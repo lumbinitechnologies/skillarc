@@ -82,7 +82,14 @@ export default function AuthCallbackPage() {
         console.warn("⚠️ Callback session initialization error:", initialError)
       }
 
-      if (initialSession) {
+      // Only bypass the code exchange and redirect early if:
+      // 1. There is an active session in the browser.
+      // 2. There is no pending code parameter in the URL.
+      // 3. The active session email matches the invited email (or no invited email is specified).
+      const initialSessionEmail = initialSession?.user?.email
+      const isMismatched = inviteEmail && initialSessionEmail && initialSessionEmail.toLowerCase() !== inviteEmail.toLowerCase()
+
+      if (initialSession && !isMismatched && !code) {
         redirectToSetPassword()
         return
       }
