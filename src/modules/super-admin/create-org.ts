@@ -30,13 +30,12 @@ export async function createOrganization(data: {
 
   const user = authData.user
 
-  // 3. Insert into users table
-  await supabase.from("users").insert({
+  await supabase.from("users").upsert({
     id: user?.id,
     name: data.adminName,
     role: ROLES.ORG_ADMIN,
     organization_id: org.id,
-  })
+  }, { onConflict: "id" })
 
   return org
 }

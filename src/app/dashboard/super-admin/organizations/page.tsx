@@ -18,9 +18,9 @@ export default async function OrganizationsPage() {
   if (orgError) console.error("Org fetch error:", orgError.message, orgError.details, orgError.hint)
 
   const { data: adminCounts, error: adminError } = await supabase
-    .from("profiles")
+    .from("users")
     .select("organization_id")
-    .eq("role", "org_admin")
+    .eq("role", "ORG_ADMIN")
 
   if (adminError) console.error("Admin count error:", adminError.message, adminError.details, adminError.hint)
 
@@ -46,7 +46,7 @@ export default async function OrganizationsPage() {
   return (
     <OrganizationsClient
       organizations={organizations}
-      onCreateOrg={(name) => createOrganization({ name })}
+      onCreateOrg={createOrganization}
       onDeleteOrg={deleteOrganization}
       onEditOrg={editOrganization}
     />

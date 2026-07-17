@@ -18,24 +18,28 @@ export default async function ProgramHeadDashboardPage() {
 
   if (profile?.role !== ROLES.PROGRAM_HEAD) redirect("/auth/login")
 
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("id, name")
-    .eq("id", profile.institution_id)
-    .single()
+  // Fetch institutions, student counts, and courses in parallel
+  const [institutionRes, studentCountRes, coursesRes] = await Promise.all([
+    supabase
+      .from("institutions")
+      .select("id, name")
+      .eq("id", profile.institution_id)
+      .maybeSingle(),
+    supabase
+      .from("users")
+      .select("*", { count: "exact", head: true })
+      .eq("institution_id", profile.institution_id)
+      .eq("role", ROLES.STUDENT),
+    supabase
+      .from("courses")
+      .select("id, name, code")
+      .eq("institution_id", profile.institution_id)
+      .order("name"),
+  ])
 
-  // Fetch count of students in same institution
-  const { count: studentCount } = await supabase
-    .from("users")
-    .select("*", { count: "exact", head: true })
-    .eq("institution_id", profile.institution_id)
-    .eq("role", ROLES.STUDENT)
-
-  // Fetch courses in this institution to represent program structure
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("id, name, code")
-    .eq("institution_id", profile.institution_id)
+  const institution = institutionRes.data
+  const studentCount = studentCountRes.count ?? 0
+  const courses = coursesRes.data ?? []
 
   return (
     <ProgramHeadDashboardClient

@@ -23,106 +23,105 @@ export default async function Page() {
 
   if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("id, name")
-    .eq("id", profile.institution_id)
-    .single()
+  // 1. Fetch institution, section, timetable slots, and attendance records in parallel
+  const [institutionRes, sectionRes, timetableRes, attendanceRes] = await Promise.all([
+    supabase
+      .from("institutions")
+      .select("id, name")
+      .eq("id", profile.institution_id)
+      .maybeSingle(),
+    profile.section_id
+      ? supabase
+          .from("sections")
+          .select("id, name, semester, program_id")
+          .eq("id", profile.section_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    profile.section_id
+      ? supabase
+          .from("timetable_slots")
+          .select("day, period, subject_id, faculty_id")
+          .eq("institution_id", profile.institution_id)
+          .eq("section_id", profile.section_id)
+          .order("day")
+          .order("period")
+      : Promise.resolve({ data: [] }),
+    profile.section_id
+      ? supabase
+          .from("attendance_records")
+          .select("status, attendance_sessions!inner(section_id)")
+          .eq("student_id", user.id)
+          .eq("attendance_sessions.section_id", profile.section_id)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const institution = institutionRes.data
+  const section = sectionRes.data
+  const timetableRows = timetableRes.data ?? []
+  const attendanceRecords = attendanceRes.data ?? []
 
   let sectionName = "Not assigned"
   let programName = "Not assigned"
   let sectionSemester: number | null = null
 
-  if (profile.section_id) {
-    const { data: section } = await supabase
-      .from("sections")
-      .select("id, name, semester, program_id")
-      .eq("id", profile.section_id)
-      .single()
+  if (section) {
+    sectionName = section.name ?? "Not assigned"
+    sectionSemester = section.semester ?? profile.semester ?? null
+  }
 
-    if (section) {
-      sectionName = section.name ?? "Not assigned"
-      sectionSemester = section.semester ?? profile.semester ?? null
-      if (section.program_id) {
-        const { data: program } = await supabase
+  const programIdToFetch = section?.program_id || profile.program_id
+  const subjectIds = Array.from(
+    new Set((timetableRows ?? []).map((slot: any) => slot.subject_id).filter(Boolean))
+  ) as string[]
+  const facultyIds = Array.from(
+    new Set((timetableRows ?? []).map((slot: any) => slot.faculty_id).filter(Boolean))
+  ) as string[]
+
+  // 2. Fetch program, subjects, and faculty details in parallel
+  const [programRes, subjectsRes, facultyRes] = await Promise.all([
+    programIdToFetch
+      ? supabase
           .from("programs")
           .select("id, name")
-          .eq("id", section.program_id)
-          .single()
+          .eq("id", programIdToFetch)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    subjectIds.length
+      ? supabase
+          .from("subjects")
+          .select("id, name, code")
+          .in("id", subjectIds)
+          .order("name")
+      : Promise.resolve({ data: [] }),
+    facultyIds.length
+      ? supabase
+          .from("users")
+          .select("id, name")
+          .in("id", facultyIds)
+      : Promise.resolve({ data: [] }),
+  ])
 
-        if (program) {
-          programName = program.name ?? "Not assigned"
-        }
-      }
-    }
-  } else if (profile.program_id) {
-    const { data: program } = await supabase
-      .from("programs")
-      .select("id, name")
-      .eq("id", profile.program_id)
-      .single()
+  const program = programRes.data
+  const subjectRows = subjectsRes.data ?? []
+  const facultyRows = facultyRes.data ?? []
 
-    if (program) {
-      programName = program.name ?? "Not assigned"
-    }
+  if (program) {
+    programName = program.name ?? "Not assigned"
   }
-
-  const { data: timetableRowsForSubjects } = profile.section_id
-    ? await supabase
-        .from("timetable_slots")
-        .select("subject_id, faculty_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-        .order("subject_id")
-    : { data: [] }
-
-  const subjectIds = Array.from(
-    new Set((timetableRowsForSubjects ?? []).map((slot: any) => slot.subject_id).filter(Boolean))
-  ) as string[]
-
-  const { data: subjectRows } = subjectIds.length
-    ? await supabase
-        .from("subjects")
-        .select("id, name, code")
-        .in("id", subjectIds)
-        .order("name")
-    : { data: [] }
-
-  const facultyIds = Array.from(
-    new Set((timetableRowsForSubjects ?? []).map((slot: any) => slot.faculty_id).filter(Boolean))
-  ) as string[]
 
   const facultyMap = new Map<string, string>()
-  if (facultyIds.length) {
-    const { data: facultyRows } = await supabase
-      .from("users")
-      .select("id, name")
-      .in("id", facultyIds)
-
-    ;(facultyRows ?? []).forEach((faculty: any) => {
-      facultyMap.set(faculty.id, faculty.name)
-    })
-  }
+  ;(facultyRows ?? []).forEach((faculty: any) => {
+    facultyMap.set(faculty.id, faculty.name)
+  })
 
   const formattedSubjects = (subjectRows ?? []).map((subject: any) => ({
     id: subject.id,
     name: subject.name,
     code: subject.code,
-    facultyName: facultyMap.get((timetableRowsForSubjects ?? []).find((slot: any) => slot.subject_id === subject.id)?.faculty_id) ?? "Faculty pending",
+    facultyName: facultyMap.get((timetableRows ?? []).find((slot: any) => slot.subject_id === subject.id)?.faculty_id) ?? "Faculty pending",
   }))
 
   const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" })
-
-  const { data: timetableRows } = profile.section_id
-    ? await supabase
-        .from("timetable_slots")
-        .select("day, period, subject_id, faculty_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-        .order("day")
-        .order("period")
-    : { data: [] }
-
   const subjectMap = new Map((subjectRows ?? []).map((subject: any) => [subject.id, subject]))
 
   const schedule = (timetableRows ?? []).map((slot: any) => ({
@@ -135,23 +134,6 @@ export default async function Page() {
 
   const todaySchedule = schedule.filter((slot) => slot.day === todayName)
   const upcomingSchedule = schedule.filter((slot) => slot.day !== todayName).slice(0, 4)
-
-  const { data: attendanceSessions } = profile.section_id
-    ? await supabase
-        .from("attendance_sessions")
-        .select("id")
-        .eq("section_id", profile.section_id)
-    : { data: [] }
-
-  const sessionIds = (attendanceSessions ?? []).map((session: any) => session.id).filter(Boolean)
-
-  const { data: attendanceRecords } = sessionIds.length
-    ? await supabase
-        .from("attendance_records")
-        .select("status")
-        .eq("student_id", user.id)
-        .in("session_id", sessionIds)
-    : { data: [] }
 
   const totalAttendance = attendanceRecords?.length ?? 0
   const presentCount = (attendanceRecords ?? []).filter((record: any) => record.status === "PRESENT").length

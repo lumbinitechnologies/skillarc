@@ -19,15 +19,13 @@ export default async function Page() {
 
   const orgId = profile.organization_id
 
-  // Fetch institutions
-  const { data: institutions } = await supabase
-    .from("institutions")
-    .select("id, name, domain")
-    .eq("organization_id", orgId)
-    .order("name", { ascending: true })
-
-  // Fetch stats
-  const [{ count: facultyCount }, { count: studentCount }] = await Promise.all([
+  // Fetch institutions and stats in parallel
+  const [institutionsRes, facultyRes, studentRes] = await Promise.all([
+    supabase
+      .from("institutions")
+      .select("id, name, domain")
+      .eq("organization_id", orgId)
+      .order("name", { ascending: true }),
     supabase
       .from("users")
       .select("*", { count: "exact", head: true })
@@ -40,13 +38,17 @@ export default async function Page() {
       .eq("role", ROLES.STUDENT),
   ])
 
+  const institutions = institutionsRes.data ?? []
+  const facultyCount = facultyRes.count ?? 0
+  const studentCount = studentRes.count ?? 0
+
   return (
     <OrgAdminDashboardClient
-      institutions={institutions ?? []}
+      institutions={institutions}
       stats={{
-        institutions: institutions?.length ?? 0,
-        faculty: facultyCount ?? 0,
-        students: studentCount ?? 0,
+        institutions: institutions.length,
+        faculty: facultyCount,
+        students: studentCount,
       }}
     />
   )

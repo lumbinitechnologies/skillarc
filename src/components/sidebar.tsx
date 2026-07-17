@@ -22,6 +22,10 @@ import {
   BarChart3,
   User,
   Briefcase,
+  ListTodo,
+  Award,
+  UserCheck,
+  ClipboardCheck,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
@@ -43,15 +47,11 @@ const roleMenus: Record<Role, MenuItem[]> = {
     { name: "Institutions", icon: School, path: "/dashboard/super-admin/institutions" },
     { name: "Analytics", icon: BarChart3, path: "/dashboard/super-admin/analytics" },
     { name: "Audit Logs", icon: ClipboardList, path: "/dashboard/super-admin/audit-logs" },
-    { name: "Events", icon: Calendar, path: "/dashboard/super-admin/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/super-admin/placements" },
     { name: "Settings", icon: Settings, path: "/dashboard/super-admin/settings" },
   ],
 
   [ROLES.ORG_ADMIN]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin" },
-    { name: "Events", icon: Calendar, path: "/dashboard/org-admin/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/org-admin/placements" },
   ],
 
   [ROLES.INSTITUTION_ADMIN]: [
@@ -60,9 +60,12 @@ const roleMenus: Record<Role, MenuItem[]> = {
     { name: "Programs", icon: ClipboardList, path: "/dashboard/institution-admin/programs" },
     { name: "Sections", icon: BookOpen, path: "/dashboard/institution-admin/sections" },
     { name: "Faculty", icon: GraduationCap, path: "/dashboard/institution-admin/faculty" },
+    { name: "Assign Subjects", icon: UserCheck, path: "/dashboard/institution-admin/faculty-subjects" },
     { name: "Students", icon: Users, path: "/dashboard/institution-admin/students" },
+    { name: "Parents", icon: Users, path: "/dashboard/institution-admin/parents" },
     { name: "Subjects", icon: BookOpen, path: "/dashboard/institution-admin/subjects" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/institution-admin/timetable" },
+    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/institution-admin/attendance" },
     { name: "Events", icon: Calendar, path: "/dashboard/institution-admin/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/institution-admin/placements" },
   ],
@@ -83,6 +86,7 @@ const roleMenus: Record<Role, MenuItem[]> = {
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
     { name: "Subjects", icon: BookOpen, path: "/dashboard/faculty/subjects" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
+    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/faculty/attendance" },
     { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/faculty/placements" },
     { name: "Profile", icon: User, path: "/dashboard/faculty/profile" },
@@ -91,7 +95,10 @@ const roleMenus: Record<Role, MenuItem[]> = {
   [ROLES.STUDENT]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
     { name: "Subjects", icon: BookOpen, path: "/dashboard/student/subjects" },
+    { name: "Tasks", icon: ListTodo, path: "/dashboard/student/todo" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/student/timetable" },
+    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/student/attendance" },
+    { name: "Report Card", icon: Award, path: "/dashboard/student/report-card" },
     { name: "Events", icon: Calendar, path: "/dashboard/student/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/student/placements" },
   ],

@@ -11,20 +11,17 @@ export default async function FacultyDashboardPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("role")
+    .select("name, role, institution_id")
     .eq("id", user.id)
     .single()
 
   if (profile?.role !== ROLES.FACULTY) redirect("/auth/login")
 
-  // Fetch detailed profile first, then run other small queries in parallel.
-  const { data: profileInfo } = await supabase.from("users").select("name, role, institution_id").eq("id", user.id).single()
-
   const [{ data: institution }, { data: assignedSubjects }, { data: timetableRows }, { count: studentCount }] = await Promise.all([
-    supabase.from("institutions").select("id, name").eq("id", profileInfo?.institution_id).maybeSingle(),
+    supabase.from("institutions").select("id, name").eq("id", profile?.institution_id).maybeSingle(),
     supabase.from("faculty_subjects").select("subject_id").eq("faculty_id", user.id).limit(6),
     supabase.from("timetable_slots").select("day, period, section_id, subjects!inner(id, name, code), sections!inner(name)").eq("faculty_id", user.id).limit(6),
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("institution_id", profileInfo?.institution_id).eq("role", ROLES.STUDENT),
+    supabase.from("users").select("*", { count: "exact", head: true }).eq("institution_id", profile?.institution_id).eq("role", ROLES.STUDENT),
   ])
 
   const subjectIds = (assignedSubjects ?? []).map((r: any) => r.subject_id)
@@ -42,7 +39,7 @@ export default async function FacultyDashboardPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <FacultyDashboardClient
         faculty={{
-          name: profileInfo?.name ?? "",
+          name: profile?.name ?? "",
           email: user.email ?? "",
           institution: institution?.name ?? "",
         }}

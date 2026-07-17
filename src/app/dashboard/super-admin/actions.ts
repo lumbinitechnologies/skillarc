@@ -31,14 +31,13 @@ async function requireSuperAdmin() {
   return { error: null, supabase, adminClient }
 }
 
-// ─── Organizations ────────────────────────────────────────────────────────────
-export async function createOrganization(input: { name: string }) {
+export async function createOrganization(name: string) {
   const { error: authError, supabase } = await requireSuperAdmin()
   if (authError || !supabase) return { success: false, error: authError }
 
   const { data, error } = await supabase
     .from("organizations")
-    .insert({ name: input.name })
+    .insert({ name })
     .select("id, name, created_at")
     .single()
 
@@ -93,13 +92,13 @@ export async function createOrgAdmin(input: {
 
   const result = await adminClient
     .from("users")
-    .insert({
+    .upsert({
       id: newUserId,
       name: input.name,
       email: input.email,
       role: ROLES.ORG_ADMIN,
       organization_id: input.organization_id,
-    })
+    }, { onConflict: "id" })
     .select()
 
   if (result.error) {

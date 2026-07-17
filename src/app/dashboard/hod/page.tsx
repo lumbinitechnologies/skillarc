@@ -18,24 +18,29 @@ export default async function HodDashboardPage() {
 
   if (profile?.role !== ROLES.HOD) redirect("/auth/login")
 
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("id, name")
-    .eq("id", profile.institution_id)
-    .single()
+  // Fetch institutions, faculty, and subjects in parallel
+  const [institutionRes, facultyRes, subjectsRes] = await Promise.all([
+    supabase
+      .from("institutions")
+      .select("id, name")
+      .eq("id", profile.institution_id)
+      .maybeSingle(),
+    supabase
+      .from("users")
+      .select("id, name, email")
+      .eq("institution_id", profile.institution_id)
+      .eq("role", ROLES.FACULTY)
+      .order("name"),
+    supabase
+      .from("subjects")
+      .select("id, name, code, faculty_id, users(name)")
+      .eq("institution_id", profile.institution_id)
+      .order("name"),
+  ])
 
-  // Fetch list of faculty in same institution
-  const { data: faculty } = await supabase
-    .from("users")
-    .select("id, name, email")
-    .eq("institution_id", profile.institution_id)
-    .eq("role", ROLES.FACULTY)
-
-  // Fetch department subjects (using subjects in this institution)
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, name, code, faculty_id, users(name)")
-    .eq("institution_id", profile.institution_id)
+  const institution = institutionRes.data
+  const faculty = facultyRes.data ?? []
+  const subjects = subjectsRes.data ?? []
 
   const formattedSubjects = (subjects ?? []).map((s: any) => ({
     id: s.id,

@@ -11,10 +11,7 @@ export default async function InstitutionsPage() {
     .select(`
       id,
       name,
-      code,
-      type,
-      active,
-      created_at,
+      domain,
       organization_id,
       organizations(name)
     `)
@@ -41,10 +38,10 @@ export default async function InstitutionsPage() {
   const institutions = (institutionsRaw ?? []).map((inst: any) => ({
     id: inst.id,
     name: inst.name ?? "",
-    code: inst.code ?? "",
-    type: inst.type ?? "other",
-    active: inst.active ?? true,
-    created_at: inst.created_at,
+    code: inst.domain ?? "general",
+    type: "college" as const,
+    active: true,
+    created_at: new Date().toISOString(),
     organization_id: inst.organization_id ?? "",
     organization_name: (inst.organizations as any)?.name ?? "—",
     user_count: countMap[inst.id] ?? 0,

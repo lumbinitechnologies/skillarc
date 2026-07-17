@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Fragment } from "react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Institution = {
@@ -147,8 +147,8 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
               </thead>
               <tbody>
                 {filtered.map(inst => (
-                  <>
-                    <tr key={inst.id} className={`inst-row ${expandedId===inst.id?"expanded":""}`}
+                  <Fragment key={inst.id}>
+                    <tr className={`inst-row ${expandedId===inst.id?"expanded":""}`}
                       onClick={() => setExpandedId(expandedId===inst.id ? null : inst.id)}
                       style={{ borderBottom: expandedId===inst.id ? "none" : "1px solid #f3f4f6" }}>
                       <td style={{ padding:"12px 20px" }}>
@@ -185,7 +185,7 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

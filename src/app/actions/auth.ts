@@ -74,13 +74,13 @@ export async function signupAction(
   }
 
   // Insert into users table
-  const { error: insertError } = await supabase.from("users").insert({
+  const { error: insertError } = await supabase.from("users").upsert({
     id: user.id,
     name,
     email,
     role,
     institution_id: process.env.NEXT_PUBLIC_INSTITUTION_ID,
-  })
+  }, { onConflict: "id" })
 
   if (insertError) {
     return { error: insertError.message }

@@ -109,7 +109,7 @@ export default function EventsPortalClient() {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("events")
         .select(`
           id,
@@ -121,8 +121,13 @@ export default function EventsPortalClient() {
           event_registrations (
             user_id
           )
-        `)
-        .order("event_date", { ascending: true });
+        `);
+
+      if (institutionId) {
+        query = query.eq("institution_id", institutionId);
+      }
+
+      const { data, error } = await query.order("event_date", { ascending: true });
 
       if (error) throw error;
 
@@ -179,7 +184,7 @@ export default function EventsPortalClient() {
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [institutionId]);
 
   const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"].includes(userRole?.toLowerCase());
 

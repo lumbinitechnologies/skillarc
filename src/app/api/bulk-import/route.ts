@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
 
         if (authError || !authData.user) continue
 
-        const { error } = await adminClient.from("users").insert({
+        const { error } = await adminClient.from("users").upsert({
           id: authData.user.id,
           name: toTitleCase(name),
           email,
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
           institution_id: institution_id,
           organization_id: profile.organization_id,
           phone: row.phone || null,
-        })
+        }, { onConflict: "id" })
         if (!error) createdCount += 1
       }
     } else if (entity === "timetable") {
