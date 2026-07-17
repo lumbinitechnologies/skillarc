@@ -53,6 +53,19 @@ export default function AuthCallbackPage() {
     async function verifySession() {
       setStatus("Verifying invite link...")
 
+      // Check for Supabase redirect error parameters (e.g. hash error or search param error)
+      const hash = window.location.hash || ""
+      const hashParams = new URLSearchParams(hash.replace(/^#/, ""))
+      const errorParam = searchParams.get("error") || hashParams.get("error")
+      const errorDesc = searchParams.get("error_description") || hashParams.get("error_description")
+
+      if (errorParam) {
+        console.error("❌ Auth redirect error:", errorParam, errorDesc)
+        setStatus(`Verification failed: ${errorDesc || errorParam}`)
+        redirected = true
+        return
+      }
+
       const code = searchParams.get("code")
 
       console.debug("auth callback params", {
