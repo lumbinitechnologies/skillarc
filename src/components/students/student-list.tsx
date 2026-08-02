@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { StudentWithSection } from "@/modules/students"
-import { Trash2, ChevronLeft, ChevronRight } from "lucide-react"
+import { Trash2, ChevronLeft, ChevronRight, Pencil } from "lucide-react"
 
 const ROWS_OPTIONS = [10, 25, 50, 100] as const
 
@@ -27,6 +27,7 @@ interface StudentListProps {
   students: StudentWithSection[]
   isLoading?: boolean
   onEdit?: (student: StudentWithSection) => void
+  onView?: (student: StudentWithSection) => void
   onDelete?: (studentId: string) => void
   // Pagination
   totalCount: number
@@ -44,6 +45,7 @@ export function StudentList({
   students,
   isLoading = false,
   onEdit,
+  onView,
   onDelete,
   totalCount,
   page,
@@ -125,7 +127,7 @@ export function StudentList({
               return (
                 <TableRow
                   key={student.id}
-                  onClick={() => onEdit?.(student)}
+                  onClick={() => onView?.(student)}
                   className={`
                     !border-0 cursor-pointer transition-colors
                     ${isChecked
@@ -192,13 +194,23 @@ export function StudentList({
                     </Badge>
                   </TableCell>
 
-                  {/* 1. Edit button removed — row click opens drawer instead */}
                   <TableCell>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
                         size="icon"
-                        className="text-red-600 h-8 w-8"
+                        className="text-violet-600 hover:bg-violet-50 h-8 w-8"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit?.(student)
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="text-red-600 hover:bg-red-50 h-8 w-8"
                         onClick={(e) => {
                           e.stopPropagation()
                           onDelete?.(student.id)

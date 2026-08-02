@@ -26,6 +26,11 @@ import {
   Award,
   UserCheck,
   ClipboardCheck,
+  FileText,
+  FolderKanban,
+  CreditCard,
+  AlertTriangle,
+  FileSignature,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
@@ -56,6 +61,10 @@ const roleMenus: Record<Role, MenuItem[]> = {
 
   [ROLES.INSTITUTION_ADMIN]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin" },
+    { name: "Admissions", icon: FileText, path: "/dashboard/institution-admin/admissions" },
+    { name: "Intake Cohorts", icon: FolderKanban, path: "/dashboard/institution-admin/intakes" },
+    { name: "Billing Desk", icon: CreditCard, path: "/dashboard/institution-admin/billing" },
+    { name: "Interventions", icon: AlertTriangle, path: "/dashboard/institution-admin/warnings" },
     { name: "Departments", icon: Layers, path: "/dashboard/institution-admin/departments" },
     { name: "Programs", icon: ClipboardList, path: "/dashboard/institution-admin/programs" },
     { name: "Sections", icon: BookOpen, path: "/dashboard/institution-admin/sections" },
@@ -86,7 +95,6 @@ const roleMenus: Record<Role, MenuItem[]> = {
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
     { name: "Subjects", icon: BookOpen, path: "/dashboard/faculty/subjects" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
-    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/faculty/attendance" },
     { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/faculty/placements" },
     { name: "Profile", icon: User, path: "/dashboard/faculty/profile" },
@@ -94,10 +102,11 @@ const roleMenus: Record<Role, MenuItem[]> = {
 
   [ROLES.STUDENT]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
+    { name: "Admissions", icon: FileSignature, path: "/dashboard/student/admissions" },
+    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/student/billing" },
     { name: "Subjects", icon: BookOpen, path: "/dashboard/student/subjects" },
     { name: "Tasks", icon: ListTodo, path: "/dashboard/student/todo" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/student/timetable" },
-    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/student/attendance" },
     { name: "Report Card", icon: Award, path: "/dashboard/student/report-card" },
     { name: "Events", icon: Calendar, path: "/dashboard/student/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/student/placements" },
@@ -134,7 +143,8 @@ const roleAccents: Record<Role, { bg: string; color: string }> = {
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [profile, setProfile] = useState<{ name: string; role: Role } | null>(null)
+  const [profile, setProfile] = useState<{ name: string; role: Role; is_timetable_builder?: boolean } | null>(null)
+  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
 
   useEffect(() => {
     async function getProfile() {
@@ -146,21 +156,54 @@ export default function Sidebar() {
           .eq("id", user.id)
           .single()
 
+        let isTimetableBuilder = false
+        const { data: perm } = await supabase
+          .from("permissions")
+          .select("id")
+          .eq("name", "timetable_builder")
+          .maybeSingle()
+
+        if (perm?.id) {
+          const { data: userPerm } = await supabase
+            .from("user_permissions")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("permission_id", perm.id)
+            .maybeSingle()
+
+          if (userPerm?.id) {
+            isTimetableBuilder = true
+          }
+        }
+
         if (data) {
           setProfile({
             name: data.name ?? user.email?.split("@")[0] ?? "User",
             role: (data.role as Role) ?? ROLES.STUDENT,
+            is_timetable_builder: isTimetableBuilder,
           })
         } else {
           setProfile({
             name: user.email?.split("@")[0] ?? "User",
             role: ROLES.STUDENT,
+            is_timetable_builder: false,
           })
         }
       }
     }
 
+    async function getFeatures() {
+      try {
+        const res = await fetch("/api/org-features")
+        const json = await res.json()
+        setEnabledFeatures(json.features || [])
+      } catch (err) {
+        console.error("Failed to load org features on sidebar:", err)
+      }
+    }
+
     getProfile()
+    getFeatures()
   }, [])
 
   async function handleLogout() {
@@ -168,7 +211,56 @@ export default function Sidebar() {
     router.push("/auth/login")
   }
 
-  const menu: MenuItem[] = profile ? roleMenus[profile.role] ?? [] : []
+  let baseItems = profile ? [...(roleMenus[profile.role] ?? [])] : []
+
+  if (profile && (profile.role === ROLES.HOD || profile.role === ROLES.PROGRAM_HEAD || profile.is_timetable_builder)) {
+    const facultyItems = roleMenus[ROLES.FACULTY] || []
+    facultyItems.forEach((facItem) => {
+      if (facItem.name === "Overview") return
+      const exists = baseItems.some((item) => item.path === facItem.path)
+      if (!exists) {
+        baseItems.push(facItem)
+      }
+    })
+  }
+
+  let menu: MenuItem[] = baseItems.filter((item) => {
+    if (!enabledFeatures) return true // Allow items to render while loading features
+    if (item.name === "Admissions") {
+      return enabledFeatures.includes("admissions_workflow")
+    }
+    if (item.name === "Billing Desk" || item.name === "Fees & Billing") {
+      return enabledFeatures.includes("billing")
+    }
+    if (item.name === "Placements") {
+      return enabledFeatures.includes("placements")
+    }
+    if (item.name === "Report Card") {
+      return enabledFeatures.includes("report_cards")
+    }
+    if (item.name === "Intake Cohorts") {
+      return enabledFeatures.includes("intake_cohorts")
+    }
+    if (item.name === "Interventions") {
+      return enabledFeatures.includes("interventions")
+    }
+    return true
+  })
+
+  // Dynamic injection of Timetable Builder for HOD, Program Head, or Builder faculty
+  if (profile && (profile.is_timetable_builder || profile.role === ROLES.HOD || profile.role === ROLES.PROGRAM_HEAD)) {
+    const hasTimetableBuilder = menu.some(item => item.path === "/dashboard/institution-admin/timetable")
+    if (!hasTimetableBuilder) {
+      menu = [
+        ...menu,
+        {
+          name: "Timetable Builder",
+          icon: Calendar,
+          path: "/dashboard/institution-admin/timetable"
+        }
+      ]
+    }
+  }
   const accent = profile ? roleAccents[profile.role] : { bg: "#ede9fe", color: "#5b21b6" }
   const roleLabel = profile ? roleLabels[profile.role] : "Loading..."
   const initials = profile
@@ -177,13 +269,15 @@ export default function Sidebar() {
 
   return (
     <aside className="sticky top-0 h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-white/90 px-6 py-8 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200/30">
-          <Sparkles size={18} />
-        </div>
-        <div>
-          <p className="text-sm font-semibold tracking-[0.16em] text-slate-900">SkillArc</p>
-          <p className="text-xs uppercase tracking-[0.24em] text-indigo-600">Academic hub</p>
+      <div className="mb-10 mt-2 flex items-center gap-4 px-2">
+        <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-16 w-16 object-contain transition-transform duration-200 hover:scale-[1.03]" />
+        <div className="flex flex-col">
+          <span className="text-2xl font-black tracking-[-0.03em] leading-none bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
+            SkillArc
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400/60 mt-2 leading-none">
+            Academic Hub
+          </span>
         </div>
       </div>
 

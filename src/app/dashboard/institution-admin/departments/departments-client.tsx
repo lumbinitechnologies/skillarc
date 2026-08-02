@@ -38,33 +38,57 @@ export function DepartmentsClientPage({
   }
 
   const createDepartment = async () => {
-    if (!name.trim()) return
+    if (!name.trim()) {
+      alert("Please enter a department name.")
+      return
+    }
 
-    const res = await fetch("/api/departments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: name.trim(),
-        institution_id: institutionId,
-      }),
-    })
+    try {
+      const res = await fetch("/api/departments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          institution_id: institutionId,
+        }),
+      })
 
-    if (res.ok) {
-      setName("")
-      await loadDepartments()
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        setName("")
+        await loadDepartments()
+      } else {
+        console.error("Failed to create department:", data.error)
+        alert(`Error creating department: ${data.error || "Failed to create"}`)
+      }
+    } catch (err: any) {
+      console.error("Request error:", err)
+      alert(`Request failed: ${err.message || "Unknown error"}`)
     }
   }
 
   const deleteDepartment = async (id: string) => {
     if (!confirm("Delete department?")) return
 
-    await fetch(`/api/departments/${id}`, {
-      method: "DELETE",
-    })
+    try {
+      const res = await fetch(`/api/departments/${id}`, {
+        method: "DELETE",
+      })
 
-    await loadDepartments()
+      const data = await res.json().catch(() => ({}))
+
+      if (res.ok) {
+        await loadDepartments()
+      } else {
+        alert(`Error deleting department: ${data.error || "Failed to delete"}`)
+      }
+    } catch (err: any) {
+      console.error("Delete error:", err)
+      alert(`Request failed: ${err.message || "Unknown error"}`)
+    }
   }
 
   const filteredDepartments = departments.filter((dept) =>

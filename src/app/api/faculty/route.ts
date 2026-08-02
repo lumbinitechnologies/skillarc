@@ -78,15 +78,36 @@ export async function GET(request: NextRequest) {
     const query = supabase
       .from("users")
       .select("*")
-      .eq("role", ROLES.FACULTY)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
 
     if (institutionId) query.eq("institution_id", institutionId)
 
-    const { data, error } = await query.order("name")
+    const { data = [], error } = await query.order("name")
 
     if (error) throw error
 
-    return NextResponse.json(data)
+    // Load timetable builder permissions
+    let { data: perm } = await supabase
+      .from("permissions")
+      .select("id")
+      .eq("name", "timetable_builder")
+      .maybeSingle()
+
+    const { data: userPerms = [] } = perm
+      ? await supabase
+          .from("user_permissions")
+          .select("user_id")
+          .eq("permission_id", perm.id)
+      : { data: [] }
+
+    const builderUserIds = new Set((userPerms || []).map(up => up.user_id))
+
+    const mapped = (data || []).map((u) => ({
+      ...u,
+      is_timetable_builder: builderUserIds.has(u.id),
+    }))
+
+    return NextResponse.json(mapped)
   } catch (error) {
     console.error("Faculty fetch error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

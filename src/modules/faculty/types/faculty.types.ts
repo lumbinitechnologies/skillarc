@@ -7,6 +7,7 @@ export interface Faculty extends UserProfile {
 export interface FacultyWithStats extends Faculty {
   assignedSubjects?: number
   assignedSections?: number
+  is_timetable_builder?: boolean
   department?: {
     id: string
     name: string
@@ -25,4 +26,6 @@ export interface UpdateFacultyInput {
   name?: string
   email?: string
   department_id?: string
+  role?: string
+  is_timetable_builder?: boolean
 }

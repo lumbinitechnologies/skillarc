@@ -135,6 +135,7 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
           if (!open) setSelectedParent(null)
         }}
         onSubmit={handleCreateOrUpdate}
+        onRelationsChanged={loadParents}
         parent={selectedParent}
         isLoading={isLoading}
       />

@@ -34,7 +34,7 @@ export default async function FacultyPage() {
         )
       `)
       .eq("institution_id", institutionId)
-      .eq("role", ROLES.FACULTY)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
       .order("name"),
     supabase
       .from("faculty_subjects")
@@ -55,8 +55,25 @@ export default async function FacultyPage() {
   const sections = sectionsRes.data ?? []
   const departments = departmentsRes.data ?? []
 
+  // Load timetable builder permissions
+  let { data: perm } = await supabase
+    .from("permissions")
+    .select("id")
+    .eq("name", "timetable_builder")
+    .maybeSingle()
+
+  const { data: userPerms = [] } = perm
+    ? await supabase
+        .from("user_permissions")
+        .select("user_id")
+        .eq("permission_id", perm.id)
+    : { data: [] }
+
+  const builderUserIds = new Set((userPerms || []).map(up => up.user_id))
+
   const facultyWithStats = faculty.map((f) => ({
     ...f,
+    is_timetable_builder: builderUserIds.has(f.id),
     assignedSubjects: facultySubjects.filter((fs) => fs.faculty_id === f.id).length,
     assignedSections: sections.filter((s) => s.faculty_advisor_id === f.id).length,
   }))

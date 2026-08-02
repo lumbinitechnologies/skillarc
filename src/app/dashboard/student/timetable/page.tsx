@@ -13,13 +13,21 @@ export default async function StudentTimetablePage() {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  const { data: userProfile } = await supabase
     .from("users")
-    .select("id, role, institution_id, section_id")
+    .select("id, role, institution_id")
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  const { data: studentData } = await supabase
+    .from("students")
+    .select("id, section_id")
+    .eq("id", user.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentData }
 
   const { data: timetableRows = [] } = profile.section_id
     ? await supabase

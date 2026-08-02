@@ -17,6 +17,21 @@ export default async function OrganizationsPage() {
 
   if (orgError) console.error("Org fetch error:", orgError.message, orgError.details, orgError.hint)
 
+  let featuresMap: Record<string, string[]> = {}
+  try {
+    const { data: featuresData } = await supabase
+      .from("organizations")
+      .select("id, features")
+    
+    if (featuresData) {
+      featuresData.forEach((row: any) => {
+        featuresMap[row.id] = row.features || []
+      })
+    }
+  } catch (err) {
+    console.warn("Features column does not exist yet. Please run migration: ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS features text[] DEFAULT '{}'::text[];")
+  }
+
   const { data: adminCounts, error: adminError } = await supabase
     .from("users")
     .select("organization_id")
@@ -41,6 +56,7 @@ export default async function OrganizationsPage() {
       created_at: org.created_at,
       institution_count: org.institutions?.[0]?.count ?? 0,
       admin_count: adminCountMap[org.id] ?? 0,
+      features: featuresMap[org.id] || [],
     })) ?? []
 
   return (

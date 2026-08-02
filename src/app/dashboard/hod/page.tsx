@@ -29,7 +29,7 @@ export default async function HodDashboardPage() {
       .from("users")
       .select("id, name, email")
       .eq("institution_id", profile.institution_id)
-      .eq("role", ROLES.FACULTY)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
       .order("name"),
     supabase
       .from("subjects")

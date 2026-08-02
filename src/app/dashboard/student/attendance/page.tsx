@@ -35,13 +35,23 @@ export default async function StudentAttendancePage() {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  // Get user profile first (common fields)
+  const { data: userProfile } = await supabase
     .from("users")
-    .select("id, role, institution_id, name, email, section_id, program_id, semester, registration_number, phone, admission_year")
+    .select("id, role, institution_id, name, email, phone")
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  // Get student-specific fields from students table
+  const { data: studentProfile } = await supabase
+    .from("students")
+    .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender")
+    .eq("id", user.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentProfile }
 
   const { data: institution } = await supabase
     .from("institutions")

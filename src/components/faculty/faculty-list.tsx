@@ -74,8 +74,28 @@ export function FacultyList({
                     <GraduationCap className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-900">{f.name}</p>
-                    <p className="text-xs text-slate-500">Faculty member</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="font-semibold text-slate-900">{f.name}</p>
+                      {f.role === "HOD" && (
+                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px] py-0 px-2 font-bold rounded-lg border-0 shrink-0">
+                          HOD
+                        </Badge>
+                      )}
+                      {f.role === "PROGRAM_HEAD" && (
+                        <Badge className="bg-pink-100 text-pink-700 hover:bg-pink-100 text-[10px] py-0 px-2 font-bold rounded-lg border-0 shrink-0">
+                          Program Head
+                        </Badge>
+                      )}
+                      {f.is_timetable_builder && (
+                        <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 text-[10px] py-0 px-2 font-bold rounded-lg border-0 shrink-0 flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                          Timetable Builder
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {f.role === "HOD" ? "Head of Department" : f.role === "PROGRAM_HEAD" ? "Program Coordinator" : "Faculty Member"}
+                    </p>
                   </div>
                 </div>
               </TableCell>

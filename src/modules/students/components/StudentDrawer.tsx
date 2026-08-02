@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   Tabs,
   TabsContent,
@@ -18,6 +19,32 @@ export default function StudentDrawer({
   student,
   onClose,
 }: StudentDrawerProps) {
+  const [guardian, setGuardian] = useState<any>(null)
+  const [isLoadingGuardian, setIsLoadingGuardian] = useState(false)
+
+  useEffect(() => {
+    async function getGuardian() {
+      if (!student?.id) return
+      setIsLoadingGuardian(true)
+      try {
+        const res = await fetch(`/api/parents/relations?student_id=${student.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data && data.length > 0) {
+            setGuardian(data[0])
+          } else {
+            setGuardian(null)
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load guardian:", err)
+      } finally {
+        setIsLoadingGuardian(false)
+      }
+    }
+    getGuardian()
+  }, [student])
+
   if (!open || !student) return null
 
   return (
@@ -124,13 +151,20 @@ export default function StudentDrawer({
                 <h3 className="font-semibold text-base">Guardian / Parent</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">Primary contact information</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <InfoCard label="Parent Name"  value={null} />
-                <InfoCard label="Phone"        value={null} />
-                <InfoCard label="Email"        value={null} />
-                <InfoCard label="Relation"     value={null} />
-              </div>
-              <Placeholder label="Guardian details will appear here once added." />
+              {isLoadingGuardian ? (
+                <div className="flex justify-center py-8">
+                  <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-violet-600" />
+                </div>
+              ) : guardian ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoCard label="Parent Name"  value={guardian.parent?.name} />
+                  <InfoCard label="Phone"        value={guardian.parent?.phone} />
+                  <InfoCard label="Email"        value={guardian.parent?.email} />
+                  <InfoCard label="Relation"     value={guardian.relationship} />
+                </div>
+              ) : (
+                <Placeholder label="No guardian details linked to this student." />
+              )}
             </div>
           </TabsContent>
 

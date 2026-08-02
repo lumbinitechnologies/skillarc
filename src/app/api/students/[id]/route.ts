@@ -26,24 +26,56 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, section_id, semester, program_id } = body
+    const { name, section_id, semester, program_id, registration_number, admission_year } = body
 
-    const { data: student, error } = await supabase
-      .from("users")
-      .update({
-        name,
-        section_id,
-        semester,
-        program_id: program_id || null,
-      })
+    if (name) {
+      const { error: userError } = await supabase
+        .from("users")
+        .update({ name })
+        .eq("id", id)
+        .eq("role", ROLES.STUDENT)
+
+      if (userError) throw userError
+    }
+
+    const studentUpdate: Record<string, any> = {}
+    if (section_id !== undefined) studentUpdate.section_id = section_id || null
+    if (semester !== undefined) studentUpdate.semester = semester || null
+    if (program_id !== undefined) studentUpdate.program_id = program_id || null
+    if (registration_number !== undefined) studentUpdate.registration_number = registration_number || null
+    if (admission_year !== undefined) studentUpdate.admission_year = admission_year || null
+
+    if (Object.keys(studentUpdate).length > 0) {
+      const { error: studentError } = await supabase
+        .from("students")
+        .update(studentUpdate)
+        .eq("id", id)
+
+      if (studentError) throw studentError
+    }
+
+    const { data: updatedStudent } = await supabase
+      .from("students")
+      .select(`
+        *,
+        section:section_id(
+          id,
+          name,
+          semester,
+          program_id,
+          program:program_id(id, name)
+        )
+      `)
       .eq("id", id)
-      .eq("role", ROLES.STUDENT)
-      .select("*, section:section_id(id, name, semester, program_id)")
       .single()
 
-    if (error) throw error
+    const { data: userData } = await supabase
+      .from("users")
+      .select("name, email, role, is_active")
+      .eq("id", id)
+      .single()
 
-    return NextResponse.json(student)
+    return NextResponse.json({ ...updatedStudent, ...userData })
   } catch (error) {
     console.error("Student update error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

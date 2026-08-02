@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 
 export async function POST(request: Request) {
@@ -36,12 +37,12 @@ export async function POST(request: Request) {
 
   const {
     facultyId,
-    subjectIds,
+    subjectIds: rawSubjectIds,
   } = body
 
   if (
     !facultyId ||
-    !Array.isArray(subjectIds)
+    !Array.isArray(rawSubjectIds)
   ) {
     return NextResponse.json(
       {
@@ -53,8 +54,12 @@ export async function POST(request: Request) {
     )
   }
 
-  // Step 6 — Verify the faculty belongs to the same institution
-  const { data: faculty } = await supabase
+  const subjectIds = Array.from(new Set(rawSubjectIds))
+
+  // Step 6 — Verify the faculty belongs to the same institution using Admin Client
+  const adminClient = createSupabaseAdminClient()
+
+  const { data: faculty } = await adminClient
     .from("users")
     .select("institution_id")
     .eq("id", facultyId)
@@ -74,8 +79,8 @@ export async function POST(request: Request) {
     )
   }
 
-  // Step 7 — Verify every subject belongs to the same institution
-  const { data: subjects } = await supabase
+  // Step 7 — Verify every subject belongs to the same institution using Admin Client
+  const { data: subjects } = await adminClient
     .from("subjects")
     .select("id")
     .eq("institution_id", profile.institution_id)
@@ -92,17 +97,17 @@ export async function POST(request: Request) {
     )
   }
 
-  // Step 8 — Replace assignments in the database
+  // Step 8 — Replace assignments in the database using Admin Client
 
-  // Delete existing assignments
-  const { error: deleteError } = await supabase
+  // Delete existing assignments (delete all for this faculty directly)
+  const { error: deleteError } = await adminClient
     .from("faculty_subjects")
     .delete()
-    .eq("institution_id", profile.institution_id)
     .eq("faculty_id", facultyId)
 
   if (deleteError) {
-    throw deleteError
+    console.error("🔴 Delete faculty_subjects error:", deleteError)
+    return NextResponse.json({ error: deleteError.message }, { status: 400 })
   }
 
   // Insert new assignments
@@ -113,12 +118,13 @@ export async function POST(request: Request) {
       subject_id: subjectId,
     }))
 
-    const { error: insertError } = await supabase
+    const { error: insertError } = await adminClient
       .from("faculty_subjects")
       .insert(rows)
 
     if (insertError) {
-      throw insertError
+      console.error("🔴 Insert faculty_subjects error:", insertError)
+      return NextResponse.json({ error: insertError.message }, { status: 400 })
     }
   }
 

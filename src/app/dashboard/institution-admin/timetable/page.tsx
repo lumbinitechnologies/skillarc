@@ -1,10 +1,12 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
 import { TimetableClientPage } from "./timetable-client"
 
 export default async function TimetablePage() {
   const supabase = await createSupabaseServerClient()
+  const adminClient = createSupabaseAdminClient()
 
   const {
     data: { user },
@@ -12,13 +14,40 @@ export default async function TimetablePage() {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  const { data: profile } = await adminClient
     .from("users")
     .select("role, institution_id")
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.INSTITUTION_ADMIN) {
+  if (!profile) {
+    redirect("/dashboard")
+  }
+
+  let hasAccess = [ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)
+
+  if (!hasAccess && user.id) {
+    const { data: perm } = await adminClient
+      .from("permissions")
+      .select("id")
+      .eq("name", "timetable_builder")
+      .maybeSingle()
+
+    if (perm?.id) {
+      const { data: userPerm } = await adminClient
+        .from("user_permissions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("permission_id", perm.id)
+        .maybeSingle()
+
+      if (userPerm?.id) {
+        hasAccess = true
+      }
+    }
+  }
+
+  if (!hasAccess) {
     redirect("/dashboard")
   }
 

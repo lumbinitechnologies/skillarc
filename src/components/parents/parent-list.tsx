@@ -48,7 +48,20 @@ export function ParentList({
           </div>
 
           <div className="space-y-2 mb-4 text-sm text-gray-600">
-            <p>Institution ID: {parent.institution_id ?? "Not set"}</p>
+            <div className="mt-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Linked Students</span>
+              {(parent as any).students && (parent as any).students.length > 0 ? (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {(parent as any).students.map((stud: any) => (
+                    <Badge key={stud.id} variant="secondary" className="px-2.5 py-1 bg-indigo-50 text-[#6C63FF] border border-indigo-100 rounded-full text-xs font-semibold">
+                      {stud.name} ({stud.registration_number || "No USN"}) · {stud.relationship}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1 italic">No students linked to this parent account.</p>
+              )}
+            </div>
           </div>
 
           <div className="flex gap-2 pt-3 border-t">

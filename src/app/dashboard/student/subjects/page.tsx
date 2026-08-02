@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { BookOpen, GraduationCap, UserRound, ArrowRight } from "lucide-react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import Link from "next/link"
 
@@ -14,16 +15,26 @@ export default async function StudentSubjectsPage() {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  const adminClient = createSupabaseAdminClient()
+
+  const { data: userProfile } = await adminClient
     .from("users")
-    .select("id, role, institution_id, section_id")
+    .select("id, role, institution_id")
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  const { data: studentData } = await adminClient
+    .from("students")
+    .select("id, section_id, program_id, semester")
+    .eq("id", user.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentData }
 
   const { data: timetableRows = [] } = profile.section_id
-    ? await supabase
+    ? await adminClient
         .from("timetable_slots")
         .select("subject_id, faculty_id")
         .eq("institution_id", profile.institution_id)
@@ -31,16 +42,34 @@ export default async function StudentSubjectsPage() {
         .order("subject_id")
     : { data: [] }
 
-  const subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+  let subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+
+  if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
+    let subQuery = adminClient
+      .from("subjects")
+      .select("id")
+    if (profile.program_id) {
+      subQuery = subQuery.eq("program_id", profile.program_id)
+    } else if (profile.institution_id) {
+      subQuery = subQuery.eq("institution_id", profile.institution_id)
+    }
+    if (profile.semester) {
+      subQuery = subQuery.eq("semester", profile.semester)
+    }
+    const { data: programSubjects } = await subQuery
+    if (programSubjects?.length) {
+      subjectIds = programSubjects.map((s: any) => s.id)
+    }
+  }
 
   const { data: subjectRows = [] } = subjectIds.length
-    ? await supabase.from("subjects").select("id, name, code, subject_type").in("id", subjectIds).order("name")
+    ? await adminClient.from("subjects").select("id, name, code, subject_type").in("id", subjectIds).order("name")
     : { data: [] }
 
   const facultyIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.faculty_id).filter(Boolean))) as string[]
   const facultyMap = new Map<string, string>()
   if (facultyIds.length) {
-    const { data: facultyRows = [] } = await supabase.from("users").select("id, name").in("id", facultyIds)
+    const { data: facultyRows = [] } = await adminClient.from("users").select("id, name").in("id", facultyIds)
     ;(facultyRows as Array<any>).forEach((faculty) => facultyMap.set(faculty.id, faculty.name))
   }
 

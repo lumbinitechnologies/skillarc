@@ -2,6 +2,19 @@ import { headers } from "next/headers"
 import { createSupabaseAdminClient } from "./supabase-admin"
 
 export function resolveAppOrigin(headersValue?: Headers | { get(name: string): string | null } | null): string {
+  // If the request explicitly comes from localhost / 127.0.0.1, prioritize it for local testing
+  if (headersValue) {
+    const forwardedProto = headersValue.get("x-forwarded-proto")
+    const forwardedHost = headersValue.get("x-forwarded-host")
+    const host = forwardedHost?.split(",")[0]?.trim() || headersValue.get("host")
+    const proto = forwardedProto?.split(",")[0]?.trim() || "http"
+
+    if (host && (host.includes("localhost") || host.includes("127.0.0.1"))) {
+      const localProto = host.includes("localhost") ? "http" : proto
+      return `${localProto}://${host}`.replace(/\/+$/, "")
+    }
+  }
+
   const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim()
   if (configuredOrigin) {
     return configuredOrigin.replace(/\/+$/, "")
@@ -103,6 +116,27 @@ export async function inviteUser(params: {
   if (upsertError) {
     console.error("🔴 Upsert error in users table:", upsertError)
     throw new Error(upsertError.message)
+  }
+
+  // If role is STUDENT, also create a record in the students table
+  if (role === "STUDENT" || role === "student") {
+    console.log(`📚 Creating student record for user ${data.user.id}`)
+    const { error: studentError } = await supabase.from("students").upsert({
+      id: data.user.id,
+      institution_id: institutionId,
+      program_id: null,
+      section_id: null,
+      semester: null,
+      registration_number: null,
+      admission_year: null,
+    }, { onConflict: "id" })
+
+    if (studentError) {
+      console.error("⚠️  Warning: Student record creation failed:", studentError)
+      // Don't throw - the user record was created successfully, this is just metadata
+    } else {
+      console.log(`✅ Student record created`)
+    }
   }
 
   return { success: true, message: "Invitation sent successfully" }

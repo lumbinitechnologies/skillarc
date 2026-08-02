@@ -15,7 +15,9 @@ export default async function FacultyDashboardPage() {
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.FACULTY) redirect("/auth/login")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) {
+    redirect("/auth/login")
+  }
 
   const [{ data: institution }, { data: assignedSubjects }, { data: timetableRows }, { count: studentCount }] = await Promise.all([
     supabase.from("institutions").select("id, name").eq("id", profile?.institution_id).maybeSingle(),

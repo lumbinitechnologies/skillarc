@@ -35,14 +35,20 @@ import {
   Video,
   Save,
   Brain,
-  BookOpen
+  BookOpen,
+  FolderKanban,
+  Sparkles,
+  Layers,
+  Sliders,
+  Star
 } from "lucide-react"
 
 import {
   createAssignmentAction,
   updateAssignmentAction,
   deleteAssignmentAction,
-  gradeSubmissionAction
+  gradeSubmissionAction,
+  runPlagiarismScanAction
 } from "@/app/actions/assignments"
 import {
   createMeetingAction,
@@ -53,6 +59,11 @@ import {
   getExistingAttendanceAction,
   saveAttendanceAction
 } from "@/app/dashboard/faculty/attendance/actions"
+import {
+  createProjectWithGroupsAction,
+  getSubjectStudentsAction,
+  suggestTeamsAIAction
+} from "@/app/actions/project-groups"
 
 interface FacultySubjectDetailClientProps {
   facultyId: string
@@ -71,6 +82,7 @@ interface FacultySubjectDetailClientProps {
   submissions: Array<any>
   students: Array<any>
   meetings: Array<any>
+  projects: Array<any>
 }
 
 export function FacultySubjectDetailClient({
@@ -83,11 +95,35 @@ export function FacultySubjectDetailClient({
   submissions,
   students,
   meetings,
+  projects,
 }: FacultySubjectDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<"announcements" | "classwork" | "grades" | "students" | "meetings" | "attendance">("classwork")
+  const [activeTab, setActiveTab] = useState<"announcements" | "classwork" | "grades" | "students" | "meetings" | "attendance" | "groups">("classwork")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState<"Assignment" | "Quiz" | "Coding Assignment" | "Material">("Assignment")
   const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
+
+  // Project groups states
+  const [localProjects, setLocalProjects] = useState(projects)
+  const [selectedSectionId, setSelectedSectionId] = useState("")
+  const [projectTitle, setProjectTitle] = useState("")
+  const [projectDesc, setProjectDesc] = useState("")
+  
+  // Roster details
+  const [roster, setRoster] = useState<any[]>([])
+  const [loadingRoster, setLoadingRoster] = useState(false)
+  
+  // Separation settings
+  const [teamCount, setTeamCount] = useState(3)
+  const [themeId, setThemeId] = useState("classic")
+  const [focus, setFocus] = useState<"skill_balance" | "role_distribution" | "random">("skill_balance")
+  
+  // Allocation Outcome
+  const [generatedTeams, setGeneratedTeams] = useState<any[]>([])
+  const [overallFeedback, setOverallFeedback] = useState("")
+  const [allocating, setAllocating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [expandedProjId, setExpandedProjId] = useState<string | null>(null)
+  const [allocateTab, setAllocateTab] = useState<"projects" | "allocate">("projects")
 
   // Local Toast notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "warning" } | null>(null)
@@ -95,6 +131,19 @@ export function FacultySubjectDetailClient({
     setToast({ message: msg, type })
     setTimeout(() => setToast(null), 3000)
   }
+
+  // Local submissions & Plagiarism state
+  const [localSubmissions, setLocalSubmissions] = useState<any[]>(submissions)
+  const [isScanningPlagiarism, setIsScanningPlagiarism] = useState(false)
+  const [plagiarismScanResult, setPlagiarismScanResult] = useState<{
+    rate: number
+    risk: string
+    matchedStudent: string
+  } | null>(null)
+
+  useEffect(() => {
+    setLocalSubmissions(submissions)
+  }, [submissions])
 
   // Meetings specific states
   const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
@@ -369,7 +418,7 @@ export function FacultySubjectDetailClient({
 
   // Submission details helpers
   const getSubmissionsForAssignment = (assignmentId: string) => {
-    return submissions
+    return localSubmissions
       .filter(s => s.assignment_id === assignmentId)
       .map(s => {
         const student = studentMap.get(s.student_id)
@@ -384,7 +433,7 @@ export function FacultySubjectDetailClient({
 
   const getNotSubmittedForAssignment = (assignment: any) => {
     const assignedSectionIds = assignment.section_ids || []
-    const submittedStudentIds = new Set(submissions.filter(s => s.assignment_id === assignment.id).map(s => s.student_id))
+    const submittedStudentIds = new Set(localSubmissions.filter(s => s.assignment_id === assignment.id).map(s => s.student_id))
     
     return students
       .filter(s => assignedSectionIds.includes(s.section_id) && !submittedStudentIds.has(s.id))
@@ -419,20 +468,255 @@ export function FacultySubjectDetailClient({
   const handleSaveGrade = async () => {
     if (!currentSub || !scoreInput) return
     setIsSavingGrade(true)
-    const gradeVal = Number(scoreInput)
-    const res = await gradeSubmissionAction(currentSub.id, gradeVal, feedbackInput, subject.id)
-    setIsSavingGrade(false)
-    if (res.success) {
-      // Advance or reset
-      if (currentEvalIdx + 1 < activeQueueList.length) {
-        setCurrentEvalIdx(currentEvalIdx)
-      } else {
-        setCurrentEvalIdx(0)
-        setActiveQueueTab("graded")
+    try {
+      const score = Number(scoreInput)
+      if (isNaN(score) || score < 0 || score > (selectedGradingAssignment?.max_score || 100)) {
+        setToast({
+          message: `Please enter a valid score between 0 and ${selectedGradingAssignment?.max_score || 100}.`,
+          type: "warning"
+        })
+        setIsSavingGrade(false)
+        return
       }
-    } else {
-      alert("Error saving grade: " + res.error)
+
+      const res = await gradeSubmissionAction(
+        currentSub.id,
+        score,
+        feedbackInput,
+        subject.id
+      )
+
+      if (res.success) {
+        setLocalSubmissions((prev) =>
+          prev.map((s) =>
+            s.id === currentSub.id
+              ? { ...s, grade: score, feedback: feedbackInput, status: "graded" }
+              : s
+          )
+        )
+        setToast({ message: "Grade saved successfully!", type: "success" })
+
+        // Adjust index if we graded the last pending item
+        if (activeQueueTab === "pending") {
+          const remainingPendingCount = pendingGrading.length - 1
+          if (remainingPendingCount === 0) {
+            setCurrentEvalIdx(0)
+          } else if (currentEvalIdx >= remainingPendingCount) {
+            setCurrentEvalIdx(remainingPendingCount - 1)
+          }
+        }
+      } else {
+        setToast({ message: `Error saving grade: ${res.error || "Unknown error"}`, type: "warning" })
+      }
+    } catch (err: any) {
+      console.error("Save grade error:", err)
+      setToast({ message: `Failed to save grade: ${err.message || "Unknown error"}`, type: "warning" })
+    } finally {
+      setIsSavingGrade(false)
     }
+  }
+
+  // --- PROJECT GROUP ALLOCATION CONFIGURATION & UTILS ---
+  const POPULAR_ROLES = [
+    "Frontend Developer",
+    "Backend Developer",
+    "Fullstack Engineer",
+    "UI/UX Designer",
+    "Product Manager",
+    "QA Specialist",
+    "DevOps Engineer",
+    "Data Scientist",
+    "Embedded Engineer",
+    "Hardware Specialist"
+  ]
+
+  const SQUAD_THEMES = [
+    { name: "Fantasy Adventurers 🧙‍♂️", id: "fantasy", description: "Guilds of Mages, Rogues, and Warriors." },
+    { name: "Sci-Fi Starfleets 🚀", id: "scifi", description: "Cosmic task forces exploring deep space." },
+    { name: "Mighty Animals 🦁", id: "animal", description: "Apex predator alliances." },
+    { name: "Neon Cyber Hackers 💻", id: "cyber", description: "Consortium of netrunners and coders." },
+    { name: "Classic Numbered Squads 📋", id: "classic", description: "Professional, straightforward naming." }
+  ]
+
+  const THEME_NAMES: Record<string, { names: string[]; mottos: string[]; descriptions: string[] }> = {
+    fantasy: {
+      names: ["Aether Wizards", "Shadow Guild", "Crimson Paladins", "Iron Vanguard", "Dragon Sentinels", "Mystic Nomads"],
+      mottos: ["Through fire and arcane knowledge!", "We strike from the unseen shadows.", "Valiance is our shield.", "Unbreakable like deep mountain stone."],
+      descriptions: ["Esoteric knowledge and strategic planning.", "Agility, deception, and speed.", "Divine defense and support healing."]
+    },
+    scifi: {
+      names: ["Hyperion Crew", "Andromeda Sector", "Nebula Raiders", "Chronos Division", "Solar Sentries"],
+      mottos: ["To the edge of the universe!", "Boundless stars, unbroken vision.", "Collect, adapt, and fly."],
+      descriptions: ["Interstellar intelligence and warp technology.", "Planetary colonization and resource gathering.", "Aggressive tactical squadron equipped with shields."]
+    },
+    animal: {
+      names: ["Apex Panthers", "Grizzly Syndicate", "Viper Strike Force", "Golden Eagles", "Timber Wolves"],
+      mottos: ["Unseen stalkers of the night!", "Raw power, unbreakable resolve.", "One strike, absolute resolve."],
+      descriptions: ["Swift, quiet deployment and adaptation.", "Powerhouse squad built to handle workload.", "Calculated precision operations."]
+    },
+    cyber: {
+      names: ["Netrunners Prime", "Buffer Overlords", "Quantum Daemons", "Circuit Breakers", "Zero-Day Syndicate"],
+      mottos: ["We code the reality.", "Overriding limits in real time.", "Entangled in superior strategy."],
+      descriptions: ["Deep-penetration security and network routing.", "Heavy-compute optimization and pipelines.", "Neural nets and mathematical regressions."]
+    },
+    classic: {
+      names: ["Squad Alpha", "Squad Beta", "Squad Gamma", "Squad Delta", "Squad Epsilon"],
+      mottos: ["First in priority, first in result.", "Synergy through continuous balance.", "The solid foundation of operations."],
+      descriptions: ["Foundational core squad focused on primary execution.", "Secondary strategic squad specializing in modular support.", "Analytics and verification wing."]
+    }
+  }
+
+  function handleSectionChange(secId: string) {
+    setSelectedSectionId(secId)
+    if (!secId) {
+      setRoster([])
+      return
+    }
+
+    const filtered = students.filter((s: any) => s.section_id === secId)
+    const enriched = filtered.map((st: any, i: number) => ({
+      id: st.id,
+      name: st.name,
+      email: st.email,
+      registration_number: st.registration_number,
+      role: POPULAR_ROLES[i % POPULAR_ROLES.length],
+      skill: (i % 3) + 3,
+      gender: i % 2 === 0 ? "Male" : "Female"
+    }))
+    setRoster(enriched)
+  }
+
+  function handleRosterUpdate(id: string, field: "role" | "skill", val: any) {
+    setRoster(prev => prev.map(m => m.id === id ? { ...m, [field]: val } : m))
+  }
+
+  function handleOfflineSplit() {
+    if (roster.length === 0) return
+    const theme = THEME_NAMES[themeId] || THEME_NAMES.classic
+    const teams = Array.from({ length: teamCount }, (_, i) => {
+      const presetName = theme.names[i % theme.names.length]
+      const motto = theme.mottos[i % theme.mottos.length]
+      const desc = theme.descriptions[i % theme.descriptions.length]
+      return {
+        name: `${presetName} ${i >= theme.names.length ? Math.floor(i / theme.names.length) + 1 : ""}`.trim(),
+        description: desc,
+        motto,
+        memberIds: [] as string[],
+        synergyScore: 80 + (i % 3) * 5
+      }
+    })
+
+    if (focus === "random") {
+      const shuffled = [...roster].sort(() => Math.random() - 0.5)
+      shuffled.forEach((m, idx) => {
+        teams[idx % teamCount].memberIds.push(m.id)
+      })
+    } else if (focus === "skill_balance") {
+      const sorted = [...roster].sort((a, b) => b.skill - a.skill)
+      sorted.forEach(m => {
+        let minTeam = teams[0]
+        let minSkill = Infinity
+        for (const t of teams) {
+          const tSkill = t.memberIds.reduce((sum, id) => sum + (roster.find(r => r.id === id)?.skill || 0), 0)
+          if (tSkill < minSkill) {
+            minSkill = tSkill
+            minTeam = t
+          }
+        }
+        minTeam.memberIds.push(m.id)
+      })
+    } else {
+      const rolesMap: Record<string, any[]> = {}
+      roster.forEach(m => {
+        if (!rolesMap[m.role]) rolesMap[m.role] = []
+        rolesMap[m.role].push(m)
+      })
+      Object.keys(rolesMap).forEach((role, idx) => {
+        rolesMap[role].forEach((m, mIdx) => {
+          teams[(idx + mIdx) % teamCount].memberIds.push(m.id)
+        })
+      })
+    }
+
+    setGeneratedTeams(teams)
+    setOverallFeedback("Offline structural split completed successfully.")
+  }
+
+  async function handleAISplit() {
+    if (roster.length === 0) return
+    setAllocating(true)
+    const membersData = roster.map(r => ({
+      id: r.id,
+      name: r.name,
+      role: r.role,
+      skill: r.skill,
+      gender: r.gender
+    }))
+
+    const res = (await suggestTeamsAIAction(membersData, {
+      teamCount,
+      theme: themeId,
+      focus
+    })) as any
+
+    if (res.success && res.data) {
+      setGeneratedTeams(res.data.teams || [])
+      setOverallFeedback(res.data.overallFeedback || "AI split complete.")
+    } else {
+      handleOfflineSplit()
+    }
+    setAllocating(false)
+  }
+
+  async function handlePublish() {
+    if (!projectTitle.trim()) {
+      alert("Please enter a project title.")
+      return
+    }
+    if (generatedTeams.length === 0) {
+      alert("No teams generated to publish.")
+      return
+    }
+
+    setSaving(true)
+    const result = await createProjectWithGroupsAction({
+      title: projectTitle,
+      description: projectDesc,
+      subject_id: subject.id,
+      faculty_id: facultyId,
+      groups: generatedTeams
+    })
+
+    if (result.success) {
+      triggerToast("Project groups published successfully!", "success")
+      setProjectTitle("")
+      setProjectDesc("")
+      setGeneratedTeams([])
+      setRoster([])
+      setSelectedSectionId("")
+      setAllocateTab("projects")
+      // Refetch / update localProjects list
+      setLocalProjects(prev => [
+        {
+          id: result.projectId,
+          title: projectTitle,
+          description: projectDesc,
+          created_at: new Date().toISOString(),
+          project_groups: generatedTeams.map((gt, i) => ({
+            id: `new-g-${i}`,
+            group_name: gt.name,
+            group_members: gt.memberIds.map((mId: string) => ({
+              student_id: mId,
+              users: { name: roster.find(r => r.id === mId)?.name || "Student" }
+            }))
+          }))
+        },
+        ...prev
+      ])
+    } else {
+      alert(`Failed to save: ${result.error}`)
+    }
+    setSaving(false)
   }
 
   const typeConfig = {
@@ -484,6 +768,7 @@ export function FacultySubjectDetailClient({
             { id: "announcements", label: "Stream", icon: MessageSquare },
             { id: "students", label: "Roster", icon: Users },
             { id: "attendance", label: "Attendance", icon: ClipboardList },
+            { id: "groups", label: "Project Groups", icon: FolderKanban },
           ].map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -865,6 +1150,114 @@ export function FacultySubjectDetailClient({
                                 </p>
                               </div>
                             )}
+                          </div>
+                        )}
+                        {/* Plagiarism & Code Integrity Checker */}
+                        {selectedGradingAssignment.type !== "Quiz" && (
+                          <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-white/60 backdrop-blur-md shadow-xs text-left">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 font-['Plus_Jakarta_Sans']">
+                                  🛡️ Plagiarism & Code Integrity Scan
+                                </h4>
+                                <p className="text-[10px] text-slate-400">Cross-reference classmates solutions & templates</p>
+                              </div>
+                              {currentSub.plagiarism_rate != null ? (
+                                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
+                                  currentSub.plagiarism_rate >= 60
+                                    ? "bg-rose-50 text-rose-600 border border-rose-100"
+                                    : currentSub.plagiarism_rate >= 30
+                                    ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                    : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                                }`}>
+                                  {currentSub.plagiarism_rate >= 60 ? "HIGH RISK" : currentSub.plagiarism_rate >= 30 ? "MODERATE" : "LOW RISK"}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                                  NOT SCANNED
+                                </span>
+                              )}
+                            </div>
+
+                            {currentSub.plagiarism_rate != null ? (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Similarity Score</div>
+                                    <div className="text-xl font-bold font-['Space_Grotesk'] text-slate-800">
+                                      {currentSub.plagiarism_rate}%
+                                    </div>
+                                  </div>
+                                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Status</div>
+                                    <div className={`text-xs font-bold ${
+                                      currentSub.plagiarism_rate >= 50 ? "text-rose-600" : "text-emerald-600"
+                                    }`}>
+                                      {currentSub.plagiarism_rate >= 50 ? "FLAGGED" : "CLEAN & CLEAR"}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="w-full bg-slate-100 rounded-full h-2">
+                                  <div
+                                    className={`h-2 rounded-full transition-all duration-500 ${
+                                      currentSub.plagiarism_rate >= 60
+                                        ? "bg-rose-500"
+                                        : currentSub.plagiarism_rate >= 30
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                    }`}
+                                    style={{ width: `${currentSub.plagiarism_rate}%` }}
+                                  />
+                                </div>
+
+                                {currentSub.plagiarism_rate > 0 && (
+                                  <div className="text-[10px] text-slate-500 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100 leading-normal">
+                                    Matched solution structure with other peers (highest peer overlap score: {currentSub.plagiarism_rate}%).
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed text-slate-400 text-xs">
+                                Click below to execute fuzzy matches across classmate uploads
+                              </div>
+                            )}
+
+                            <button
+                              onClick={async () => {
+                                setIsScanningPlagiarism(true)
+                                try {
+                                  const res = await runPlagiarismScanAction(currentSub.id)
+                                  if (res.success) {
+                                    triggerToast("Integrity scan complete!", "success")
+                                    // Update localSubmissions array
+                                    setLocalSubmissions(prev =>
+                                      prev.map(s =>
+                                        s.id === currentSub.id
+                                          ? { ...s, plagiarism_rate: res.plagiarismRate ?? 0, verification_status: (res.plagiarismRate ?? 0) >= 50 ? "FLAGGED" : "CLEAN" }
+                                          : s
+                                      )
+                                    )
+                                  } else {
+                                    alert("Plagiarism scan failed: " + res.error)
+                                  }
+                                } catch (err) {
+                                  console.error("Scan error:", err)
+                                } finally {
+                                  setIsScanningPlagiarism(false)
+                                }
+                              }}
+                              disabled={isScanningPlagiarism}
+                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-98 flex items-center justify-center gap-1.5"
+                            >
+                              {isScanningPlagiarism ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Running Analysis Engine...
+                                </>
+                              ) : (
+                                "Run Integrity Scan"
+                              )}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1427,6 +1820,346 @@ export function FacultySubjectDetailClient({
                 Schedule Slot
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 7: Project Groups Allocation Workspace */}
+      {activeTab === "groups" && (
+        <div className="grid gap-8 lg:grid-cols-12 text-left">
+          {/* Settings panel */}
+          <div className="space-y-6 lg:col-span-4">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                <span className="text-sm font-black text-slate-800">Allocation Workspace</span>
+                <div className="flex gap-1.5 bg-slate-100 p-0.5 rounded-xl">
+                  <button
+                    onClick={() => setAllocateTab("projects")}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition ${
+                      allocateTab === "projects"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Projects
+                  </button>
+                  <button
+                    onClick={() => setAllocateTab("allocate")}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition ${
+                      allocateTab === "allocate"
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    New Allocate
+                  </button>
+                </div>
+              </div>
+
+              {allocateTab === "allocate" ? (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Select Target Section
+                    </label>
+                    <select
+                      value={selectedSectionId}
+                      onChange={(e) => handleSectionChange(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="">Choose section...</option>
+                      {sections.map((sec) => (
+                        <option key={sec.id} value={sec.id}>
+                          Section {sec.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Project Title
+                    </label>
+                    <input
+                      type="text"
+                      value={projectTitle}
+                      onChange={(e) => setProjectTitle(e.target.value)}
+                      placeholder="Enter project name..."
+                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Project Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={projectDesc}
+                      onChange={(e) => setProjectDesc(e.target.value)}
+                      placeholder="Brief description..."
+                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Target Squad Count
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={12}
+                      value={teamCount}
+                      onChange={(e) => setTeamCount(parseInt(e.target.value) || 2)}
+                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Designation Theme
+                    </label>
+                    <select
+                      value={themeId}
+                      onChange={(e) => setThemeId(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                    >
+                      {SQUAD_THEMES.map(theme => (
+                        <option key={theme.id} value={theme.id}>
+                          {theme.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      Balance Focus
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setFocus("skill_balance")}
+                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                          focus === "skill_balance"
+                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                            : "bg-slate-50 border-slate-200 text-slate-600"
+                        }`}
+                      >
+                        Skill Balanced
+                      </button>
+                      <button
+                        onClick={() => setFocus("role_distribution")}
+                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                          focus === "role_distribution"
+                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                            : "bg-slate-50 border-slate-200 text-slate-600"
+                        }`}
+                      >
+                        Role Distributed
+                      </button>
+                      <button
+                        onClick={() => setFocus("random")}
+                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                          focus === "random"
+                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                            : "bg-slate-50 border-slate-200 text-slate-600"
+                        }`}
+                      >
+                        Random
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+                    <button
+                      onClick={handleAISplit}
+                      disabled={roster.length === 0 || allocating}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-100 transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                    >
+                      <Sparkles size={16} />
+                      {allocating ? "Allocating..." : "Allocate via Gemini AI"}
+                    </button>
+
+                    <button
+                      onClick={handleOfflineSplit}
+                      disabled={roster.length === 0}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                    >
+                      Manual Offline Split
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400 leading-normal">
+                    Click "View groups" on any active project on the right side to inspect team segregation metrics, synergy values, and mottos.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Results Pane */}
+          <div className="space-y-6 lg:col-span-8">
+            {allocateTab === "allocate" ? (
+              <>
+                {/* Roster profiles table */}
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-extrabold text-slate-800 text-sm">Roster Profiles</h3>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                      {roster.length} students enrolled
+                    </span>
+                  </div>
+
+                  {loadingRoster ? (
+                    <div className="py-12 text-center text-sm text-slate-400">Loading student roster...</div>
+                  ) : roster.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-slate-400">
+                      Select a section on the left to configure roles & skill ratings.
+                    </div>
+                  ) : (
+                    <div className="max-h-[300px] overflow-y-auto border border-slate-100 rounded-2xl">
+                      <table className="min-w-full divide-y divide-slate-100 text-sm">
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {roster.map((student) => (
+                            <tr key={student.id}>
+                              <td className="px-4 py-2 font-semibold text-slate-800">{student.name}</td>
+                              <td className="px-4 py-2">
+                                <select
+                                  value={student.role}
+                                  onChange={(e) => handleRosterUpdate(student.id, "role", e.target.value)}
+                                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none"
+                                >
+                                  {POPULAR_ROLES.map(role => (
+                                    <option key={role} value={role}>{role}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-4 py-2">
+                                <select
+                                  value={student.skill}
+                                  onChange={(e) => handleRosterUpdate(student.id, "skill", parseInt(e.target.value) || 3)}
+                                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none"
+                                >
+                                  <option value="1">1 Star</option>
+                                  <option value="2">2 Stars</option>
+                                  <option value="3">3 Stars</option>
+                                  <option value="4">4 Stars</option>
+                                  <option value="5">5 Stars</option>
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Allocation Preview results */}
+                {generatedTeams.length > 0 && (
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                      <div>
+                        <h3 className="font-extrabold text-slate-800 text-sm">Allocation Preview</h3>
+                        <p className="mt-1 text-xs text-slate-500">{overallFeedback}</p>
+                      </div>
+                      <button
+                        onClick={handlePublish}
+                        disabled={saving}
+                        className="rounded-2xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-100 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                      >
+                        {saving ? "Publishing..." : "Publish Allocation"}
+                      </button>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {generatedTeams.map((team, idx) => (
+                        <div key={idx} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-black text-slate-850">{team.name}</span>
+                            {team.synergyScore && (
+                              <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
+                                <Star size={10} className="fill-emerald-600" />
+                                {team.synergyScore}% Synergy
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-400 italic mb-3">"{team.motto}"</p>
+                          
+                          <div className="space-y-1.5 mt-4">
+                            {team.memberIds.map((memId: string) => {
+                              const student = roster.find(r => r.id === memId)
+                              if (!student) return null
+                              return (
+                                <div key={memId} className="flex items-center justify-between rounded-xl bg-white p-2 border border-slate-100 text-xs">
+                                  <span className="font-semibold text-slate-700">{student.name}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+                                    {student.role}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Projects Tab Right Panel List */
+              <div className="space-y-4">
+                {localProjects.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
+                    <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
+                    <h3 className="mt-4 text-base font-semibold text-slate-900">No project groups created yet</h3>
+                    <p className="mt-2 text-sm text-slate-500">Switch to the "New Allocate" tab on the left to split groups.</p>
+                  </div>
+                ) : (
+                  localProjects.map((proj) => (
+                    <div key={proj.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">{proj.title}</h3>
+                          <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
+                          <p className="mt-2 text-xs text-slate-400">Created: {new Date(proj.created_at).toLocaleDateString()}</p>
+                        </div>
+                        <button
+                          onClick={() => setExpandedProjId(expandedProjId === proj.id ? null : proj.id)}
+                          className="rounded-xl border border-slate-100 px-4 py-2 text-xs font-semibold hover:bg-slate-50"
+                        >
+                          {expandedProjId === proj.id ? "Hide details" : "View groups"}
+                        </button>
+                      </div>
+
+                      {expandedProjId === proj.id && (
+                        <div className="mt-6 border-t border-slate-100 pt-6">
+                          <div className="grid gap-6 sm:grid-cols-2">
+                            {proj.project_groups?.map((group: any) => (
+                              <div key={group.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">
+                                  {group.group_name}
+                                </h4>
+                                <div className="space-y-2">
+                                  {group.group_members?.map((member: any, mIdx: number) => (
+                                    <div key={mIdx} className="flex flex-col rounded-xl bg-white p-2 text-xs border border-slate-100">
+                                      <span className="font-semibold text-slate-700">{member.users?.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

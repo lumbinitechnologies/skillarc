@@ -12,13 +12,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import type { Faculty, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
+import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
 
 interface CreateFacultyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (data: CreateFacultyInput | UpdateFacultyInput, isEdit: boolean) => Promise<void>
-  faculty?: Faculty | null
+  faculty?: FacultyWithStats | null
   departments?: Array<{ id: string; name: string }>
   isLoading?: boolean
 }
@@ -34,7 +34,9 @@ export function CreateFacultyDialog({
   const [formData, setFormData] = useState({
     name: faculty?.name || "",
     email: faculty?.email || "",
-    department_id: "",
+    department_id: faculty?.department_id || "",
+    role: (faculty?.role || "FACULTY") as any,
+    is_timetable_builder: faculty?.is_timetable_builder || false,
   })
   const { toast } = useToast()
 
@@ -42,7 +44,9 @@ export function CreateFacultyDialog({
     setFormData({
       name: faculty?.name || "",
       email: faculty?.email || "",
-      department_id: "",
+      department_id: faculty?.department_id || "",
+      role: (faculty?.role || "FACULTY") as any,
+      is_timetable_builder: faculty?.is_timetable_builder || false,
     })
   }, [faculty])
 
@@ -69,7 +73,7 @@ export function CreateFacultyDialog({
     try {
       await onSubmit(formData, !!faculty)
       onOpenChange(false)
-      setFormData({ name: "", email: "", department_id: "" })
+      setFormData({ name: "", email: "", department_id: "", role: "FACULTY", is_timetable_builder: false })
     } catch (error) {
       toast({
         title: "Error",
@@ -86,7 +90,7 @@ export function CreateFacultyDialog({
           <DialogTitle>{faculty ? "Edit Faculty" : "Create Faculty"}</DialogTitle>
           <DialogDescription>
             {faculty
-              ? "Update faculty member details"
+              ? "Update faculty member details and assign roles"
               : "Create a new faculty member account"}
           </DialogDescription>
         </DialogHeader>
@@ -134,7 +138,7 @@ export function CreateFacultyDialog({
                 onChange={(e) =>
                   setFormData({ ...formData, department_id: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 bg-white text-slate-800 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 <option value="">Select department</option>
                 {departments.map((dept) => (
@@ -146,6 +150,44 @@ export function CreateFacultyDialog({
             </div>
           )}
 
+          {/* Role selector (HOD / Program Head / Faculty) */}
+          <div className="space-y-2">
+            <Label htmlFor="role">Institutional Role</Label>
+            <select
+              id="role"
+              value={formData.role}
+              onChange={(e) =>
+                setFormData({ ...formData, role: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-slate-200 bg-white text-slate-800 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="FACULTY">Faculty Member</option>
+              <option value="HOD">Head of Department (HOD)</option>
+              <option value="PROGRAM_HEAD">Program Head</option>
+            </select>
+          </div>
+
+          {/* Timetable Builder toggle */}
+          <div className="flex items-center gap-3 py-2 px-1 border border-slate-100 rounded-lg bg-slate-50/50">
+            <input
+              type="checkbox"
+              id="is_timetable_builder"
+              checked={formData.is_timetable_builder}
+              onChange={(e) =>
+                setFormData({ ...formData, is_timetable_builder: e.target.checked })
+              }
+              className="h-4 w-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+            />
+            <div>
+              <Label htmlFor="is_timetable_builder" className="text-xs font-bold text-slate-700 cursor-pointer">
+                Timetable Builder Access
+              </Label>
+              <p className="text-[10px] text-slate-400">
+                Grant permission to create and build timetables.
+              </p>
+            </div>
+          </div>
+
           <div className="flex gap-2 pt-4">
             <Button
               type="button"
@@ -155,7 +197,7 @@ export function CreateFacultyDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1">
+            <Button type="submit" disabled={isLoading} className="flex-1 bg-[#6C63FF] hover:bg-[#5b52e0] text-white">
               {isLoading ? "Saving..." : faculty ? "Update Faculty" : "Create Faculty"}
             </Button>
           </div>

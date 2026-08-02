@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import { FacultySubjectDetailClient } from "./faculty-subject-detail-client"
+import { getProjectsBySubjectAction } from "@/app/actions/project-groups"
 
 export const dynamic = "force-dynamic"
 
@@ -26,7 +27,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.FACULTY) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
 
   // 1. Fetch Subject Info
   const { data: subject } = await supabase
@@ -66,22 +67,59 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   const assignmentIds = (assignments ?? []).map((a: any) => a.id)
 
   // 4. Fetch Submissions for these assignments
-  const { data: submissions = [] } = assignmentIds.length
+  const { data: submissionsRaw = [] } = assignmentIds.length
     ? await supabase
         .from("submissions")
         .select("*")
         .in("assignment_id", assignmentIds)
     : { data: [] }
 
-  // 5. Fetch Students enrolled in the sections taught
-  const { data: students = [] } = sectionIds.length
+  // Fetch plagiarism verification details
+  const subIds = (submissionsRaw || []).map((s: any) => s.id)
+  const { data: verifications = [] } = subIds.length
     ? await supabase
-        .from("users")
-        .select("id, name, email, section_id, registration_number")
-        .eq("role", ROLES.STUDENT)
-        .in("section_id", sectionIds)
-        .order("name")
+        .from("submission_verifications")
+        .select("submission_id, plagiarism_rate, status")
+        .in("submission_id", subIds)
     : { data: [] }
+
+  const submissions = (submissionsRaw || []).map((s: any) => {
+    const v = (verifications || []).find((ver: any) => ver.submission_id === s.id)
+    return {
+      ...s,
+      plagiarism_rate: v ? Number(v.plagiarism_rate) : null,
+      verification_status: v ? v.status : null,
+    }
+  })
+
+  // 5. Fetch Students enrolled in the sections taught
+  let students: any[] = []
+  if (sectionIds.length) {
+    const { data: studentRecords } = await supabase
+      .from("students")
+      .select("id, section_id, registration_number")
+      .in("section_id", sectionIds)
+
+    if (studentRecords?.length) {
+      const sIds = studentRecords.map((s: any) => s.id)
+      const { data: userRecords } = await supabase
+        .from("users")
+        .select("id, name, email")
+        .in("id", sIds)
+        .order("name")
+
+      students = (studentRecords || []).map((st: any) => {
+        const u = (userRecords || []).find((usr: any) => usr.id === st.id)
+        return {
+          id: st.id,
+          name: u?.name || "Unknown",
+          email: u?.email || "",
+          section_id: st.section_id,
+          registration_number: st.registration_number,
+        }
+      })
+    }
+  }
 
   // 6. Fetch Meetings for this subject
   const { data: meetings = [] } = await supabase
@@ -89,6 +127,9 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
     .select("*")
     .eq("subject_id", subjectId)
     .order("created_at", { ascending: false })
+
+  // 7. Fetch Project Groups for this subject
+  const projects = await getProjectsBySubjectAction(subjectId)
 
   return (
     <FacultySubjectDetailClient
@@ -101,6 +142,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
       submissions={submissions ?? []}
       students={students ?? []}
       meetings={meetings ?? []}
+      projects={projects ?? []}
     />
   )
 }

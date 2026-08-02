@@ -1,9 +1,10 @@
-import { UserRound } from "lucide-react"
+import { UserRound, Printer } from "lucide-react"
 
 interface Props {
   students: any[]
   attendance: Record<string, string>
   onStatusChange: (studentId: string, status: string) => void
+  onPrint?: () => void
 }
 
 const STATUS = [
@@ -28,6 +29,7 @@ export default function AttendanceTable({
   students,
   attendance,
   onStatusChange,
+  onPrint,
 }: Props) {
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -39,8 +41,19 @@ export default function AttendanceTable({
               {students.length} student{students.length === 1 ? "" : "s"} in the current view
             </p>
           </div>
-          <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-            Quick mark
+          <div className="flex items-center gap-2">
+            {onPrint && (
+              <button
+                type="button"
+                onClick={onPrint}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition shadow-xs"
+              >
+                <Printer size={14} className="text-[#6C63FF]" /> Print Sheet
+              </button>
+            )}
+            <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+              Quick mark
+            </div>
           </div>
         </div>
       </div>

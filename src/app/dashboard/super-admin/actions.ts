@@ -31,14 +31,14 @@ async function requireSuperAdmin() {
   return { error: null, supabase, adminClient }
 }
 
-export async function createOrganization(name: string) {
+export async function createOrganization(name: string, features: string[] = []) {
   const { error: authError, supabase } = await requireSuperAdmin()
   if (authError || !supabase) return { success: false, error: authError }
 
   const { data, error } = await supabase
     .from("organizations")
-    .insert({ name })
-    .select("id, name, created_at")
+    .insert({ name, features })
+    .select("id, name, created_at, features")
     .single()
 
   if (error) {
@@ -46,15 +46,16 @@ export async function createOrganization(name: string) {
     return { success: false, error: error.message }
   }
 
-  return { success: true, org: { ...data, institution_count: 0, admin_count: 0 } }
+  return { success: true, org: { ...data, institution_count: 0, admin_count: 0, features: data.features } }
 }
 
-export async function editOrganization(id: string, name: string) {
+export async function editOrganization(id: string, name: string, features: string[] = []) {
   const { error: authError, supabase } = await requireSuperAdmin()
   if (authError || !supabase) return { success: false, error: authError }
 
-  const { error } = await supabase.from("organizations").update({ name }).eq("id", id)
+  const { error } = await supabase.from("organizations").update({ name, features }).eq("id", id)
   if (error) return { success: false, error: error.message }
+
   return { success: true }
 }
 
@@ -64,6 +65,7 @@ export async function deleteOrganization(id: string) {
 
   const { error } = await supabase.from("organizations").delete().eq("id", id)
   if (error) return { success: false, error: error.message }
+
   return { success: true }
 }
 

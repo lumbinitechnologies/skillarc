@@ -24,7 +24,7 @@ export default async function AttendancePage() {
 
   const institutionId = profile.institution_id
 
-  const [programsRes, sectionsRes, subjectsRes, studentsRes] = await Promise.all([
+  const [programsRes, sectionsRes, subjectsRes, studentRecordsRes] = await Promise.all([
     supabase
       .from("programs")
       .select("id,name")
@@ -49,7 +49,25 @@ export default async function AttendancePage() {
   const programs = programsRes.data ?? []
   const sections = sectionsRes.data ?? []
   const subjects = subjectsRes.data ?? []
-  const students = studentsRes.data ?? []
+  const studentRecords = studentRecordsRes.data ?? []
+
+  const studentIds = studentRecords.map((s: any) => s.id)
+  const { data: userRecords = [] } = studentIds.length
+    ? await supabase
+        .from("users")
+        .select("id, name, email, role")
+        .in("id", studentIds)
+    : { data: [] }
+
+  const students = studentRecords.map((s: any) => {
+    const user = (userRecords ?? []).find((u: any) => u.id === s.id)
+    return {
+      ...s,
+      name: user?.name || "Unknown Student",
+      email: user?.email || "",
+      role: user?.role || "STUDENT",
+    }
+  })
 
   return (
     <AttendanceClient

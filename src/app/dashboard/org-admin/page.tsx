@@ -30,7 +30,7 @@ export default async function Page() {
       .from("users")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .eq("role", ROLES.FACULTY),
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
     supabase
       .from("users")
       .select("*", { count: "exact", head: true })

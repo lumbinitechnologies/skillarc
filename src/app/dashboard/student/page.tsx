@@ -13,15 +13,23 @@ export default async function Page() {
   } = await supabase.auth.getUser()
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  // Get user profile (common fields)
+  const { data: userProfile } = await supabase
     .from("users")
-    .select(
-      "id, role, institution_id, name, email, section_id, program_id, semester, registration_number, phone, admission_year"
-    )
+    .select("id, role, institution_id, name, email, phone")
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  // Get student-specific fields from students table
+  const { data: studentData } = await supabase
+    .from("students")
+    .select("id, section_id, program_id, semester, registration_number, admission_year")
+    .eq("id", user.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentData }
 
   // 1. Fetch institution, section, timetable slots, and attendance records in parallel
   const [institutionRes, sectionRes, timetableRes, attendanceRes] = await Promise.all([
@@ -70,9 +78,29 @@ export default async function Page() {
   }
 
   const programIdToFetch = section?.program_id || profile.program_id
-  const subjectIds = Array.from(
+  let subjectIds = Array.from(
     new Set((timetableRows ?? []).map((slot: any) => slot.subject_id).filter(Boolean))
   ) as string[]
+
+  if (subjectIds.length === 0 && (programIdToFetch || profile.institution_id)) {
+    let subQuery = supabase
+      .from("subjects")
+      .select("id")
+    if (programIdToFetch) {
+      subQuery = subQuery.eq("program_id", programIdToFetch)
+    } else if (profile.institution_id) {
+      subQuery = subQuery.eq("institution_id", profile.institution_id)
+    }
+    const currentSem = sectionSemester ?? profile.semester
+    if (currentSem) {
+      subQuery = subQuery.eq("semester", currentSem)
+    }
+    const { data: programSubjects } = await subQuery
+    if (programSubjects?.length) {
+      subjectIds = programSubjects.map((s: any) => s.id)
+    }
+  }
+
   const facultyIds = Array.from(
     new Set((timetableRows ?? []).map((slot: any) => slot.faculty_id).filter(Boolean))
   ) as string[]

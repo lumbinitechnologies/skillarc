@@ -117,6 +117,7 @@ export function CreateStudentDialog({
     section_id: "", semester: 1, program_id: null as string | null,
     institution_id: "", phone: "", registration_number: "",
     admission_year: currentYear,
+    parentName: "", parentEmail: "", parentPhone: "", parentRelationship: "Guardian"
   }
 
   const fromStudent = () => ({
@@ -135,18 +136,54 @@ export function CreateStudentDialog({
   const [formData, setFormData] = useState<CreateStudentInput | UpdateStudentInput>(fromStudent())
   const { toast } = useToast()
 
-  useEffect(() => { setFormData(fromStudent()) }, [student])
+  useEffect(() => {
+    async function fetchGuardian() {
+      if (student?.id) {
+        try {
+          const res = await fetch(`/api/parents/relations?student_id=${student.id}`)
+          if (res.ok) {
+            const rels = await res.json()
+            if (rels && rels.length > 0) {
+              const rel = rels[0]
+              setFormData(prev => ({
+                ...prev,
+                parentName: rel.parent?.name || "",
+                parentEmail: rel.parent?.email || "",
+                parentPhone: rel.parent?.phone || "",
+                parentRelationship: rel.relationship || "Guardian"
+              }))
+            }
+          }
+        } catch (err) {
+          console.error("Failed to load guardian details:", err)
+        }
+      }
+    }
+
+    setFormData(fromStudent())
+    fetchGuardian()
+  }, [student])
 
   const availableSemesters = useMemo(() => [
     ...new Set(
-      sections.filter(s => s.program_id === formData.program_id).map(s => s.semester)
+      sections
+        .filter(s => (s.program_id || (s as any).program?.id) === formData.program_id)
+        .map(s => s.semester)
     ),
   ].sort((a, b) => a - b), [sections, formData.program_id])
 
   const filteredSections = useMemo(() =>
     sections.filter(s =>
-      s.program_id === formData.program_id && s.semester === formData.semester
+      (s.program_id || (s as any).program?.id) === formData.program_id &&
+      s.semester === formData.semester
     ), [sections, formData.program_id, formData.semester])
+
+  // Automatically sync semester state if it's invalid for the selected program
+  useEffect(() => {
+    if (availableSemesters.length > 0 && (!formData.semester || !availableSemesters.includes(formData.semester))) {
+      setFormData(prev => ({ ...prev, semester: availableSemesters[0], section_id: "" }))
+    }
+  }, [availableSemesters, formData.semester])
 
   function set(key: string, value: any) {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -332,6 +369,89 @@ export function CreateStudentDialog({
                         : "Select section"}
                   </option>
                   {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </StyledSelect>
+              </div>
+            </div>
+
+            {/* ── Parent / Guardian Details ── */}
+            <SectionDivider icon={<User size={13} color="#fff" />} label="Parent / Guardian Details" />
+
+            <div>
+              <FieldLabel>Search Existing Parent</FieldLabel>
+              <div style={{ position: "relative" }}>
+                <Input
+                  placeholder="Type name or email to search existing..."
+                  onChange={async (e) => {
+                    const term = e.target.value;
+                    if (term.length > 2) {
+                      try {
+                        const res = await fetch(`/api/parents?institution_id=${(formData as any).institution_id || student?.institution_id || ""}`);
+                        if (res.ok) {
+                          const parents = await res.json();
+                          const matched = parents.find((p: any) =>
+                            p.name?.toLowerCase().includes(term.toLowerCase()) ||
+                            p.email?.toLowerCase().includes(term.toLowerCase())
+                          );
+                          if (matched) {
+                            set("parentName", matched.name || "");
+                            set("parentEmail", matched.email || "");
+                            set("parentPhone", matched.phone || "");
+                          }
+                        }
+                      } catch (err) {
+                        console.error(err);
+                      }
+                    }
+                  }}
+                  style={{
+                    fontSize: 13, fontWeight: 500, fontFamily: font,
+                    border: "1.5px solid #e5e7eb", borderRadius: 10,
+                    backgroundColor: "#fff", height: 38,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <FieldLabel>Parent/Guardian Name</FieldLabel>
+                <StyledInput
+                  placeholder="Name"
+                  value={(formData as any).parentName || ""}
+                  onChange={e => set("parentName", e.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Parent/Guardian Email</FieldLabel>
+                <StyledInput
+                  type="email"
+                  placeholder="parent@example.com"
+                  value={(formData as any).parentEmail || ""}
+                  onChange={e => set("parentEmail", e.target.value)}
+                  disabled={isEdit}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <FieldLabel>Parent Phone</FieldLabel>
+                <StyledInput
+                  placeholder="Phone"
+                  value={(formData as any).parentPhone || ""}
+                  onChange={e => set("parentPhone", e.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Relationship</FieldLabel>
+                <StyledSelect
+                  value={(formData as any).parentRelationship || "Guardian"}
+                  onChange={v => set("parentRelationship", v)}
+                >
+                  <option value="Father">Father</option>
+                  <option value="Mother">Mother</option>
+                  <option value="Guardian">Guardian</option>
+                  <option value="Other">Other</option>
                 </StyledSelect>
               </div>
             </div>

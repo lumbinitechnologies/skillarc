@@ -28,7 +28,7 @@ export default async function FacultyTimetablePage() {
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.FACULTY) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
 
   const { data: timetableRows = [] } = await supabase
     .from("timetable_slots")

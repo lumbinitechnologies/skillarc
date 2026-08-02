@@ -45,7 +45,21 @@ export function StudentsClientPage({
   const [selectedStudent, setSelectedStudent] = useState<StudentWithSection | null>(null)
   const [drawerOpen, setDrawerOpen]   = useState(false)
   const [isLoading, setIsLoading]     = useState(false)
+  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
   const { toast } = useToast()
+
+  useEffect(() => {
+    async function getFeatures() {
+      try {
+        const res = await fetch("/api/org-features")
+        const json = await res.json()
+        setEnabledFeatures(json.features || [])
+      } catch (err) {
+        console.error("Failed to load org features:", err)
+      }
+    }
+    getFeatures()
+  }, [])
 
   // ── Fetch page from server ──────────────────────────────────────────────
   const loadStudents = useCallback(async (targetPage = page, targetLimit = limit) => {
@@ -179,16 +193,18 @@ export function StudentsClientPage({
             <p className="mt-2 text-sm text-slate-500">Manage enrollments, section assignments, and student records in one place.</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setIsImportOpen(true)} className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <Upload className="mr-2 h-4 w-4" />
-            Import CSV
-          </Button>
-          <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
-            <Plus className="mr-2 h-4 w-4" />
-            New Student
-          </Button>
-        </div>
+        {(!enabledFeatures || enabledFeatures.includes("direct_onboarding")) && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setIsImportOpen(true)} className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
+            <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
+              <Plus className="mr-2 h-4 w-4" />
+              New Student
+            </Button>
+          </div>
+        )}
       </div>
 
       <StudentSearch value={search} onChange={(v) => { setSearch(v); setPage(1) }} />
@@ -209,6 +225,10 @@ export function StudentsClientPage({
           students={filteredStudents}
           isLoading={isLoading}
           onEdit={(student) => {
+            setSelectedStudent(student)
+            setIsOpen(true)
+          }}
+          onView={(student) => {
             setSelectedStudent(student)
             setDrawerOpen(true)
           }}

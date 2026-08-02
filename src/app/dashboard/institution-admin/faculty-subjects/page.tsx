@@ -29,7 +29,7 @@ export default async function FacultySubjectsPage() {
       .from("users")
       .select("id,name")
       .eq("institution_id", institutionId)
-      .eq("role", ROLES.FACULTY)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
       .order("name"),
     supabase
       .from("subjects")

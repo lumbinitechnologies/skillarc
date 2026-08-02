@@ -26,27 +26,66 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, department_id } = body
+    const { name, department_id, role, is_timetable_builder } = body
+
+    const updateData: any = {}
+    if (name) updateData.name = name
+    if (role && [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(role)) {
+      updateData.role = role
+    }
 
     const { data: faculty, error } = await supabase
       .from("users")
-      .update({ name })
+      .update(updateData)
       .eq("id", id)
-      .eq("role", ROLES.FACULTY)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
       .select()
       .single()
 
     if (error) throw error
 
+    // Handle department mapping
     if (department_id) {
       const { error: deptError } = await supabase.from("departments_hierarchy").upsert([
         {
           user_id: id,
           department_id,
-          role: ROLES.FACULTY,
+          role: role || faculty.role,
         },
       ])
       if (deptError) throw deptError
+    }
+
+    // Handle Timetable Builder permission
+    if (is_timetable_builder !== undefined) {
+      let { data: perm } = await supabase
+        .from("permissions")
+        .select("id")
+        .eq("name", "timetable_builder")
+        .maybeSingle()
+
+      if (!perm) {
+        const { data: newPerm } = await supabase
+          .from("permissions")
+          .insert({ name: "timetable_builder" })
+          .select("id")
+          .single()
+        perm = newPerm
+      }
+
+      if (perm?.id) {
+        if (is_timetable_builder) {
+          await supabase
+            .from("user_permissions")
+            .upsert({ user_id: id, permission_id: perm.id })
+        } else {
+          await supabase
+            .from("user_permissions")
+            .delete()
+            .eq("user_id", id)
+            .eq("permission_id", perm.id)
+        }
+      }
     }
 
     return NextResponse.json(faculty)
@@ -79,7 +118,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { error } = await supabase.from("users").delete().eq("id", id).eq("role", ROLES.FACULTY)
+    const { error } = await supabase
+      .from("users")
+      .delete()
+      .eq("id", id)
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
     if (error) throw error
 
     return NextResponse.json({ success: true })

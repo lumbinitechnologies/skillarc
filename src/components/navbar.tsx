@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, Search, LogOut, User, Settings, ChevronDown } from "lucide-react"
+import { Bell, Search, LogOut, User, Settings, ChevronDown, KeyRound } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
 
@@ -42,7 +42,26 @@ export default function Navbar() {
   const profilePath = profile ? profileRoutes[profile.role as Role] ?? "/dashboard" : "/dashboard"
   const settingsPath = profile ? settingsRoutes[profile.role as Role] ?? profilePath : "/dashboard"
 
+  const [notifications, setNotifications] = useState<any[]>([])
+
   useEffect(() => {
+    async function loadNotifications(userId: string) {
+      try {
+        const { data } = await supabase
+          .from("notifications")
+          .select("id, title, message, is_read, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(6)
+        
+        if (data) {
+          setNotifications(data)
+        }
+      } catch (err) {
+        console.error("Failed to load notifications:", err)
+      }
+    }
+
     async function getProfile() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
@@ -63,6 +82,8 @@ export default function Navbar() {
             role: "User",
           })
         }
+
+        loadNotifications(user.id)
       }
     }
 
@@ -89,11 +110,32 @@ export default function Navbar() {
     router.push("/auth/login")
   }
 
-  const notifications = [
-    { id: 1, text: "New assignment submitted by Alex R.", time: "2m ago", unread: true },
-    { id: 2, text: "Course 'DAA' timetable updated.", time: "1h ago", unread: true },
-    { id: 3, text: "3 students enrolled in WT batch.", time: "3h ago", unread: false },
-  ]
+  async function markAsRead(id: string) {
+    try {
+      await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", id)
+      
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    } catch (err) {
+      console.error("Failed to mark notification read:", err)
+    }
+  }
+
+  function fmtTime(dateStr: string) {
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime()
+      const diffMin = Math.floor(diffMs / 60000)
+      if (diffMin < 1) return "Just now"
+      if (diffMin < 60) return `${diffMin}m ago`
+      const diffHr = Math.floor(diffMin / 60)
+      if (diffHr < 24) return `${diffHr}h ago`
+      return new Date(dateStr).toLocaleDateString()
+    } catch {
+      return ""
+    }
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl shadow-sm">
@@ -132,29 +174,41 @@ export default function Navbar() {
               className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-indigo-100 bg-white/90 text-slate-600 transition hover:bg-slate-50 ${notifOpen ? "ring-1 ring-indigo-200" : ""}`}
             >
               <Bell size={16} />
-              <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-orange-400/90 shadow-[0_0_0_4px_rgba(248,113,113,0.14)] animate-ping" />
-              <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-orange-400" />
+              {notifications.some(n => !n.is_read) && (
+                <>
+                  <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-orange-400/90 shadow-[0_0_0_4px_rgba(248,113,113,0.14)] animate-ping" />
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-orange-400" />
+                </>
+              )}
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full z-30 mt-3 min-w-[300px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-30 mt-3 min-w-[320px] max-w-[360px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
                 <div className="border-b border-slate-200/70 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-900">Notifications</p>
                 </div>
-                <div className="flex flex-col">
-                  {notifications.map((notification) => (
-                    <button
-                      key={notification.id}
-                      type="button"
-                      className={`flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition ${notification.unread ? "bg-slate-50" : "hover:bg-slate-100"}`}
-                    >
-                      {notification.unread && <span className="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-indigo-500" />}
-                      <div className="min-w-0">
-                        <p className="text-sm text-slate-700">{notification.text}</p>
-                        <p className="mt-1 text-xs text-slate-400">{notification.time}</p>
-                      </div>
-                    </button>
-                  ))}
+                <div className="flex flex-col max-h-[360px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-xs text-slate-400">
+                      No notifications yet.
+                    </div>
+                  ) : (
+                    notifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => markAsRead(notification.id)}
+                        className={`flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition ${!notification.is_read ? "bg-indigo-50/40 hover:bg-indigo-50/70" : "hover:bg-slate-100"}`}
+                      >
+                        {!notification.is_read && <span className="mt-1.5 inline-flex h-2 w-2 shrink-0 rounded-full bg-indigo-500" />}
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 text-xs">{notification.title}</p>
+                          <p className="text-xs text-slate-600 mt-0.5 leading-normal">{notification.message}</p>
+                          <p className="mt-1 text-[10px] text-slate-400">{fmtTime(notification.created_at)}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
                   <button type="button" className="w-full border-t border-slate-200/70 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600 transition hover:bg-indigo-50">
                     View all notifications
                   </button>
@@ -205,6 +259,17 @@ export default function Navbar() {
                 >
                   <Settings size={14} className="text-indigo-500" />
                   Settings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push("/dashboard/change-password")
+                    setDropdownOpen(false)
+                  }}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50"
+                >
+                  <KeyRound size={14} className="text-indigo-500" />
+                  Change Password
                 </button>
                 <div className="border-t border-slate-200/70" />
                 <button

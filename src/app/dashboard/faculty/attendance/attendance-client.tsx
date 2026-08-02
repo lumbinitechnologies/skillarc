@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Save } from "lucide-react"
+import { Save, Printer } from "lucide-react"
 import AttendanceFilters from "@/modules/attendance/components/AttendanceFilters"
 import AttendanceTable from "@/modules/attendance/components/AttendanceTable"
+import AttendancePrintModal from "@/modules/attendance/components/AttendancePrintModal"
 import { getExistingAttendanceAction, saveAttendanceAction } from "./actions"
 
 interface Props {
@@ -36,6 +37,7 @@ export default function AttendanceClient({
   const [feedback, setFeedback] = useState<string | null>(null)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
   const [isSetupCollapsed, setIsSetupCollapsed] = useState(false)
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
 
   const filteredStudents = useMemo(
     () =>
@@ -270,6 +272,7 @@ export default function AttendanceClient({
             students={filteredStudents}
             attendance={attendance}
             onStatusChange={handleStatusChange}
+            onPrint={() => setIsPrintModalOpen(true)}
           />
         </div>
 
@@ -315,6 +318,13 @@ export default function AttendanceClient({
               <Save size={16} />
               {isSaving ? "Saving..." : "Save Attendance"}
             </button>
+            <button
+              onClick={() => setIsPrintModalOpen(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+            >
+              <Printer size={16} className="text-[#6C63FF]" />
+              Print Attendance Sheet
+            </button>
             {sessionNotice ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
                 {sessionNotice}
@@ -328,6 +338,19 @@ export default function AttendanceClient({
           </div>
         </div>
       </div>
+
+      <AttendancePrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        programName={programs.find(p => p.id === selectedProgram)?.name || "All Programs"}
+        semesterName={selectedSemester || "Current Semester"}
+        sectionName={sections.find(s => s.id === selectedSection)?.name || "Current Section"}
+        subjectName={subjects.find(s => s.id === selectedSubject)?.name || "Current Subject"}
+        periodName={selectedPeriod ? `Period ${selectedPeriod}` : "Period 1"}
+        date={selectedDate}
+        students={filteredStudents}
+        attendance={attendance}
+      />
     </div>
   )
 }

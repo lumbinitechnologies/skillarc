@@ -9,13 +9,14 @@ type Organization = {
   created_at: string
   institution_count: number
   admin_count: number
+  features?: string[]
 }
 
 type Props = {
   organizations: Organization[]
-  onCreateOrg: (name: string) => Promise<{ success: boolean; org?: Organization; error?: string }>
+  onCreateOrg: (name: string, features: string[]) => Promise<{ success: boolean; org?: Organization; error?: string }>
   onDeleteOrg?: (id: string) => Promise<{ success: boolean; error?: string }>
-  onEditOrg?: (id: string, name: string) => Promise<{ success: boolean; error?: string }>
+  onEditOrg?: (id: string, name: string, features: string[]) => Promise<{ success: boolean; error?: string }>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,6 +62,19 @@ function Badge({ children, bg, color }: { children: React.ReactNode; bg: string;
   return <span style={{ background:bg, color, fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:99, fontFamily:"'DM Mono', monospace", display:"inline-block" }}>{children}</span>
 }
 
+const AVAILABLE_FEATURES = [
+  { id: "direct_onboarding", label: "Direct Student Onboarding", desc: "Allows institution admins to directly input and import student accounts manually." },
+  { id: "admissions_workflow", label: "Formal Admissions Lifecycle", desc: "Enables admissions registry portal with student applications, verifications, offer letters, and enrollment." },
+  { id: "plagiarism", label: "Plagiarism Verification", desc: "Checks student submissions against classmates solutions using fuzzy matching ratio engine." },
+  { id: "billing", label: "Billing & Online Payments", desc: "Enables dynamic tuition installment plan creation, online UPI/card fee payment modal, and printable invoices." },
+  { id: "placements", label: "Placements Portal", desc: "Recruitment drives, student job application flows, and corporate placement analytics desk." },
+  { id: "video_call", label: "Virtual Class & Meetings", desc: "Integrates online classrooms, video calls, participant records, and direct session creation." },
+  { id: "ai_evaluation", label: "AI Evaluation & Feedback", desc: "Automated AI grading engine assessing semantic similarity, concept coverage, and immediate feedback." },
+  { id: "report_cards", label: "Report Cards & Analytics", desc: "Grade performance summaries, attendance rates, coursework trackers, and visual card analytics." },
+  { id: "intake_cohorts", label: "Intake Cohorts & Registration", desc: "Allows configuring registration intakes, student cohorts, and academic batch progression." },
+  { id: "interventions", label: "Academic Interventions", desc: "Enables student academic warnings, interventions tracking, and risk level monitoring." },
+]
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function OrganizationsPage({ organizations: initialOrgs, onCreateOrg, onDeleteOrg, onEditOrg }: Props) {
   const [orgs, setOrgs] = useState(initialOrgs ?? [])
@@ -69,6 +83,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
   const [editTarget, setEditTarget] = useState<Organization | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null)
   const [orgName, setOrgName] = useState("")
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([])
   const [formError, setFormError] = useState("")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -84,10 +99,11 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
     if (!orgName.trim()) { setFormError("Organization name is required."); return }
     setFormError("")
     startTransition(async () => {
-      const res = await onCreateOrg(orgName.trim())
+      const res = await onCreateOrg(orgName.trim(), selectedFeatures)
       if (res.success && res.org) {
-        setOrgs(prev => [res.org!, ...prev])
+        setOrgs(prev => [{ ...res.org!, features: selectedFeatures }, ...prev])
         setOrgName("")
+        setSelectedFeatures([])
         setShowCreate(false)
         showToast(`"${res.org.name}" created`, "success")
       } else {
@@ -101,11 +117,12 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
     if (!orgName.trim() || !editTarget) { setFormError("Name is required."); return }
     setFormError("")
     startTransition(async () => {
-      const res = await onEditOrg?.(editTarget.id, orgName.trim())
+      const res = await onEditOrg?.(editTarget.id, orgName.trim(), selectedFeatures)
       if (res?.success) {
-        setOrgs(prev => prev.map(o => o.id === editTarget.id ? { ...o, name: orgName.trim() } : o))
+        setOrgs(prev => prev.map(o => o.id === editTarget.id ? { ...o, name: orgName.trim(), features: selectedFeatures } : o))
         setEditTarget(null)
         setOrgName("")
+        setSelectedFeatures([])
         showToast("Organization updated", "success")
       } else {
         setFormError(res?.error ?? "Failed")
@@ -210,7 +227,21 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
                           <div style={{ width:36, height:36, borderRadius:10, background:c.bg, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:14, color:c.text, flexShrink:0 }}>
                             {org.name.charAt(0).toUpperCase()}
                           </div>
-                          <span style={{ fontWeight:600, fontSize:14, color:"#111827" }}>{org.name}</span>
+                          <div>
+                            <span style={{ fontWeight:600, fontSize:14, color:"#111827" }}>{org.name}</span>
+                            {org.features && org.features.length > 0 && (
+                              <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
+                                {org.features.map(f => {
+                                  const label = f === "direct_onboarding" ? "Direct Onboard" : f === "admissions_workflow" ? "Admissions" : f === "plagiarism" ? "Plagiarism" : f === "billing" ? "Billing" : f === "placements" ? "Placements" : f === "video_call" ? "Virtual Class" : f === "ai_evaluation" ? "AI Eval" : f === "intake_cohorts" ? "Intakes" : f === "interventions" ? "Interventions" : "Analytics"
+                                  return (
+                                    <span key={f} style={{ fontSize:9, fontWeight:600, background:"#f5f3ff", color:"#6b21a8", padding:"1px 6px", borderRadius:4, border:"1px solid #faf5ff" }}>
+                                      {label}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td style={{ padding:"13px 20px" }}><Badge bg="#dbeafe" color="#1d4ed8">{org.institution_count} inst.</Badge></td>
@@ -219,7 +250,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
                       <td style={{ padding:"13px 20px" }}>
                         <div style={{ display:"flex", gap:6 }}>
                           <button className="org-action-btn" style={{ borderRadius:7, padding:"4px 10px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}
-                            onClick={() => { setEditTarget(org); setOrgName(org.name); setFormError(""); }}>
+                            onClick={() => { setEditTarget(org); setOrgName(org.name); setSelectedFeatures(org.features || []); setFormError(""); }}>
                             Edit
                           </button>
                           <button className="org-action-btn org-del-btn" style={{ borderRadius:7, padding:"4px 10px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", color:"#6b7280" }}
@@ -244,6 +275,32 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:6 }}>Organization Name</label>
             <input type="text" value={orgName} onChange={e=>setOrgName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleCreate()} placeholder="e.g. Lumbini Technologies" style={inputStyle} autoFocus />
           </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Permitted Modules</label>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto", paddingRight:4 }}>
+              {AVAILABLE_FEATURES.map(f => {
+                const checked = selectedFeatures.includes(f.id)
+                return (
+                  <label key={f.id} style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:10, padding:10, cursor:"pointer", transition:"border-color 0.15s" }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedFeatures(prev =>
+                          prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]
+                        )
+                      }}
+                      style={{ marginTop: 2, accentColor: "#4f46e5", cursor: "pointer" }}
+                    />
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{f.label}</div>
+                      <div style={{ fontSize:10, color:"#6b7280", marginTop:2, lineHeight:"1.3" }}>{f.desc}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
           {formError && <p style={{ color:"#dc2626", fontSize:13, margin:"0 0 8px" }}>{formError}</p>}
           <button onClick={handleCreate} disabled={isPending}
             style={{ width:"100%", padding:11, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(29,78,216,0.25)", opacity: isPending ? 0.6 : 1 }}>
@@ -258,6 +315,32 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
           <div style={{ marginBottom:16 }}>
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:6 }}>Organization Name</label>
             <input type="text" value={orgName} onChange={e=>setOrgName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleEdit()} style={inputStyle} autoFocus />
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Permitted Modules</label>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto", paddingRight:4 }}>
+              {AVAILABLE_FEATURES.map(f => {
+                const checked = selectedFeatures.includes(f.id)
+                return (
+                  <label key={f.id} style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:10, padding:10, cursor:"pointer", transition:"border-color 0.15s" }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedFeatures(prev =>
+                          prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]
+                        )
+                      }}
+                      style={{ marginTop: 2, accentColor: "#4f46e5", cursor: "pointer" }}
+                    />
+                    <div>
+                      <div style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{f.label}</div>
+                      <div style={{ fontSize:10, color:"#6b7280", marginTop:2, lineHeight:"1.3" }}>{f.desc}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
           </div>
           {formError && <p style={{ color:"#dc2626", fontSize:13, margin:"0 0 8px" }}>{formError}</p>}
           <button onClick={handleEdit} disabled={isPending}

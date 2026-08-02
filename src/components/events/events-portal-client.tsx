@@ -82,12 +82,13 @@ export default function EventsPortalClient() {
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
   // Fetch current user details from Supabase auth
+  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
+
   useEffect(() => {
     async function getUserDetails() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          setUserId(user.id);
           const { data } = await supabase
             .from("users")
             .select("role, institution_id")
@@ -97,9 +98,12 @@ export default function EventsPortalClient() {
             setUserRole(data.role || "student");
             setInstitutionId(data.institution_id || null);
           }
+          setUserId(user.id);
         }
       } catch (err) {
         console.error(err);
+      } finally {
+        setProfileLoaded(true);
       }
     }
     getUserDetails();
@@ -183,8 +187,10 @@ export default function EventsPortalClient() {
   };
 
   useEffect(() => {
-    fetchEvents();
-  }, [institutionId]);
+    if (profileLoaded) {
+      fetchEvents();
+    }
+  }, [profileLoaded]);
 
   const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"].includes(userRole?.toLowerCase());
 

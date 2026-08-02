@@ -23,7 +23,9 @@ import {
   UserRound,
   Video,
   Play,
-  ClipboardList
+  ClipboardList,
+  FolderKanban,
+  Star
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
@@ -42,13 +44,8 @@ interface StudentSubjectDetailClientProps {
   classmates: Array<any>
   meetings: Array<any>
   attendanceEntries: Array<any>
-  attendanceSummary: {
-    total: number
-    present: number
-    absent: number
-    late: number
-    rate: number
-  }
+  attendanceSummary: any
+  projectGroups: Array<any>
 }
 
 export function StudentSubjectDetailClient({
@@ -63,8 +60,9 @@ export function StudentSubjectDetailClient({
   meetings,
   attendanceEntries,
   attendanceSummary,
+  projectGroups,
 }: StudentSubjectDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<"stream" | "classwork" | "people" | "meetings" | "attendance">("classwork")
+  const [activeTab, setActiveTab] = useState<"stream" | "classwork" | "people" | "meetings" | "attendance" | "groups">("classwork")
 
   // Real-time meetings state for active classroom classes
   const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
@@ -183,6 +181,7 @@ export function StudentSubjectDetailClient({
           { id: "stream", label: "Feed", icon: MessageSquare },
           { id: "people", label: "Class Roster", icon: Users },
           { id: "attendance", label: "Attendance", icon: ClipboardList },
+          { id: "groups", label: "Project Groups", icon: FolderKanban },
         ].map((tab) => {
           const active = activeTab === tab.id
           return (
@@ -299,6 +298,7 @@ export function StudentSubjectDetailClient({
                 {streamItems.map((item) => {
                   if (item.kind === "announcement") {
                     const ann = item.data
+                    const annFacultyName = ann.faculty?.name || facultyName
                     return (
                       <div key={item.id} className="bg-white border border-slate-100 rounded-3xl p-6 flex items-start gap-4 hover:shadow-[0_12px_24px_rgba(108,99,255,0.03)] transition-all duration-350">
                         <div className="w-10 h-10 rounded-xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center flex-shrink-0">
@@ -306,7 +306,7 @@ export function StudentSubjectDetailClient({
                         </div>
                         <div className="flex-grow min-w-0">
                           <div className="flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800 text-sm">{facultyName}</h4>
+                            <h4 className="font-bold text-slate-800 text-sm">{annFacultyName}</h4>
                             <div className="text-[10px] text-slate-400 font-bold font-['Space_Grotesk']">
                               {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                             </div>
@@ -317,6 +317,7 @@ export function StudentSubjectDetailClient({
                     )
                   } else {
                     const mat = item.data
+                    const matFacultyName = mat.faculty?.name || facultyName
                     return (
                       <div key={item.id} className="bg-white border border-emerald-100 rounded-3xl p-6 flex items-start gap-4 hover:shadow-[0_12px_24px_rgba(108,99,255,0.03)] transition-all duration-350">
                         <div className="w-10 h-10 rounded-xl bg-[#00C2A8]/5 text-[#00C2A8] flex items-center justify-center flex-shrink-0">
@@ -324,7 +325,7 @@ export function StudentSubjectDetailClient({
                         </div>
                         <div className="flex-grow min-w-0">
                           <div className="flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800 text-sm">{facultyName} posted reference materials</h4>
+                            <h4 className="font-bold text-slate-800 text-sm">{matFacultyName} posted reference materials</h4>
                             <div className="text-[10px] text-slate-400 font-bold font-['Space_Grotesk']">
                               {new Date(mat.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}
                             </div>
@@ -543,6 +544,85 @@ export function StudentSubjectDetailClient({
                 )}
               </div>
             </div>
+          </div>
+        )}
+        {/* Tab 6: Project Groups */}
+        {activeTab === "groups" && (
+          <div className="space-y-6 text-left">
+            {projectGroups.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
+                <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
+                <h3 className="mt-4 text-base font-semibold text-slate-900">No project groups allocated</h3>
+                <p className="mt-2 text-sm text-slate-500">Your faculty has not created project group allocations for this subject yet.</p>
+              </div>
+            ) : (
+              projectGroups.map((gAllocation: any) => {
+                const proj = gAllocation.project
+                const group = gAllocation.project_group
+                return (
+                  <div key={gAllocation.id} className="rounded-3xl border border-slate-250 bg-white p-6 shadow-sm space-y-6">
+                    <div className="flex flex-col md:flex-row justify-between md:items-center border-b border-slate-100 pb-4 gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-bold text-slate-900">{proj?.title || "Class Project"}</h3>
+                          {group?.synergy_score && (
+                            <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
+                              <Star size={10} className="fill-emerald-600" />
+                              {group?.synergy_score}% Synergy
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">{proj?.description || "Collaborative course group assignment."}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="bg-[#6C63FF]/10 text-[#6C63FF] border border-[#6C63FF]/20 px-3 py-1 rounded-xl text-xs font-black">
+                          {group?.group_name || "Team Squad"}
+                        </span>
+                        {group?.motto && (
+                          <p className="text-xs text-slate-400 italic mt-1">"{group.motto}"</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-extrabold text-slate-700 text-xs mb-3 uppercase tracking-wider">Teammates & Roles</h4>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {(group?.group_members || []).map((member: any, idx: number) => {
+                          const isSelf = member.student_id === studentId
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center justify-between rounded-2xl p-4 border transition-all ${
+                                isSelf
+                                  ? "bg-indigo-50/70 border-indigo-200 ring-2 ring-indigo-500/10"
+                                  : "bg-slate-50/50 border-slate-100 hover:bg-slate-50"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                  isSelf ? "bg-[#6C63FF] text-white" : "bg-slate-200 text-slate-600"
+                                }`}>
+                                  {member.users?.name?.substring(0, 2) || "ST"}
+                                </div>
+                                <div>
+                                  <span className={`text-xs font-extrabold block ${isSelf ? "text-indigo-955" : "text-slate-800"}`}>
+                                    {member.users?.name || "Student"} {isSelf && " (You)"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-semibold">{member.users?.email || ""}</span>
+                                </div>
+                              </div>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 border shadow-2xs">
+                                {member.role || "Developer"}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
         )}
       </div>

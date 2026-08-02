@@ -80,12 +80,29 @@ export async function POST(request: NextRequest) {
             name: toTitleCase(name),
             role: ROLES.STUDENT,
             institution_id: institution_id,
+            phone: row.phone || null,
+          }).eq("id", invitedUser.id)
+
+          let programId: string | null = null
+          if (sectionId) {
+            const { data: sec } = await supabase
+              .from("sections")
+              .select("program_id")
+              .eq("id", sectionId)
+              .maybeSingle()
+            programId = sec?.program_id ?? null
+          }
+
+          await supabase.from("students").upsert({
+            id: invitedUser.id,
+            institution_id: institution_id,
             section_id: sectionId,
+            program_id: programId,
             semester: Number.isFinite(semester) ? semester : null,
             registration_number: row.registration_number || null,
-            phone: row.phone || null,
             admission_year: row.admission_year ? Number(row.admission_year) : null,
-          }).eq("id", invitedUser.id)
+          }, { onConflict: "id" })
+
           createdCount += 1
         }
       }

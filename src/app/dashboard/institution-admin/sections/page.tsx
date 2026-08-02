@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { SectionsClientPage } from "./sections-client"
 import { ROLES } from "@/constants/roles"
 
+export const dynamic = "force-dynamic"
+
 export default async function SectionsPage() {
   const supabase = await createSupabaseServerClient()
 
@@ -43,13 +45,13 @@ export default async function SectionsPage() {
       .order("name", { ascending: true }),
     supabase
       .from("programs")
-      .select("id, name, departments(id)")
-      .eq("departments.institution_id", institutionId),
+      .select("id, name")
+      .eq("institution_id", institutionId),
     supabase
       .from("users")
       .select("id, name, email")
       .eq("institution_id", institutionId)
-      .eq("role", ROLES.FACULTY),
+      .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
   ])
 
   const sections = sectionsRes.data ?? []

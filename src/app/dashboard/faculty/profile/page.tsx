@@ -19,7 +19,7 @@ export default async function FacultyProfilePage() {
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.FACULTY) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
 
   const { data: institution } = await supabase
     .from("institutions")

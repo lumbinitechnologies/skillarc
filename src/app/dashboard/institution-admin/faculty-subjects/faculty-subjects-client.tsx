@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { facultySubjectService } from "@/modules/faculty-subjects/services/facultySubjectService"
 import SummaryPanel from "@/modules/faculty-subjects/components/SummaryPanel"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
@@ -75,7 +76,9 @@ export function FacultySubjectsClientPage({
   assignments,
 }: Props) {
   const safeAssignments = assignments ?? []
+  const router = useRouter()
 
+  const [localAssignments, setLocalAssignments] = useState<Assignment[]>(safeAssignments)
   const [search, setSearch] = useState("")
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null)
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([])
@@ -112,19 +115,19 @@ export function FacultySubjectsClientPage({
 
   const assignedCountByFaculty = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const a of safeAssignments) {
+    for (const a of localAssignments) {
       map[a.faculty_id] = (map[a.faculty_id] ?? 0) + 1
     }
     return map
-  }, [safeAssignments])
+  }, [localAssignments])
 
   const assignedCountBySubject = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const a of safeAssignments) {
+    for (const a of localAssignments) {
       map[a.subject_id] = (map[a.subject_id] ?? 0) + 1
     }
     return map
-  }, [safeAssignments])
+  }, [localAssignments])
 
   const filteredFaculty = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -143,7 +146,7 @@ export function FacultySubjectsClientPage({
       if (!confirmSwitch) return
     }
 
-    const assigned = safeAssignments
+    const assigned = localAssignments
       .filter((a) => a.faculty_id === f.id)
       .map((a) => a.subject_id)
 
@@ -180,11 +183,22 @@ export function FacultySubjectsClientPage({
         subjectIds: selectedSubjects,
       })
 
+      // Update localAssignments state so counts and checkboxes sync reactively immediately
+      const cleanAssignments = localAssignments.filter(
+        (a) => a.faculty_id !== selectedFaculty
+      )
+      const newAssignments = selectedSubjects.map((subId) => ({
+        faculty_id: selectedFaculty,
+        subject_id: subId,
+      }))
+      setLocalAssignments([...cleanAssignments, ...newAssignments])
+
       setSavedSubjects(selectedSubjects)
       setToast({ type: "success", message: "Assignments saved" })
-    } catch (err) {
+      router.refresh()
+    } catch (err: any) {
       console.error(err)
-      setToast({ type: "error", message: "Failed to save assignments" })
+      setToast({ type: "error", message: `Failed to save: ${err.message || "Unknown error"}` })
     } finally {
       setSaving(false)
     }

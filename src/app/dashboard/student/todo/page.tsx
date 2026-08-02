@@ -61,13 +61,21 @@ export default async function StudentTodoPage() {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  const { data: userProfile } = await supabase
     .from("users")
-    .select("id, role, institution_id, section_id")
+    .select("id, role, institution_id")
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  const { data: studentData } = await supabase
+    .from("students")
+    .select("id, section_id, program_id, semester")
+    .eq("id", user.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentData }
 
   // 1. Fetch enrolled subjects to filter assignments
   const { data: timetableRows = [] } = profile.section_id
@@ -78,7 +86,25 @@ export default async function StudentTodoPage() {
         .eq("section_id", profile.section_id)
     : { data: [] }
 
-  const subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+  let subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+
+  if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
+    let subQuery = supabase
+      .from("subjects")
+      .select("id")
+    if (profile.program_id) {
+      subQuery = subQuery.eq("program_id", profile.program_id)
+    } else if (profile.institution_id) {
+      subQuery = subQuery.eq("institution_id", profile.institution_id)
+    }
+    if (profile.semester) {
+      subQuery = subQuery.eq("semester", profile.semester)
+    }
+    const { data: programSubjects } = await subQuery
+    if (programSubjects?.length) {
+      subjectIds = programSubjects.map((s: any) => s.id)
+    }
+  }
 
   if (!subjectIds.length) {
     return (

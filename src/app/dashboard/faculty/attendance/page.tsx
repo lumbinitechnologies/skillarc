@@ -18,7 +18,7 @@ export default async function AttendancePage() {
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== ROLES.FACULTY) {
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) {
     redirect("/dashboard")
   }
 
@@ -56,17 +56,35 @@ export default async function AttendancePage() {
     : { data: [] }
 
   let studentQuery = supabase
-    .from("users")
-    .select("id,name,email,role,section_id,program_id,semester,registration_number")
+    .from("students")
+    .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender")
     .eq("institution_id", institutionId)
-    .eq("role", ROLES.STUDENT)
-    .order("name")
+    .order("id")
 
+  // Also need user names/emails - we'll join on id which references users.id
+  // Fetch students data first
+  const { data: studentRecords = [] } = await studentQuery
+
+  // Now fetch corresponding user info
+  const studentIds = (studentRecords ?? []).map((s: any) => s.id)
+  const { data: userRecords = [] } = studentIds.length
+    ? await supabase
+        .from("users")
+        .select("id, name, email, role")
+        .in("id", studentIds)
+    : { data: [] }
+
+  // Merge student + user data
+  const students = (studentRecords ?? []).map((s: any) => {
+    const user = (userRecords ?? []).find((u: any) => u.id === s.id)
+    return { ...s, name: user?.name || "Unknown", email: user?.email || "", role: user?.role || "" }
+  })
+
+  // Filter by section if faculty teaches specific sections
+  let filteredStudents = students
   if (sectionIds.length) {
-    studentQuery = studentQuery.in("section_id", sectionIds)
+    filteredStudents = students.filter((s: any) => sectionIds.includes(s.section_id))
   }
-
-  const { data: students = [] } = await studentQuery
 
   return (
     <AttendanceClient
@@ -75,7 +93,7 @@ export default async function AttendancePage() {
       programs={programs ?? []}
       sections={sections ?? []}
       subjects={subjects ?? []}
-      students={students ?? []}
+      students={filteredStudents ?? []}
     />
   )
 }

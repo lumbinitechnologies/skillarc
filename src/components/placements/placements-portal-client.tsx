@@ -47,12 +47,14 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
   const [analytics, setAnalytics] = useState(() => buildAnalytics());
 
   // Load user profile & sync data
+  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
+
+  // Load user profile & sync data
   useEffect(() => {
     async function loadSession() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          setUserId(user.id);
           const { data: profile } = await supabase
             .from("users")
             .select("name, role, institution_id")
@@ -79,15 +81,17 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
             setDbAttendancePercent(Math.round((present / attendanceData.length) * 100));
           }
 
-              // Fetch student placements applications
-              const { data: apps } = await supabase
-                .from("applications")
-                .select("*, job_posts(title, company_id)")
-                .eq("student_id", user.id);
-          
-              if (apps) {
-                setStudentApplications(apps);
-              }
+          // Fetch student placements applications
+          const { data: apps } = await supabase
+            .from("applications")
+            .select("*, job_posts(title, company_id)")
+            .eq("student_id", user.id);
+      
+          if (apps) {
+            setStudentApplications(apps);
+          }
+
+          setUserId(user.id);
         } else {
           // Local fallback in non-auth setups
           setUserRole("institution_admin");
@@ -96,6 +100,8 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       } catch (err) {
         console.error("Session fetch error:", err);
         setUserRole("student");
+      } finally {
+        setProfileLoaded(true);
       }
     }
     loadSession();
@@ -106,17 +112,29 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
     setLoading(true);
     try {
       // 1. Fetch Companies
-      const { data: comps, error: compErr } = await supabase
+      let compsQuery = supabase
         .from("companies")
         .select("*")
         .order("name", { ascending: true });
 
+      if (institutionId) {
+        compsQuery = compsQuery.eq("institution_id", institutionId);
+      }
+
+      const { data: comps, error: compErr } = await compsQuery;
+
       if (compErr) throw compErr;
 
       // 2. Fetch Job Posts (Drives) Joined with companies
-      const { data: posts, error: postErr } = await supabase
+      let postsQuery = supabase
         .from("job_posts")
         .select("*, companies(name, website, description)");
+
+      if (institutionId) {
+        postsQuery = postsQuery.eq("institution_id", institutionId);
+      }
+
+      const { data: posts, error: postErr } = await postsQuery;
 
       if (postErr) throw postErr;
 
@@ -181,29 +199,40 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       const { data: appsRes } = await appsQuery;
       const allApps = appsRes || [];
 
-      // 4. Fetch Students from users table (role = STUDENT) belonging to this institution
+      // 4. Fetch Students from students table belonging to this institution
       let studentsQuery = supabase
-        .from("users")
+        .from("students")
         .select(`
           id,
-          name,
-          email,
           admission_year,
-          programs (
+          program:program_id (
             name
           )
-        `)
-        .eq("role", "STUDENT");
+        `);
 
       if (institutionId) {
         studentsQuery = studentsQuery.eq("institution_id", institutionId);
       }
 
-      const { data: studentsRes, error: studentsErr } = await studentsQuery.order("name", { ascending: true });
+      const { data: studentsRes, error: studentsErr } = await studentsQuery;
 
       if (studentsErr) throw studentsErr;
 
+      const studentIds = (studentsRes || []).map((s: any) => s.id);
+      let usersMap = new Map<string, { name: string; email: string }>();
+
+      if (studentIds.length > 0) {
+        const { data: usersRes } = await supabase
+          .from("users")
+          .select("id, name, email")
+          .in("id", studentIds)
+          .order("name");
+
+        (usersRes || []).forEach((u: any) => usersMap.set(u.id, u));
+      }
+
       const fetchedStudents: Student[] = (studentsRes || []).map((s: any) => {
+        const userObj = usersMap.get(s.id);
         const studentApps = allApps.filter((a: any) => a.student_id === s.id);
         const placedApp = studentApps.find((a: any) => a.status === "SELECTED");
         const companyName = (placedApp as any)?.job_posts?.companies?.name || 
@@ -211,10 +240,12 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
                             (placedApp as any)?.job_posts?.[0]?.companies?.[0]?.name || 
                             undefined;
 
+        const progName = (s.program as any)?.name;
+
         return {
           student_id: s.id,
-          name: s.name || s.email?.split("@")[0] || "Unknown Student",
-          branch: s.programs?.name || "Computer Science",
+          name: userObj?.name || userObj?.email?.split("@")[0] || "Unknown Student",
+          branch: progName || "Computer Science",
           year: s.admission_year ? Math.max(1, Math.min(4, new Date().getFullYear() - s.admission_year + 1)) : 4,
           skills: "React, TypeScript, SQL, Node.js",
           hackathons: 1,
@@ -311,34 +342,25 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
 
       const realAnalytics = computeAnalytics(fetchedStudents, fetchedCompanies, fetchedDrives);
 
-      // If database has no entries, seed with mock sets so the portal looks full at first
-      if (fetchedCompanies.length === 0) {
-        setCompanies(MOCK_COMPANIES);
-      } else {
-        setCompanies(fetchedCompanies);
-      }
-
-      if (fetchedDrives.length === 0) {
-        setDrives(MOCK_DRIVES);
-      } else {
-        setDrives(fetchedDrives);
-      }
-
-      setStudents(fetchedStudents.length ? fetchedStudents : MOCK_STUDENTS);
-      setAnalytics((old) => fetchedStudents.length ? realAnalytics : old);
+      setCompanies(fetchedCompanies);
+      setDrives(fetchedDrives);
+      setStudents(fetchedStudents);
+      setAnalytics(realAnalytics);
     } catch (err) {
       console.error("Supabase placements load error:", err);
-      // Fallback
-      setCompanies(MOCK_COMPANIES);
-      setDrives(MOCK_DRIVES);
+      setCompanies([]);
+      setDrives([]);
+      setStudents([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPlacementsData();
-  }, [institutionId]);
+    if (profileLoaded) {
+      fetchPlacementsData();
+    }
+  }, [profileLoaded]);
 
   if (loading || !userRole) {
     return (
@@ -444,13 +466,14 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
               <OverviewTabView analytics={analytics} />
             )}
             {activeTab === "students" && (
-              <StudentsTabView students={students.length ? students : MOCK_STUDENTS} />
+              <StudentsTabView students={students} />
             )}
             {activeTab === "companies" && (
               <CompaniesTabView
                 companies={companies}
                 refreshData={fetchPlacementsData}
                 analytics={analytics}
+                institutionId={institutionId}
               />
             )}
             {activeTab === "drives" && (
@@ -458,6 +481,7 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
                 drives={drives}
                 companies={companies}
                 refreshData={fetchPlacementsData}
+                institutionId={institutionId}
               />
             )}
             {activeTab === "interview" && (
@@ -467,7 +491,7 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
               <CommsTabView />
             )}
             {activeTab === "predictor" && (
-              <PredictorTabView students={students.length ? students : MOCK_STUDENTS} defaultAttendance={dbAttendancePercent} />
+              <PredictorTabView students={students} defaultAttendance={dbAttendancePercent} />
             )}
           </div>
         )}
@@ -632,7 +656,7 @@ function StudentPortalView({
       </div>
 
       {subTab === "predictor" && (
-        <PredictorTabView students={MOCK_STUDENTS} defaultAttendance={attendancePercent} isStudentOnly />
+        <PredictorTabView students={students} defaultAttendance={attendancePercent} isStudentOnly />
       )}
 
       {subTab === "drives" && (
@@ -904,10 +928,12 @@ function CompaniesTabView({
   companies,
   refreshData,
   analytics,
+  institutionId,
 }: {
   companies: Company[];
   refreshData: () => void;
   analytics: any;
+  institutionId: string | null;
 }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -931,6 +957,7 @@ function CompaniesTabView({
           name: newCo.name,
           website: newCo.website,
           description: newCo.description,
+          institution_id: institutionId,
         }]);
 
       if (error) throw error;
@@ -1089,10 +1116,12 @@ function DrivesTabView({
   drives,
   companies,
   refreshData,
+  institutionId,
 }: {
   drives: Drive[];
   companies: Company[];
   refreshData: () => void;
+  institutionId: string | null;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -1114,6 +1143,7 @@ function DrivesTabView({
           title: form.job_title,
           description: form.description,
           deadline: form.deadline || new Date().toISOString().split("T")[0],
+          institution_id: institutionId,
         }]);
 
       if (error) throw error;
