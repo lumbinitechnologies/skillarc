@@ -1,26 +1,18 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 // POST - Create section
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
 
-    // Check auth
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
     // Check role
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("role, institution_id")
-      .eq("id", user.id)
-      .single()
+    const userProfile = await getCurrentUserContext()
+    if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (userProfile?.role !== ROLES.INSTITUTION_ADMIN) {
+    if (userProfile.role !== ROLES.INSTITUTION_ADMIN) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -70,16 +62,8 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("institution_id")
-      .eq("id", user.id)
-      .single()
+    const userProfile = await getCurrentUserContext()
+    if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const institutionId = request.nextUrl.searchParams.get("institution_id")
 

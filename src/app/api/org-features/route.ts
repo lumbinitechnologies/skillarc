@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const profile = await getCurrentUserContext()
+    if (!profile) {
       return NextResponse.json({ features: [] }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("users")
-      .select("organization_id")
-      .eq("id", user.id)
-      .single()
-
-    if (!profile?.organization_id) {
+    if (!profile.organization_id) {
       // Super admins or users without org ID get all features
       return NextResponse.json({
         features: [

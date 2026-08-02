@@ -2,21 +2,17 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import HodDashboardClient from "./hod-dashboard-client"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export const dynamic = "force-dynamic"
 
 export default async function HodDashboardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.HOD) redirect("/auth/login")
+
+  const profile = context
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.HOD) redirect("/auth/login")
 
   // Fetch institutions, faculty, and subjects in parallel
   const [institutionRes, facultyRes, subjectsRes] = await Promise.all([
@@ -52,7 +48,7 @@ export default async function HodDashboardPage() {
 
   return (
     <HodDashboardClient
-      hod={{ name: profile.name ?? user.email ?? "HOD", email: user.email ?? "", institution: institution?.name ?? "Institution" }}
+      hod={{ name: profile.name ?? profile.email ?? "HOD", email: profile.email ?? "", institution: institution?.name ?? "Institution" }}
       stats={{
         facultyCount: faculty?.length ?? 0,
         subjectsCount: formattedSubjects.length,

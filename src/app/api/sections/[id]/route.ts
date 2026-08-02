@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 // GET - Fetch single section
 export async function GET(
@@ -46,19 +47,10 @@ export async function PUT(
     const { id } = await params
     const supabase = await createSupabaseServerClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userProfile = await getCurrentUserContext()
+    if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Check role
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("role, institution_id")
-      .eq("id", user.id)
-      .single()
-
-    if (userProfile?.role !== ROLES.INSTITUTION_ADMIN) {
+    if (userProfile.role !== ROLES.INSTITUTION_ADMIN) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -98,19 +90,10 @@ export async function DELETE(
     const { id } = await params
     const supabase = await createSupabaseServerClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const userProfile = await getCurrentUserContext()
+    if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Check role
-    const { data: userProfile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (userProfile?.role !== ROLES.INSTITUTION_ADMIN) {
+    if (userProfile.role !== ROLES.INSTITUTION_ADMIN) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

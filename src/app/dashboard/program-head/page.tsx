@@ -2,21 +2,17 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import ProgramHeadDashboardClient from "./program-head-dashboard-client"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export const dynamic = "force-dynamic"
 
 export default async function ProgramHeadDashboardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.PROGRAM_HEAD) redirect("/auth/login")
+
+  const profile = context
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.PROGRAM_HEAD) redirect("/auth/login")
 
   // Fetch institutions, student counts, and courses in parallel
   const [institutionRes, studentCountRes, coursesRes] = await Promise.all([
@@ -43,7 +39,7 @@ export default async function ProgramHeadDashboardPage() {
 
   return (
     <ProgramHeadDashboardClient
-      programHead={{ name: profile.name ?? user.email ?? "Program Head", email: user.email ?? "", institution: institution?.name ?? "Institution" }}
+      programHead={{ name: profile.name ?? profile.email ?? "Program Head", email: profile.email ?? "", institution: institution?.name ?? "Institution" }}
       stats={{
         studentsCount: studentCount ?? 0,
         coursesCount: courses?.length ?? 0,

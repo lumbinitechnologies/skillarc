@@ -1,5 +1,6 @@
 import Sidebar from "@/components/sidebar"
 import Navbar from "@/components/navbar"
+import ImpersonationBanner from "@/components/impersonation-banner"
 import { CourseProvider } from "@/modules/courses/course-context"
 
 export default function DashboardLayout({
@@ -17,6 +18,7 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+        <ImpersonationBanner />
       </div>
     </CourseProvider>
   )

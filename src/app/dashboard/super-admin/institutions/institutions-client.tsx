@@ -34,6 +34,27 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
   const [filterActive, setFilterActive] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
+  async function handleEnterInstitution(instId: string) {
+    try {
+      const res = await fetch("/api/super-admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "INSTITUTION_ADMIN",
+          institution_id: instId,
+        }),
+      })
+      if (res.ok) {
+        window.location.href = "/dashboard"
+      } else {
+        alert("Failed to enter institution")
+      }
+    } catch (err) {
+      console.error(err)
+      alert("Error entering institution")
+    }
+  }
+
   const orgs = Array.from(new Set(initial.map(i => i.organization_id)))
     .map(id => ({ id, name: initial.find(i => i.organization_id === id)?.organization_name ?? id }))
 
@@ -57,6 +78,28 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
         .inst-row:hover { background:#f0fdf4 !important; }
         .inst-row.expanded { background:#f0fdf4 !important; }
         select:focus, input:focus { outline:none; border-color:#059669 !important; box-shadow:0 0 0 3px rgba(5,150,105,0.12); }
+        .sa-btn-mint {
+          background: linear-gradient(135deg, #00C2A8, #00A690);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 6px 14px;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          margin-left: auto;
+          box-shadow: 0 4px 12px rgba(0, 194, 168, 0.2);
+          transition: all 0.15s ease;
+          font-family: inherit;
+        }
+        .sa-btn-mint:hover {
+          opacity: 0.95;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px rgba(0, 194, 168, 0.35);
+        }
+        .sa-btn-mint:active {
+          transform: scale(0.97) translateY(0);
+        }
       `}</style>
 
       <div className="inst-page">
@@ -177,10 +220,19 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
                     {expandedId === inst.id && (
                       <tr key={`${inst.id}-expanded`} style={{ borderBottom:"1px solid #f3f4f6" }}>
                         <td colSpan={7} style={{ padding:"0 20px 16px 64px", background:"#f0fdf4" }}>
-                          <div style={{ display:"flex", gap:24, fontSize:13 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:24, fontSize:13 }}>
                             <div><span style={{ color:"#9ca3af" }}>Institution ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.id}</span></div>
                             <div><span style={{ color:"#9ca3af" }}>Org ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.organization_id}</span></div>
                             <div><span style={{ color:"#9ca3af" }}>Total Users: </span><span style={{ fontWeight:600, color:"#111827" }}>{inst.user_count}</span></div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleEnterInstitution(inst.id)
+                              }}
+                              className="sa-btn-mint"
+                            >
+                              Enter Institution Dashboard
+                            </button>
                           </div>
                         </td>
                       </tr>

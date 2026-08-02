@@ -1,23 +1,16 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { getCurrentUserContext } from "@/lib/user-context"
 import OrgAdminDashboardClient from "./org-admin-dashboard-client"
 import { ROLES } from "@/constants/roles"
 
 export default async function Page() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.ORG_ADMIN) redirect("/dashboard")
+
+  const orgId = context.organization_id
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, organization_id")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.ORG_ADMIN) redirect("/dashboard")
-
-  const orgId = profile.organization_id
 
   // Fetch institutions and stats in parallel
   const [institutionsRes, facultyRes, studentRes] = await Promise.all([

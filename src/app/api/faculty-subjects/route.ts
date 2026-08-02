@@ -2,30 +2,21 @@ import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient()
 
-  // Step 3 — Authentication
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
+  // Step 4 — Authorization
+  const profile = await getCurrentUserContext()
+  if (!profile) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
     )
   }
 
-  // Step 4 — Authorization
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.INSTITUTION_ADMIN) {
+  if (profile.role !== ROLES.INSTITUTION_ADMIN) {
     return NextResponse.json(
       { error: "Forbidden" },
       { status: 403 }

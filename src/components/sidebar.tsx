@@ -148,47 +148,18 @@ export default function Sidebar() {
 
   useEffect(() => {
     async function getProfile() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from("users")
-          .select("name, role")
-          .eq("id", user.id)
-          .single()
-
-        let isTimetableBuilder = false
-        const { data: perm } = await supabase
-          .from("permissions")
-          .select("id")
-          .eq("name", "timetable_builder")
-          .maybeSingle()
-
-        if (perm?.id) {
-          const { data: userPerm } = await supabase
-            .from("user_permissions")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("permission_id", perm.id)
-            .maybeSingle()
-
-          if (userPerm?.id) {
-            isTimetableBuilder = true
-          }
-        }
-
-        if (data) {
+      try {
+        const res = await fetch("/api/auth/profile")
+        if (res.ok) {
+          const json = await res.json()
           setProfile({
-            name: data.name ?? user.email?.split("@")[0] ?? "User",
-            role: (data.role as Role) ?? ROLES.STUDENT,
-            is_timetable_builder: isTimetableBuilder,
-          })
-        } else {
-          setProfile({
-            name: user.email?.split("@")[0] ?? "User",
-            role: ROLES.STUDENT,
-            is_timetable_builder: false,
+            name: json.name || json.email?.split("@")[0] || "User",
+            role: (json.role as Role) || ROLES.STUDENT,
+            is_timetable_builder: json.is_timetable_builder || false,
           })
         }
+      } catch (err) {
+        console.error("Failed to load active profile on sidebar:", err)
       }
     }
 

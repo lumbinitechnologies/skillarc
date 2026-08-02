@@ -3,18 +3,15 @@ import { redirect } from "next/navigation"
 import InstitutionAdminDashboardClient from "./institution-admin-dashboard-client"
 import { ROLES } from "@/constants/roles"
 
+import { getCurrentUserContext } from "@/lib/user-context"
+
 export default async function InstitutionAdminPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/auth/login")
+
+  const profile = context
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, organization_id")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.INSTITUTION_ADMIN) redirect("/auth/login")
 
   const [
     institutionRes,

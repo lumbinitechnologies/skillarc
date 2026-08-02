@@ -3,20 +3,17 @@ import { redirect } from "next/navigation"
 import ParentDashboardClient from "./parent-dashboard-client"
 import { ROLES } from "@/constants/roles"
 
+import { getCurrentUserContext } from "@/lib/user-context"
+
 export const dynamic = "force-dynamic"
 
 export default async function ParentDashboardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.PARENT) redirect("/auth/login")
+
+  const profile = context
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.PARENT) redirect("/auth/login")
 
   const { data: institution } = await supabase
     .from("institutions")
@@ -28,7 +25,7 @@ export default async function ParentDashboardPage() {
   const { data: relations = [] } = await supabase
     .from("parent_student_relations")
     .select("student_id, relationship")
-    .eq("parent_id", user.id)
+    .eq("parent_id", profile.id)
 
   const childrenData = await Promise.all(
     (relations || []).map(async (rel) => {
@@ -179,8 +176,8 @@ export default async function ParentDashboardPage() {
   return (
     <ParentDashboardClient
       parent={{
-        name: profile.name ?? user.email ?? "Parent",
-        email: user.email ?? "",
+        name: profile.name ?? profile.email ?? "Parent",
+        email: profile.email ?? "",
         institution: institution?.name ?? "Institution"
       }}
       childrenList={validChildren}

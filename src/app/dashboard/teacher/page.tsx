@@ -2,19 +2,15 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
 import TeacherDashboardClient from "./teacher-dashboard-client"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export default async function TeacherDashboardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.FACULTY) redirect("/auth/login")
+
+  const profile = context
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.FACULTY) redirect("/auth/login")
 
   const { data: institution } = await supabase
     .from("institutions")
@@ -25,7 +21,7 @@ export default async function TeacherDashboardPage() {
   const { data: subjects } = await supabase
     .from("subjects")
     .select("id, name, code")
-    .eq("teacher_id", user.id)
+    .eq("teacher_id", profile.id)
 
   const { count: studentCount } = await supabase
     .from("users")
@@ -35,7 +31,7 @@ export default async function TeacherDashboardPage() {
 
   return (
     <TeacherDashboardClient
-      teacher={{ email: user.email ?? "", institution: institution?.name ?? "" }}
+      teacher={{ email: profile.email ?? "", institution: institution?.name ?? "" }}
       subjects={subjects ?? []}
       studentCount={studentCount ?? 0}
     />

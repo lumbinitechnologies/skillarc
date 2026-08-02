@@ -1,21 +1,13 @@
 import { redirect } from "next/navigation"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { getCurrentUserContext } from "@/lib/user-context"
 import { ROLES } from "@/constants/roles"
 import { DASHBOARD_ROUTES } from "@/constants/routes"
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient()
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, organization_id")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  const role = profile?.role
+  const role = context.role
 
   const roleRedirects: Record<string, string> = {
     [ROLES.SUPER_ADMIN]:       DASHBOARD_ROUTES.SUPER_ADMIN,
@@ -33,7 +25,7 @@ export default async function DashboardPage() {
   if (!destination) {
     return (
       <pre style={{ padding: "1rem", whiteSpace: "pre-wrap" }}>
-        {JSON.stringify({ userId: user.id, userEmail: user.email, profile, role }, null, 2)}
+        {JSON.stringify({ userId: context.id, context }, null, 2)}
       </pre>
     )
   }

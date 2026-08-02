@@ -327,6 +327,49 @@ export default function SuperAdminDashboardClient({
     setTimeout(() => setToast(null), 3500)
   }
 
+  async function handleEnterOrg(orgId: string) {
+    try {
+      const res = await fetch("/api/super-admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "ORG_ADMIN",
+          organization_id: orgId,
+        }),
+      })
+      if (res.ok) {
+        window.location.href = "/dashboard"
+      } else {
+        showToast("Failed to enter organization", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      showToast("Error entering organization", "error")
+    }
+  }
+
+  async function handleImpersonateAdmin(adminId: string, orgId: string) {
+    try {
+      const res = await fetch("/api/super-admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "ORG_ADMIN",
+          organization_id: orgId,
+          user_id: adminId,
+        }),
+      })
+      if (res.ok) {
+        window.location.href = "/dashboard"
+      } else {
+        showToast("Failed to impersonate admin", "error")
+      }
+    } catch (err) {
+      console.error(err)
+      showToast("Error impersonating admin", "error")
+    }
+  }
+
   async function handleCreateOrg() {
     if (!orgName.trim()) {
       setOrgError("Organization name is required.")
@@ -571,6 +614,55 @@ export default function SuperAdminDashboardClient({
         .sa-btn-amber:active { transform: scale(0.97); }
         .sa-btn-amber:disabled { opacity: 0.5; cursor: not-allowed; }
 
+        .sa-btn-outline-indigo {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: transparent;
+          border: 1.5px solid #6c63ff;
+          color: #6c63ff;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 5px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-family: inherit;
+          margin-left: 8px;
+        }
+        .sa-btn-outline-indigo:hover {
+          background: rgba(108, 99, 255, 0.08);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(108, 99, 255, 0.12);
+        }
+        .sa-btn-outline-indigo:active {
+          transform: translateY(0) scale(0.98);
+        }
+
+        .sa-btn-outline-purple {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          background: transparent;
+          border: 1.5px solid #8b5cf6;
+          color: #8b5cf6;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 5px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          font-family: inherit;
+        }
+        .sa-btn-outline-purple:hover {
+          background: rgba(139, 92, 246, 0.08);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);
+        }
+        .sa-btn-outline-purple:active {
+          transform: translateY(0) scale(0.98);
+        }
+
         .sa-btn-submit {
           width: 100%;
           padding: 11px;
@@ -809,6 +901,12 @@ export default function SuperAdminDashboardClient({
                             >
                               + Add Admin
                             </button>
+                            <button
+                              className="sa-btn-outline-indigo"
+                              onClick={() => handleEnterOrg(org.id)}
+                            >
+                              Enter Org
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -831,6 +929,7 @@ export default function SuperAdminDashboardClient({
                         <th>Organization</th>
                         <th>Email</th>
                         <th>Added</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -881,6 +980,14 @@ export default function SuperAdminDashboardClient({
                               "en-IN",
                               { day: "numeric", month: "short", year: "numeric" }
                             )}
+                          </td>
+                          <td>
+                            <button
+                              className="sa-btn-outline-purple"
+                              onClick={() => handleImpersonateAdmin(admin.id, admin.organization_id)}
+                            >
+                              Impersonate
+                            </button>
                           </td>
                         </tr>
                       ))}

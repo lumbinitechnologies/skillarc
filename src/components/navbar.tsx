@@ -63,27 +63,18 @@ export default function Navbar() {
     }
 
     async function getProfile() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from("users")
-          .select("name, role")
-          .eq("id", user.id)
-          .single()
-
-        if (data) {
+      try {
+        const res = await fetch("/api/auth/profile")
+        if (res.ok) {
+          const json = await res.json()
           setProfile({
-            name: data.name ?? user.email?.split("@")[0] ?? "User",
-            role: data.role ?? "User",
+            name: json.name || json.email?.split("@")[0] || "User",
+            role: json.role || "User",
           })
-        } else {
-          setProfile({
-            name: user.email?.split("@")[0] ?? "User",
-            role: "User",
-          })
+          loadNotifications(json.id)
         }
-
-        loadNotifications(user.id)
+      } catch (err) {
+        console.error("Failed to load active profile on navbar:", err)
       }
     }
 

@@ -1,31 +1,23 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 // POST - Create Program
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    const profile = await getCurrentUserContext()
+    if (!profile) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       )
     }
 
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role, institution_id")
-      .eq("id", user.id)
-      .single()
-
     if (
-      profile?.role !==
+      profile.role !==
       ROLES.INSTITUTION_ADMIN
     ) {
       return NextResponse.json(

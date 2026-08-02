@@ -2,31 +2,30 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import StudentPage from "./student-dashboard-client"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export const dynamic = "force-dynamic"
 
 export default async function Page() {
-  const supabase = await createSupabaseServerClient()
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
+  const supabase = await createSupabaseServerClient()
 
   // Get user profile (common fields)
   const { data: userProfile } = await supabase
     .from("users")
     .select("id, role, institution_id, name, email, phone")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!userProfile || context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   // Get student-specific fields from students table
   const { data: studentData } = await supabase
     .from("students")
     .select("id, section_id, program_id, semester, registration_number, admission_year")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
   const profile = { ...userProfile, ...studentData }
@@ -58,7 +57,7 @@ export default async function Page() {
       ? supabase
           .from("attendance_records")
           .select("status, attendance_sessions!inner(section_id)")
-          .eq("student_id", user.id)
+          .eq("student_id", context.id)
           .eq("attendance_sessions.section_id", profile.section_id)
       : Promise.resolve({ data: [] }),
   ])
@@ -172,8 +171,8 @@ export default async function Page() {
   return (
     <StudentPage
       student={{
-        name: profile.name ?? user.email ?? "Student",
-        email: profile.email ?? user.email ?? "",
+        name: profile.name ?? profile.email ?? "Student",
+        email: profile.email ?? "",
         institution: institution?.name ?? "Institution",
         sectionName,
         programName,

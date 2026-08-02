@@ -74,12 +74,12 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
         .in("assignment_id", assignmentIds)
     : { data: [] }
 
-  // Fetch plagiarism verification details
+  // Fetch plagiarism & AI verification details
   const subIds = (submissionsRaw || []).map((s: any) => s.id)
   const { data: verifications = [] } = subIds.length
     ? await supabase
         .from("submission_verifications")
-        .select("submission_id, plagiarism_rate, status")
+        .select("submission_id, plagiarism_rate, ai_probability, status")
         .in("submission_id", subIds)
     : { data: [] }
 
@@ -88,6 +88,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
     return {
       ...s,
       plagiarism_rate: v ? Number(v.plagiarism_rate) : null,
+      ai_probability: v ? (v.ai_probability != null ? Number(v.ai_probability) : null) : null,
       verification_status: v ? v.status : null,
     }
   })
