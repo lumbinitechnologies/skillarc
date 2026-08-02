@@ -240,16 +240,8 @@ export default function Sidebar() {
 
   return (
     <aside className="sticky top-0 h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-white/90 px-6 py-8 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-      <div className="mb-10 mt-2 flex items-center gap-4 px-2">
-        <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-16 w-16 object-contain transition-transform duration-200 hover:scale-[1.03]" />
-        <div className="flex flex-col">
-          <span className="text-2xl font-black tracking-[-0.03em] leading-none bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-            SkillArc
-          </span>
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400/60 mt-2 leading-none">
-            Academic Hub
-          </span>
-        </div>
+      <div className="mb-10 mt-2 flex items-center justify-center px-2">
+        <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-28 w-28 object-contain transition-transform duration-200 hover:scale-[1.03]" />
       </div>
 
       {profile && (
