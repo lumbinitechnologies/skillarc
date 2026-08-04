@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { ShieldAlert, Users, School, Building2, UserCheck, X, ChevronRight, LogOut, Loader2 } from "lucide-react"
+import type { UserContext } from "@/lib/user-context"
 
 type ProfileContext = {
   id: string
@@ -28,12 +29,27 @@ type UserOption = {
   email: string
 }
 
-export default function ImpersonationBanner() {
-  const [profile, setProfile] = useState<ProfileContext | null>(null)
+export default function ImpersonationBanner({ profile: initialProfile }: { profile: UserContext | null }) {
   const [isOpen, setIsOpen] = useState(false)
   const [options, setOptions] = useState<ImpersonateOptions | null>(null)
   const [users, setUsers] = useState<UserOption[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+
+  const profile: ProfileContext | null = initialProfile
+    ? {
+        id: initialProfile.id,
+        name: initialProfile.name,
+        email: initialProfile.email,
+        role: initialProfile.role,
+        institution_id: initialProfile.institution_id,
+        organization_id: initialProfile.organization_id,
+        is_timetable_builder: initialProfile.is_timetable_builder,
+        is_impersonating: initialProfile.isImpersonating,
+        original_role: initialProfile.originalProfile.role,
+        original_name: initialProfile.originalProfile.name,
+        is_super_admin: initialProfile.isSuperAdmin,
+      }
+    : null
 
   // Switcher form states
   const [targetRole, setTargetRole] = useState("")
@@ -45,26 +61,13 @@ export default function ImpersonationBanner() {
   const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    async function loadProfile() {
-      try {
-        const res = await fetch("/api/auth/profile")
-        if (res.ok) {
-          const data = await res.json()
-          setProfile(data)
-          if (data.is_super_admin) {
-            // Set initial state from current impersonation
-            setTargetRole(data.role)
-            setSelectedOrgId(data.organization_id || "")
-            setSelectedInstId(data.institution_id || "")
-            setSelectedUserId(data.is_impersonating ? data.id : "")
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch impersonation profile:", err)
-      }
-    }
-    loadProfile()
-  }, [])
+    if (!profile?.is_super_admin) return
+
+    setTargetRole(profile.role)
+    setSelectedOrgId(profile.organization_id || "")
+    setSelectedInstId(profile.institution_id || "")
+    setSelectedUserId(profile.is_impersonating ? profile.id : "")
+  }, [profile?.is_super_admin, profile?.role, profile?.organization_id, profile?.institution_id, profile?.is_impersonating, profile?.id])
 
   // Fetch dropdown options when modal is opened
   useEffect(() => {

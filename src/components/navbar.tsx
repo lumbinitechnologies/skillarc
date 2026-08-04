@@ -5,17 +5,23 @@ import { useRouter } from "next/navigation"
 import { Bell, Search, LogOut, User, Settings, ChevronDown, KeyRound } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
+import type { UserContext } from "@/lib/user-context"
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
-export default function Navbar() {
+export default function Navbar({ profile: initialProfile }: { profile: UserContext | null }) {
   const router = useRouter()
   const [query, setQuery] = useState("")
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notifRef = useRef<HTMLDivElement>(null)
-  const [profile, setProfile] = useState<{ name: string; role: string } | null>(null)
+  const profile = initialProfile
+    ? {
+        name: initialProfile.name,
+        role: initialProfile.role,
+      }
+    : null
 
   const profileRoutes: Record<Role, string> = {
     [ROLES.SUPER_ADMIN]: "/dashboard/super-admin",
@@ -53,7 +59,7 @@ export default function Navbar() {
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(6)
-        
+
         if (data) {
           setNotifications(data)
         }
@@ -62,24 +68,10 @@ export default function Navbar() {
       }
     }
 
-    async function getProfile() {
-      try {
-        const res = await fetch("/api/auth/profile")
-        if (res.ok) {
-          const json = await res.json()
-          setProfile({
-            name: json.name || json.email?.split("@")[0] || "User",
-            role: json.role || "User",
-          })
-          loadNotifications(json.id)
-        }
-      } catch (err) {
-        console.error("Failed to load active profile on navbar:", err)
-      }
+    if (initialProfile?.id) {
+      loadNotifications(initialProfile.id)
     }
-
-    getProfile()
-  }, [])
+  }, [initialProfile?.id])
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {

@@ -34,6 +34,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
+import type { UserContext } from "@/lib/user-context"
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
@@ -140,29 +141,19 @@ const roleAccents: Record<Role, { bg: string; color: string }> = {
   [ROLES.PARENT]: { bg: "#fdf4ff", color: "#701a75" },
 }
 
-export default function Sidebar() {
+export default function Sidebar({ profile: initialProfile }: { profile: UserContext | null }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [profile, setProfile] = useState<{ name: string; role: Role; is_timetable_builder?: boolean } | null>(null)
   const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
+  const profile = initialProfile
+    ? {
+        name: initialProfile.name,
+        role: initialProfile.role as Role,
+        is_timetable_builder: initialProfile.is_timetable_builder,
+      }
+    : null
 
   useEffect(() => {
-    async function getProfile() {
-      try {
-        const res = await fetch("/api/auth/profile")
-        if (res.ok) {
-          const json = await res.json()
-          setProfile({
-            name: json.name || json.email?.split("@")[0] || "User",
-            role: (json.role as Role) || ROLES.STUDENT,
-            is_timetable_builder: json.is_timetable_builder || false,
-          })
-        }
-      } catch (err) {
-        console.error("Failed to load active profile on sidebar:", err)
-      }
-    }
-
     async function getFeatures() {
       try {
         const res = await fetch("/api/org-features")
@@ -173,7 +164,6 @@ export default function Sidebar() {
       }
     }
 
-    getProfile()
     getFeatures()
   }, [])
 

@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { cookies } from "next/headers"
 import { ROLES } from "@/constants/roles"
@@ -9,6 +10,7 @@ export type UserContext = {
   organization_id: string | null
   name: string
   email: string
+  is_timetable_builder: boolean
   isImpersonating: boolean
   originalProfile: {
     id: string
@@ -21,19 +23,48 @@ export type UserContext = {
   isSuperAdmin: boolean
 }
 
-export async function getCurrentUserContext(): Promise<UserContext | null> {
+export const getCurrentUserContext = cache(async (): Promise<UserContext | null> => {
   const supabase = await createSupabaseServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
 
-  // Fetch actual profile from database
-  const { data: actualProfile } = await supabase
+  if (sessionError || !session?.user?.id) {
+    return null
+  }
+
+  const userId = session.user.id
+
+  const { data: actualProfile, error: profileError } = await supabase
     .from("users")
     .select("id, role, name, email, organization_id, institution_id")
-    .eq("id", user.id)
+    .eq("id", userId)
     .single()
 
-  if (!actualProfile) return null
+  if (profileError || !actualProfile) {
+    return null
+  }
+
+  let isTimetableBuilder = false
+  const { data: perm } = await supabase
+    .from("permissions")
+    .select("id")
+    .eq("name", "timetable_builder")
+    .maybeSingle()
+
+  if (perm?.id) {
+    const { data: userPerm } = await supabase
+      .from("user_permissions")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("permission_id", perm.id)
+      .maybeSingle()
+
+    if (userPerm?.id) {
+      isTimetableBuilder = true
+    }
+  }
 
   const cookieStore = await cookies()
   const impRole = cookieStore.get("sa_impersonate_role")?.value
@@ -41,27 +72,25 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   const impInstId = cookieStore.get("sa_impersonate_inst_id")?.value
   const impUserId = cookieStore.get("sa_impersonate_user_id")?.value
 
-  // Impersonation is only allowed for SUPER_ADMIN
   if (actualProfile.role === ROLES.SUPER_ADMIN && impRole) {
-    let targetProfile = null
-    if (impUserId) {
-      const { data } = await supabase
-        .from("users")
-        .select("id, role, name, email, organization_id, institution_id")
-        .eq("id", impUserId)
-        .single()
-      if (data) {
-        targetProfile = data
-      }
-    }
+    const targetProfileData = impUserId
+      ? await supabase
+          .from("users")
+          .select("id, role, name, email, organization_id, institution_id")
+          .eq("id", impUserId)
+          .single()
+      : { data: null, error: null }
+
+    const targetProfile = targetProfileData.data
 
     return {
-      id: targetProfile?.id ?? user.id, // return impersonated user ID
+      id: targetProfile?.id ?? userId,
       role: impRole,
       institution_id: targetProfile?.institution_id ?? impInstId ?? null,
       organization_id: targetProfile?.organization_id ?? impOrgId ?? null,
       name: targetProfile?.name ?? actualProfile.name ?? "",
       email: targetProfile?.email ?? actualProfile.email ?? "",
+      is_timetable_builder: isTimetableBuilder,
       isImpersonating: true,
       originalProfile: {
         id: actualProfile.id,
@@ -76,12 +105,13 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
   }
 
   return {
-    id: user.id,
+    id: userId,
     role: actualProfile.role,
     institution_id: actualProfile.institution_id,
     organization_id: actualProfile.organization_id,
     name: actualProfile.name ?? "",
     email: actualProfile.email ?? "",
+    is_timetable_builder: isTimetableBuilder,
     isImpersonating: false,
     originalProfile: {
       id: actualProfile.id,
@@ -93,4 +123,4 @@ export async function getCurrentUserContext(): Promise<UserContext | null> {
     },
     isSuperAdmin: actualProfile.role === ROLES.SUPER_ADMIN,
   }
-}
+})
