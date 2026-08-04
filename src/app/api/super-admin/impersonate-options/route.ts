@@ -1,29 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { getCurrentUserContext } from "@/lib/user-context"
 import { ROLES } from "@/constants/roles"
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const context = await getCurrentUserContext()
+    if (!context || !context.isSuperAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Verify original role is SUPER_ADMIN
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.role !== ROLES.SUPER_ADMIN) {
+    if (context.originalProfile.role !== ROLES.SUPER_ADMIN) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    const adminSupabase = createSupabaseAdminClient()
     const [orgsRes, instsRes] = await Promise.all([
-      supabase.from("organizations").select("id, name").order("name"),
-      supabase.from("institutions").select("id, name, organization_id").order("name"),
+      adminSupabase.from("organizations").select("id, name").order("name"),
+      adminSupabase.from("institutions").select("id, name, organization_id").order("name"),
     ])
 
     return NextResponse.json({

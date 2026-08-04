@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
-export default function AuthCallbackPage() {
+export default function AuthCallbackFinishPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [status, setStatus] = useState("Loading...")
@@ -38,7 +38,7 @@ export default function AuthCallbackPage() {
 
     function parseHashSession() {
       try {
-        const hash = window.location.hash || "" // e.g. #access_token=...&refresh_token=...
+        const hash = window.location.hash || ""
         if (!hash) return null
         const q = new URLSearchParams(hash.replace(/^#/, ""))
         const access_token = q.get("access_token")
@@ -53,7 +53,6 @@ export default function AuthCallbackPage() {
     async function verifySession() {
       setStatus("Verifying invite link...")
 
-      // Check for Supabase redirect error parameters (e.g. hash error or search param error)
       const hash = window.location.hash || ""
       const hashParams = new URLSearchParams(hash.replace(/^#/, ""))
       const errorParam = searchParams.get("error") || hashParams.get("error")
@@ -82,10 +81,6 @@ export default function AuthCallbackPage() {
         console.warn("⚠️ Callback session initialization error:", initialError)
       }
 
-      // Only bypass the code exchange and redirect early if:
-      // 1. There is an active session in the browser.
-      // 2. There is no pending code parameter in the URL.
-      // 3. The active session email matches the invited email (or no invited email is specified).
       const initialSessionEmail = initialSession?.user?.email
       const isMismatched = inviteEmail && initialSessionEmail && initialSessionEmail.toLowerCase() !== inviteEmail.toLowerCase()
 
@@ -114,7 +109,6 @@ export default function AuthCallbackPage() {
         }
       }
 
-      // Fallback: some magic-link flows put tokens in the URL hash (implicit grant)
       const hashTokens = parseHashSession()
       if (hashTokens) {
         console.debug("Found tokens in hash, setting session via auth.setSession")

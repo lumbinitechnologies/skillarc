@@ -1,33 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { getCurrentUserContext } from "@/lib/user-context"
 import { ROLES } from "@/constants/roles"
 
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
+    const context = await getCurrentUserContext()
+    if (!context || !context.isSuperAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Verify original role is SUPER_ADMIN
-    const { data: profile } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.role !== ROLES.SUPER_ADMIN) {
+    if (context.originalProfile.role !== ROLES.SUPER_ADMIN) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    const adminSupabase = createSupabaseAdminClient()
     const { searchParams } = new URL(req.url)
     const role = searchParams.get("role")
     const orgId = searchParams.get("organization_id")
     const instId = searchParams.get("institution_id")
     const search = searchParams.get("search")
 
-    let query = supabase.from("users").select("id, name, email")
+    let query = adminSupabase.from("users").select("id, name, email")
 
     if (role) {
       query = query.eq("role", role)
