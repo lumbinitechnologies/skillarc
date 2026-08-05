@@ -14,6 +14,7 @@ import {
   Download,
   Eye,
   Brain,
+  Book,
   BookOpen,
   AlertCircle,
   CheckCircle,
@@ -62,7 +63,7 @@ export function StudentSubjectDetailClient({
   attendanceSummary,
   projectGroups,
 }: StudentSubjectDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<"stream" | "classwork" | "people" | "meetings" | "attendance" | "groups">("classwork")
+  const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
 
   // Real-time meetings state for active classroom classes
   const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
@@ -106,9 +107,13 @@ export function StudentSubjectDetailClient({
     ...materialsList.map(m => ({ kind: "material" as const, id: m.id, date: m.created_at, data: m })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
+  const assignmentItems = assignments.filter(item => item.type !== "Material" && item.type !== "Syllabus")
+  const moduleItems = assignments.filter(item => item.type === "Material")
+  const syllabusItems = assignments.filter(item => item.type === "Syllabus")
+
   // Helper to map assignment ID to student submission status
   const getAssignmentStatusMeta = (item: any) => {
-    if (item.type === "Material" || item.type === "material") {
+    if (item.type === "Material" || item.type === "material" || item.type === "Syllabus") {
       return { label: "Available", bg: "bg-emerald-50 border-emerald-100/50 text-[#00C2A8]", icon: <Eye size={12} /> }
     }
 
@@ -139,6 +144,7 @@ export function StudentSubjectDetailClient({
     'Quiz': { icon: Brain, color: 'text-purple-600', bg: 'bg-purple-50/70', label: 'Quiz' },
     'Coding Assignment': { icon: FileCode, color: 'text-blue-600', bg: 'bg-blue-50/70', label: 'Coding' },
     'Material': { icon: BookOpen, color: 'text-emerald-600', bg: 'bg-emerald-50/70', label: 'Material' },
+    'Syllabus': { icon: Book, color: 'text-amber-600', bg: 'bg-amber-50/70', label: 'Syllabus' },
   } as any
 
   return (
@@ -176,7 +182,9 @@ export function StudentSubjectDetailClient({
       {/* Tabs Menu with premium pill buttons */}
       <div className="bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1">
         {[
-          { id: "classwork", label: "Classwork", icon: ListTodo },
+          { id: "assignments", label: "Assignments", icon: ListTodo },
+          { id: "modules", label: "Modules", icon: BookOpen },
+          { id: "syllabus", label: "Syllabus", icon: Book },
           { id: "meetings", label: "Video Classroom", icon: Video },
           { id: "stream", label: "Feed", icon: MessageSquare },
           { id: "people", label: "Class Roster", icon: Users },
@@ -227,18 +235,18 @@ export function StudentSubjectDetailClient({
           </div>
         )}
 
-        {/* Tab 1: Classwork */}
-        {activeTab === "classwork" && (
+        {/* Tab 1: Assignments */}
+        {activeTab === "assignments" && (
           <div className="space-y-6">
-            {assignments.length === 0 ? (
+            {assignmentItems.length === 0 ? (
               <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
                 <ListTodo className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-900 font-bold text-sm">No coursework found</p>
-                <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">There are no assignments, quizzes, or resources posted for your section yet.</p>
+                <p className="text-slate-900 font-bold text-sm">No assignments or quizzes found</p>
+                <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">Your instructor has not posted any assignments or quizzes for this course yet.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
-                {assignments.map((item) => {
+                {assignmentItems.map((item) => {
                   const cfg = typeConfig[item.type] || typeConfig["Assignment"]
                   const Icon = cfg.icon
                   const statusMeta = getAssignmentStatusMeta(item)
@@ -279,6 +287,79 @@ export function StudentSubjectDetailClient({
                     </Link>
                   )
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Modules */}
+        {activeTab === "modules" && (
+          <div className="space-y-6">
+            {moduleItems.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+                <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-900 font-bold text-sm">No modules available</p>
+                <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">Your instructor will post course modules and reference materials here.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {moduleItems.map((item) => {
+                  const cfg = typeConfig[item.type] || typeConfig["Material"]
+                  return (
+                    <Link
+                      key={item.id}
+                      href={`/dashboard/student/subjects/${subject.id}/assignments/${item.id}`}
+                      className="block group"
+                    >
+                      <div className="bg-white border border-slate-100 rounded-3xl p-5 hover:border-indigo-100 hover:shadow-[0_12px_24px_rgba(108,99,255,0.04)] transition-all duration-300 hover:-translate-y-0.5">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl ${cfg.bg} ${cfg.color} flex items-center justify-center flex-shrink-0`}>
+                            <BookOpen size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 text-sm truncate">{item.title}</h4>
+                            <p className="text-[11px] text-slate-400 mt-1 truncate">{item.description || "Module resource"}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 text-[10px] font-semibold text-slate-500 flex items-center justify-between">
+                          <span>{item.due_date ? `Due ${formatDueDate(item.due_date)}` : "No due date"}</span>
+                          <span className="text-[#6C63FF] font-bold">View Module</span>
+                        </div>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Syllabus */}
+        {activeTab === "syllabus" && (
+          <div className="space-y-6">
+            {syllabusItems.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+                <Book className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-900 font-bold text-sm">No syllabus posts yet</p>
+                <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">Your syllabus overview and curriculum notes will appear here when posted.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {syllabusItems.map((item) => (
+                  <Link key={item.id} href={`/dashboard/student/subjects/${subject.id}/assignments/${item.id}`} className="block group">
+                    <div className="bg-white border border-slate-100 rounded-3xl p-5 hover:border-indigo-100 hover:shadow-[0_12px_24px_rgba(108,99,255,0.04)] transition-all duration-300">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center flex-shrink-0">
+                          <Book size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-800 text-sm truncate">{item.title}</h4>
+                          <p className="text-[11px] text-slate-400 mt-1 truncate">{item.description || "Syllabus overview"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
             )}
           </div>

@@ -98,12 +98,6 @@ export default function OrgAdminDashboardClient({
               <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">Manage institutions with ease</h1>
               <p className="mt-2 text-sm text-slate-500">Track organization growth, faculty oversight, and student expansion in one place.</p>
             </div>
-            <button
-              onClick={() => router.push("/dashboard/org-admin")}
-              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-200/30 transition hover:bg-indigo-700"
-            >
-              <Plus size={16} /> Add institution
-            </button>
           </div>
         </div>
 

@@ -571,6 +571,19 @@ function StudentPortalView({
     }
   };
 
+  const handleResumeDelete = () => {
+    if (!userId || !resumeUrl) return;
+
+    const confirmed = window.confirm("Are you sure you want to delete your uploaded resume?");
+    if (!confirmed) return;
+
+    localStorage.removeItem(`student_resume_${userId}`);
+    localStorage.removeItem(`student_resume_name_${userId}`);
+    setResumeUrl("");
+    setResumeName("");
+    alert("Resume deleted successfully.");
+  };
+
   const studentProfile = (students && students.find(s => s.student_id === userId)) || MOCK_STUDENTS[0];
   const avgSgpa = studentProfile?.sgpa ? (Object.values(studentProfile.sgpa).reduce((a, b) => a + b, 0) / Object.values(studentProfile.sgpa).length) : 0;
   const activeBacklogs = studentProfile?.backlogs ? Object.values(studentProfile.backlogs).reduce((a, b) => a + b, 0) : 0;
@@ -685,6 +698,15 @@ function StudentPortalView({
                 >
                   View CV
                 </a>
+              )}
+              {resumeUrl && (
+                <button
+                  type="button"
+                  onClick={handleResumeDelete}
+                  className="px-4 py-2 border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl hover:bg-rose-100 transition-all"
+                >
+                  Delete Resume
+                </button>
               )}
               <label className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-sm">
                 {isUploadingResume ? "Uploading..." : resumeUrl ? "Change Resume" : "Upload Resume (PDF)"}

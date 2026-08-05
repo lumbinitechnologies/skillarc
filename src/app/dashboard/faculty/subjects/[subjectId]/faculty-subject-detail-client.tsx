@@ -66,6 +66,10 @@ import {
   suggestTeamsAIAction
 } from "@/app/actions/project-groups"
 
+type FacultyTab = "assignments" | "modules" | "syllabus" | "grades" | "students" | "meetings" | "attendance" | "groups" | "announcements"
+
+type FacultyWorksheetType = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
+
 interface FacultySubjectDetailClientProps {
   facultyId: string
   facultyName: string
@@ -98,9 +102,9 @@ export function FacultySubjectDetailClient({
   meetings,
   projects,
 }: FacultySubjectDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<"announcements" | "classwork" | "grades" | "students" | "meetings" | "attendance" | "groups">("classwork")
+  const [activeTab, setActiveTab] = useState<FacultyTab>("assignments")
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [modalType, setModalType] = useState<"Assignment" | "Quiz" | "Coding Assignment" | "Material">("Assignment")
+  const [modalType, setModalType] = useState<FacultyWorksheetType>("Assignment")
   const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
 
   // Project groups states
@@ -366,6 +370,7 @@ export function FacultySubjectDetailClient({
   const quizzes = assignments.filter(a => a.type === "Quiz" || a.type === "quiz")
   const codingAssignments = assignments.filter(a => a.type === "Coding Assignment" || a.type === "coding")
   const announcementsList = assignments.filter(a => a.type === "Material" && !a.due_date)
+  const syllabusItems = assignments.filter((a) => a.type === "Syllabus")
 
   const getSubmissionStats = (assignmentId: string) => {
     const subs = submissions.filter(s => s.assignment_id === assignmentId)
@@ -726,6 +731,7 @@ export function FacultySubjectDetailClient({
     'Quiz': { icon: Brain, color: 'text-[#8B5CF6]', bg: 'bg-[#8B5CF6]/5', border: 'border-[#8B5CF6]/15', label: 'Quiz' },
     'Coding Assignment': { icon: FileCode, color: 'text-[#38bdf8]', bg: 'bg-[#38bdf8]/5', border: 'border-[#38bdf8]/15', label: 'Coding' },
     'Material': { icon: BookOpen, color: 'text-[#00C2A8]', bg: 'bg-[#00C2A8]/5', border: 'border-[#00C2A8]/15', label: 'Material' },
+    'Syllabus': { icon: Book, color: 'text-[#f59e0b]', bg: 'bg-[#f59e0b]/5', border: 'border-[#f59e0b]/15', label: 'Syllabus' },
   } as any
 
   return (
@@ -764,7 +770,9 @@ export function FacultySubjectDetailClient({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex-1 bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1">
           {[
-            { id: "classwork", label: "Classwork", icon: ListTodo },
+            { id: "assignments", label: "Assignments", icon: ListTodo },
+            { id: "modules", label: "Modules", icon: BookOpen },
+            { id: "syllabus", label: "Syllabus", icon: Book },
             { id: "grades", label: "Evaluation", icon: Award },
             { id: "meetings", label: "Video Classroom", icon: Video },
             { id: "announcements", label: "Stream", icon: MessageSquare },
@@ -793,13 +801,13 @@ export function FacultySubjectDetailClient({
           })}
         </div>
 
-        {activeTab === "classwork" && (
+        {(activeTab === "assignments" || activeTab === "syllabus") && (
           <div className="relative group self-start md:self-center">
             <button className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] hover:from-[#5C53EF] hover:to-[#7B4CE6] text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95">
               <Plus size={14} /> Create Coursework
             </button>
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-30 py-1.5 overflow-hidden">
-              {(["Assignment", "Quiz", "Coding Assignment", "Material"] as const).map(type => (
+            <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-30 py-1.5 overflow-hidden">
+              {(["Assignment", "Quiz", "Coding Assignment", "Material", "Syllabus"] as const).map(type => (
                 <button
                   key={type}
                   onClick={() => {
@@ -820,14 +828,14 @@ export function FacultySubjectDetailClient({
       {/* Main Body */}
       <div className="w-full">
         
-        {/* Tab 1: Classwork */}
-        {activeTab === "classwork" && (
+        {/* Tab 1: Assignments */}
+        {activeTab === "assignments" && (
           <div className="space-y-8">
-            {assignments.length === 0 ? (
+            {standardAssignments.length === 0 && quizzes.length === 0 && codingAssignments.length === 0 ? (
               <div className="text-center py-16 bg-white border border-slate-200 rounded-3xl shadow-sm">
                 <ListTodo className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-slate-700 font-bold text-lg">No Coursework Created</h3>
-                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Create assignments, coding worksheets, or auto-graded quizzes for your sections.</p>
+                <h3 className="text-slate-700 font-bold text-lg">No Assignments or Quizzes Created</h3>
+                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Create course assignments, quizzes, or coding worksheets for your sections.</p>
                 <button
                   onClick={() => {
                     setModalType("Assignment")
@@ -884,21 +892,64 @@ export function FacultySubjectDetailClient({
                     onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
                   />
                 )}
+              </div>
+            )}
+          </div>
+        )}
 
-                {/* Materials */}
-                {materials.length > 0 && (
-                  <SectionGroup
-                    label="Resources & Materials"
-                    items={materials}
-                    type="Material"
-                    cfg={typeConfig["Material"]}
-                    statsFn={getSubmissionStats}
-                    onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
-                    onDelete={handleDeleteAssignment}
-                    formatDate={formatDueDate}
-                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
-                  />
-                )}
+        {/* Tab 2: Modules */}
+        {activeTab === "modules" && (
+          <div className="space-y-6">
+            {materials.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+                <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-slate-700 font-bold text-lg">No Modules Available</h3>
+                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Upload syllabus modules, lecture slides, and resource materials for this course.</p>
+              </div>
+            ) : (
+              <SectionGroup
+                label="Modules"
+                items={materials}
+                type="Material"
+                cfg={typeConfig["Material"]}
+                statsFn={getSubmissionStats}
+                onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                onDelete={handleDeleteAssignment}
+                formatDate={formatDueDate}
+                onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Syllabus */}
+        {activeTab === "syllabus" && (
+          <div className="space-y-6">
+            {syllabusItems.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+                <Book className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="text-slate-700 font-bold text-lg">No Syllabus Overview Yet</h3>
+                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Post a syllabus overview or curriculum guide using the Stream tab to populate this section.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {syllabusItems.map((item) => (
+                  <div key={item.id} className="bg-white border border-slate-200 rounded-3xl p-5 hover:border-indigo-200 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <Book size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-slate-800 text-sm truncate">{item.title}</h3>
+                        <p className="text-xs text-slate-500 mt-1 truncate">{item.description || "Syllabus overview resource"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>{item.due_date ? `Due ${formatDueDate(item.due_date)}` : "No due date"}</span>
+                      <span className="font-semibold text-indigo-600">Syllabus</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -2374,7 +2425,7 @@ interface CreateWorksheetModalProps {
   onClose: () => void
   subjectId: string
   facultyId: string
-  initialType: "Assignment" | "Quiz" | "Coding Assignment" | "Material"
+  initialType: "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
   sections: Array<{ id: string; name: string }>
   editingAssignment?: any | null
 }
@@ -2388,7 +2439,7 @@ function CreateWorksheetModal({
   sections,
   editingAssignment,
 }: CreateWorksheetModalProps) {
-  const [type, setType] = useState<"Assignment" | "Quiz" | "Coding Assignment" | "Material">(initialType)
+  const [type, setType] = useState<"Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus">(initialType)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [dueDate, setDueDate] = useState("")
@@ -2511,7 +2562,7 @@ function CreateWorksheetModal({
       description: description.trim(),
       due_date: fullDueDateStr,
       type,
-      max_score: type === "Material" ? 0 : maxScore,
+      max_score: type === "Material" || type === "Syllabus" ? 0 : maxScore,
       questions: type === "Quiz" ? quizQuestions : null,
       language: type === "Coding Assignment" ? language : null,
       test_cases: type === "Coding Assignment" ? testCases : null,
@@ -2714,21 +2765,28 @@ function CreateWorksheetModal({
             </div>
           )}
 
-          {type === "Material" && (
+          {(type === "Material" || type === "Syllabus") && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Resource Details</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  {type === "Syllabus" ? "Syllabus Overview" : "Resource Details"}
+                </label>
                 <textarea
                   rows={4}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  placeholder="Paste resource descriptions, links to external drives, slides or notes..."
+                  placeholder={type === "Syllabus"
+                    ? "Paste syllabus summary, curriculum outline, or key course modules..."
+                    : "Paste resource descriptions, links to external drives, slides or notes..."
+                  }
                   className="w-full border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl p-4 text-sm text-slate-800"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Resource File Attachments (Slides, Syllabus, Notes)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  {type === "Syllabus" ? "Syllabus Attachments" : "Resource File Attachments (Slides, Notes)"}
+                </label>
                 <div
                   onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
@@ -2980,4 +3038,5 @@ const typeConfig = {
   'Quiz': { icon: Brain, color: 'text-[#8B5CF6]', bg: 'bg-[#8B5CF6]/5', border: 'border-[#8B5CF6]/15', activeBg: 'bg-[#8B5CF6]', label: 'Quiz' },
   'Coding Assignment': { icon: FileCode, color: 'text-[#38bdf8]', bg: 'bg-[#38bdf8]/5', border: 'border-[#38bdf8]/15', activeBg: 'bg-[#38bdf8]', label: 'Coding' },
   'Material': { icon: BookOpen, color: 'text-[#00C2A8]', bg: 'bg-[#00C2A8]/5', border: 'border-[#00C2A8]/15', activeBg: 'bg-[#00C2A8]', label: 'Material' },
+  'Syllabus': { icon: Book, color: 'text-[#f59e0b]', bg: 'bg-[#f59e0b]/5', border: 'border-[#f59e0b]/15', activeBg: 'bg-[#f59e0b]', label: 'Syllabus' },
 } as any

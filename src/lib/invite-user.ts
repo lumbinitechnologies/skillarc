@@ -88,7 +88,7 @@ export async function inviteUser(params: {
       origin = resolveAppOrigin()
     }
   }
-  const redirectToUrl = new URL("/auth/callback", origin)
+  const redirectToUrl = new URL("/auth/callback-finish", origin)
   redirectToUrl.searchParams.set("next", "/auth/set-password")
   redirectToUrl.searchParams.set("inviteEmail", email)
   const redirectTo = redirectToUrl.toString()

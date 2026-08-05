@@ -14,13 +14,14 @@ export default function AuthCallbackFinishPage() {
     let retryAttempted = false
     const inviteEmail = searchParams.get("inviteEmail")
     const retry = searchParams.get("retry")
+    const nextPath = searchParams.get("next") || "/auth/set-password"
     const callbackQuery = inviteEmail ? `?inviteEmail=${encodeURIComponent(inviteEmail)}` : ""
 
     const redirectToSetPassword = () => {
       if (redirected) return
       redirected = true
       setStatus("Redirecting...")
-      router.replace(`/auth/set-password${callbackQuery}`)
+      router.replace(`${nextPath}${callbackQuery}`)
     }
 
     async function waitForSessionPersistence() {
