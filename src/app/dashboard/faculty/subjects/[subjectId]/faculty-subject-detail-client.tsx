@@ -54,6 +54,10 @@ import {
   createMeetingAction,
   endMeetingAction
 } from "@/app/actions/meetings"
+import {
+  createSubjectAnnouncementAction,
+  deleteSubjectAnnouncementAction,
+} from "@/app/actions/announcements"
 import { detectAIContent } from "@/lib/ai-detector"
 import { supabase } from "@/lib/supabase"
 import {
@@ -84,6 +88,7 @@ interface FacultySubjectDetailClientProps {
     name: string
   }>
   assignments: Array<any>
+  announcements: Array<any>
   submissions: Array<any>
   students: Array<any>
   meetings: Array<any>
@@ -97,6 +102,7 @@ export function FacultySubjectDetailClient({
   subject,
   sections,
   assignments,
+  announcements,
   submissions,
   students,
   meetings,
@@ -106,6 +112,7 @@ export function FacultySubjectDetailClient({
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState<FacultyWorksheetType>("Assignment")
   const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
+  const [localAnnouncements, setLocalAnnouncements] = useState<any[]>(announcements)
 
   // Project groups states
   const [localProjects, setLocalProjects] = useState(projects)
@@ -167,6 +174,10 @@ export function FacultySubjectDetailClient({
   const [attendance, setAttendance] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLocalAnnouncements(announcements)
+  }, [announcements])
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -369,7 +380,7 @@ export function FacultySubjectDetailClient({
   const standardAssignments = assignments.filter(a => a.type === "Assignment" || a.type === "assignment")
   const quizzes = assignments.filter(a => a.type === "Quiz" || a.type === "quiz")
   const codingAssignments = assignments.filter(a => a.type === "Coding Assignment" || a.type === "coding")
-  const announcementsList = assignments.filter(a => a.type === "Material" && !a.due_date)
+  const announcementsList = localAnnouncements
   const syllabusItems = assignments.filter((a) => a.type === "Syllabus")
 
   const getSubmissionStats = (assignmentId: string) => {
@@ -388,27 +399,22 @@ export function FacultySubjectDetailClient({
   const handlePostAnnouncement = async () => {
     if (!announcementText.trim()) return
     setIsPostingAnnouncement(true)
-    
-    // An announcement is stored as a Material with no due date and assigned to all sections
+
     const sectionIds = sections.map(s => s.id)
-    const res = await createAssignmentAction({
+    const res = await createSubjectAnnouncementAction({
       subject_id: subject.id,
       faculty_id: facultyId,
       title: `${subject.name} Announcement`,
       description: announcementText.trim(),
-      due_date: null,
-      type: "Material",
-      max_score: 0,
-      questions: null,
-      language: null,
-      test_cases: null,
       section_ids: sectionIds,
-      files: null
     })
 
     setIsPostingAnnouncement(false)
     if (res.success) {
       setAnnouncementText("")
+      if (res.announcement) {
+        setLocalAnnouncements(prev => [res.announcement, ...prev])
+      }
     } else {
       alert("Error posting announcement: " + res.error)
     }
@@ -420,6 +426,16 @@ export function FacultySubjectDetailClient({
     if (!res.success) {
       alert("Error deleting coursework: " + res.error)
     }
+  }
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this announcement?")) return
+    const res = await deleteSubjectAnnouncementAction(id, subject.id)
+    if (!res.success) {
+      alert("Error deleting announcement: " + res.error)
+      return
+    }
+    setLocalAnnouncements(prev => prev.filter((ann) => ann.id !== id))
   }
 
   // Submission details helpers

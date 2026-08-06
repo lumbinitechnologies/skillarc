@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import { FacultySubjectDetailClient } from "./faculty-subject-detail-client"
 import { getProjectsBySubjectAction } from "@/app/actions/project-groups"
+import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
 
 export const dynamic = "force-dynamic"
 
@@ -63,6 +64,9 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
     .select("*")
     .eq("subject_id", subjectId)
     .order("created_at", { ascending: false })
+
+  // 3b. Fetch announcement posts for this subject
+  const announcementItems = await getSubjectAnnouncementsAction(subjectId)
 
   const assignmentIds = (assignments ?? []).map((a: any) => a.id)
 
@@ -138,6 +142,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
       facultyName={profile.name}
       institutionId={profile.institution_id}
       subject={subject}
+      announcements={announcementItems ?? []}
       sections={sections ?? []}
       assignments={assignments ?? []}
       submissions={submissions ?? []}

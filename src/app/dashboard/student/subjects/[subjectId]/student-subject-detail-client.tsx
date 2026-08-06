@@ -28,6 +28,7 @@ import {
   FolderKanban,
   Star
 } from "lucide-react"
+import { replyToAnnouncementAction } from "@/app/actions/announcements"
 import { supabase } from "@/lib/supabase"
 
 interface StudentSubjectDetailClientProps {
@@ -47,6 +48,7 @@ interface StudentSubjectDetailClientProps {
   attendanceEntries: Array<any>
   attendanceSummary: any
   projectGroups: Array<any>
+  subjectAnnouncements: Array<any>
 }
 
 export function StudentSubjectDetailClient({
@@ -62,8 +64,12 @@ export function StudentSubjectDetailClient({
   attendanceEntries,
   attendanceSummary,
   projectGroups,
+  subjectAnnouncements,
 }: StudentSubjectDetailClientProps) {
   const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
+  const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<any[]>(subjectAnnouncements)
+  const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
+  const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
 
   // Real-time meetings state for active classroom classes
   const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
@@ -71,6 +77,10 @@ export function StudentSubjectDetailClient({
   useEffect(() => {
     setLocalMeetings(meetings)
   }, [meetings])
+
+  useEffect(() => {
+    setLocalSubjectAnnouncements(subjectAnnouncements)
+  }, [subjectAnnouncements])
 
   useEffect(() => {
     const channel = supabase
@@ -99,11 +109,12 @@ export function StudentSubjectDetailClient({
   }, [subject.id])
 
   // Merge announcements (materials with no due date) and other materials into Stream
-  const announcementsList = assignments.filter(a => a.type === "Material" && !a.due_date)
+  const legacyAnnouncements = assignments.filter(a => a.type === "Material" && !a.due_date)
   const materialsList = assignments.filter(a => a.type === "Material" && a.due_date)
 
   const streamItems = [
-    ...announcementsList.map(a => ({ kind: "announcement" as const, id: a.id, date: a.created_at, data: a })),
+    ...localSubjectAnnouncements.map(a => ({ kind: "announcement" as const, id: a.id, date: a.created_at, data: a, source: "announcement" as const })),
+    ...legacyAnnouncements.map(a => ({ kind: "announcement" as const, id: a.id, date: a.created_at, data: a, source: "legacy" as const })),
     ...materialsList.map(m => ({ kind: "material" as const, id: m.id, date: m.created_at, data: m })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
@@ -146,6 +157,34 @@ export function StudentSubjectDetailClient({
     'Material': { icon: BookOpen, color: 'text-emerald-600', bg: 'bg-emerald-50/70', label: 'Material' },
     'Syllabus': { icon: Book, color: 'text-amber-600', bg: 'bg-amber-50/70', label: 'Syllabus' },
   } as any
+
+  const handleReplyToAnnouncement = async (announcementId: string) => {
+    const replyText = replyTextByAnnouncement[announcementId]?.trim() || ""
+    if (!replyText) return
+
+    setIsReplying(prev => ({ ...prev, [announcementId]: true }))
+    const res = await replyToAnnouncementAction({
+      announcement_id: announcementId,
+      student_id: studentId,
+      subject_id: subject.id,
+      content: replyText,
+    })
+
+    setIsReplying(prev => ({ ...prev, [announcementId]: false }))
+    if (!res.success) {
+      alert("Error sending reply: " + res.error)
+      return
+    }
+
+    setReplyTextByAnnouncement(prev => ({ ...prev, [announcementId]: "" }))
+    setLocalSubjectAnnouncements(prev =>
+      prev.map((ann) =>
+        ann.id === announcementId
+          ? { ...ann, replies: [...(ann.replies || []), res.reply] }
+          : ann
+      )
+    )
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -380,20 +419,62 @@ export function StudentSubjectDetailClient({
                   if (item.kind === "announcement") {
                     const ann = item.data
                     const annFacultyName = ann.faculty?.name || facultyName
+                    const content = ann.description || ann.content || ""
+                    const replies = item.source === "announcement" ? ann.replies || [] : []
                     return (
-                      <div key={item.id} className="bg-white border border-slate-100 rounded-3xl p-6 flex items-start gap-4 hover:shadow-[0_12px_24px_rgba(108,99,255,0.03)] transition-all duration-350">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center flex-shrink-0">
-                          <Megaphone size={18} />
+                      <div key={`${item.source}-${item.id}`} className="bg-white border border-slate-100 rounded-3xl p-6 flex flex-col gap-4 hover:shadow-[0_12px_24px_rgba(108,99,255,0.03)] transition-all duration-350">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center flex-shrink-0">
+                            <Megaphone size={18} />
+                          </div>
+                          <div className="flex-grow min-w-0">
+                            <div className="flex justify-between items-center gap-4">
+                              <h4 className="font-bold text-slate-800 text-sm">{annFacultyName}</h4>
+                              <div className="text-[10px] text-slate-400 font-bold font-['Space_Grotesk']">
+                                {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2.5 whitespace-pre-wrap">{content}</p>
+                          </div>
                         </div>
-                        <div className="flex-grow min-w-0">
-                          <div className="flex justify-between items-center">
-                            <h4 className="font-bold text-slate-800 text-sm">{annFacultyName}</h4>
-                            <div className="text-[10px] text-slate-400 font-bold font-['Space_Grotesk']">
-                              {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+
+                        {item.source === "announcement" && (
+                          <div className="rounded-3xl bg-slate-50 border border-slate-100 p-4">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500 mb-3">Replies</div>
+                            {replies.length === 0 ? (
+                              <p className="text-xs text-slate-400">No replies yet. Share your question or comment below.</p>
+                            ) : (
+                              <div className="space-y-3">
+                                {replies.map((reply: any) => (
+                                  <div key={reply.id} className="rounded-2xl bg-white p-3 border border-slate-100">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="text-xs font-semibold text-slate-700">{reply.users?.name || "Student"}</span>
+                                      <span className="text-[10px] text-slate-400">{new Date(reply.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{reply.message}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="mt-4 space-y-2">
+                              <textarea
+                                rows={3}
+                                value={replyTextByAnnouncement[item.id] || ""}
+                                onChange={(e) => setReplyTextByAnnouncement(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                className="w-full rounded-3xl border border-slate-200 p-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none"
+                                placeholder="Write a reply to this announcement..."
+                              />
+                              <button
+                                onClick={() => handleReplyToAnnouncement(item.id)}
+                                disabled={isReplying[item.id] || !replyTextByAnnouncement[item.id]?.trim()}
+                                className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                              >
+                                {isReplying[item.id] ? "Sending..." : "Reply"}
+                              </button>
                             </div>
                           </div>
-                          <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2.5 whitespace-pre-wrap">{ann.description}</p>
-                        </div>
+                        )}
                       </div>
                     )
                   } else {

@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import { StudentSubjectDetailClient } from "./student-subject-detail-client"
 import { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
+import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
 
 export const dynamic = "force-dynamic"
 
@@ -84,6 +85,8 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     `)
     .eq("subject_id", subjectId)
     .order("created_at", { ascending: false })
+
+  const subjectAnnouncements = await getSubjectAnnouncementsAction(subjectId)
 
   // Filter assignments targeted to this student's section (or globally assigned)
   const studentSectionId = profile.section_id
@@ -221,6 +224,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       attendanceEntries={attendanceEntries}
       attendanceSummary={attendanceSummary}
       projectGroups={projectGroups ?? []}
+  subjectAnnouncements={subjectAnnouncements ?? []}
     />
   )
 }
