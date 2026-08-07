@@ -41,22 +41,25 @@ export function SubjectsClientPage({
       return
     }
 
-    const subject = await res.json()
-    // To match the display format, let's inject the program/department info from client reference
-    const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
-    const formattedSubject = {
-      ...subject,
-      program: selectedProgram ? {
-        id: selectedProgram.id,
-        name: selectedProgram.name,
-        department: selectedProgram.department ? {
-          id: selectedProgram.department.id,
-          name: selectedProgram.department.name
-        } : null
-      } : null
-    }
+    const result = await res.json()
+    const createdArray = Array.isArray(result) ? result : [result]
 
-    setSubjects((prev: any) => [...prev, formattedSubject])
+    const formattedSubjects = createdArray.map((subject: any) => {
+      const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+      return {
+        ...subject,
+        program: selectedProgram ? {
+          id: selectedProgram.id,
+          name: selectedProgram.name,
+          department: selectedProgram.department ? {
+            id: selectedProgram.department.id,
+            name: selectedProgram.department.name
+          } : null
+        } : null
+      }
+    })
+
+    setSubjects((prev: any) => [...prev, ...formattedSubjects])
     setOpen(false)
 
     toast({

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = request.nextUrl
     const institutionId = searchParams.get("institution_id")
+    const departmentId = searchParams.get("department_id")
     const search = searchParams.get("search")
     const page   = Math.max(1, Number(searchParams.get("page")  ?? 1))
     const limit  = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 25)))
@@ -31,6 +32,21 @@ export async function GET(request: NextRequest) {
 
     if (institutionId) {
       query = query.eq("institution_id", institutionId)
+    }
+
+    if (departmentId) {
+      const { data: deptPrograms } = await adminClient
+        .from("programs")
+        .select("id")
+        .eq("department_id", departmentId)
+      
+      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      
+      if (programIds.length > 0) {
+        query = query.in("program_id", programIds)
+      } else {
+        return NextResponse.json({ students: [], totalCount: 0, page, limit })
+      }
     }
 
     if (search) {

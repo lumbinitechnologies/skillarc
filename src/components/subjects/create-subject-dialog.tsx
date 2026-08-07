@@ -77,6 +77,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
   const defaultForm = {
     department_id: "",
     program_id: "",
+    program_ids: [] as string[],
     semester: 1,
     name: "",
     code: "",
@@ -97,16 +98,23 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
   )
 
   function handleDepartmentChange(department_id: string) {
-    setFormData(prev => ({ ...prev, department_id, program_id: "" }))
+    setFormData(prev => ({ ...prev, department_id, program_id: "", program_ids: [] }))
   }
 
-  const canSubmit = formData.program_id && formData.name.trim() && formData.code.trim()
+  const canSubmit = (formData.program_id || formData.program_ids.length > 0) && formData.name.trim() && formData.code.trim()
 
   async function handleSubmit() {
     if (!canSubmit) return
     setLoading(true)
-    const { department_id, ...payload } = formData
-    await onSubmit(payload)
+    const { department_id, program_id, ...payload } = formData
+    const idsToSend = formData.program_ids.length > 0 
+      ? formData.program_ids 
+      : (program_id ? [program_id] : [])
+    
+    await onSubmit({
+      ...payload,
+      program_ids: idsToSend,
+    })
     setFormData(defaultForm)
     setLoading(false)
   }
@@ -146,25 +154,40 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             </StyledSelect>
           </div>
 
-          {/* Program */}
+          {/* Programs */}
           <div>
-            <FieldLabel>Program</FieldLabel>
-            <StyledSelect
-              value={formData.program_id}
-              onChange={v => set("program_id", v)}
-              disabled={!formData.department_id}
-            >
-              <option value="">
-                {!formData.department_id
-                  ? "Select a department first"
-                  : filteredPrograms.length === 0
-                    ? "No programs for this department"
-                    : "Select Program"}
-              </option>
-              {filteredPrograms.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </StyledSelect>
+            <FieldLabel>Programs *</FieldLabel>
+            {!formData.department_id ? (
+              <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
+                Select a department first
+              </div>
+            ) : filteredPrograms.length === 0 ? (
+              <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
+                No programs for this department
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-40 overflow-y-auto border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                {filteredPrograms.map(p => {
+                  const isChecked = formData.program_ids.includes(p.id)
+                  return (
+                    <label key={p.id} className="flex items-center gap-3 cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          const newIds = isChecked
+                            ? formData.program_ids.filter(id => id !== p.id)
+                            : [...formData.program_ids, p.id]
+                          set("program_ids", newIds)
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                      />
+                      <span>{p.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Semester */}
@@ -173,10 +196,10 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             <StyledSelect
               value={String(formData.semester)}
               onChange={v => set("semester", Number(v))}
-              disabled={!formData.program_id}
+              disabled={!formData.department_id}
             >
-              {!formData.program_id
-                ? <option value="">Select a program first</option>
+              {!formData.department_id
+                ? <option value="">Select a department first</option>
                 : [1,2,3,4,5,6,7,8].map(s => (
                     <option key={s} value={s}>Semester {s}</option>
                   ))

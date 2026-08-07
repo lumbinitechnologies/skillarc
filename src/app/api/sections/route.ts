@@ -66,15 +66,42 @@ export async function GET(request: NextRequest) {
     if (!userProfile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const institutionId = request.nextUrl.searchParams.get("institution_id")
+    const departmentId = request.nextUrl.searchParams.get("department_id")
 
     let query = supabase
       .from("sections")
-      .select("*, users:faculty_advisor_id(id, name, email)")
+      .select(`
+        *,
+        faculty_advisor:faculty_advisor_id(
+          id,
+          name,
+          email
+        ),
+        program:program_id(
+          id,
+          name
+        )
+      `)
 
     if (institutionId) {
       query = query.eq("institution_id", institutionId)
     } else if (userProfile?.institution_id) {
       query = query.eq("institution_id", userProfile.institution_id)
+    }
+
+    if (departmentId) {
+      const { data: deptPrograms } = await supabase
+        .from("programs")
+        .select("id")
+        .eq("department_id", departmentId)
+      
+      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      
+      if (programIds.length > 0) {
+        query = query.in("program_id", programIds)
+      } else {
+        return NextResponse.json([])
+      }
     }
 
     const { data: sections, error } = await query.order("semester").order("name")

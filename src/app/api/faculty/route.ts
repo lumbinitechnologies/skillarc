@@ -66,13 +66,21 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const institutionId = request.nextUrl.searchParams.get("institution_id")
+    const departmentId = request.nextUrl.searchParams.get("department_id")
 
     const query = supabase
       .from("users")
-      .select("*")
+      .select(`
+        *,
+        department:department_id(
+          id,
+          name
+        )
+      `)
       .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
 
     if (institutionId) query.eq("institution_id", institutionId)
+    if (departmentId) query.eq("department_id", departmentId)
 
     const { data = [], error } = await query.order("name")
 

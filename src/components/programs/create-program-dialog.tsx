@@ -43,11 +43,11 @@ export function CreateProgramDialog({
   useEffect(() => {
     setFormData({
       name: program?.name || "",
-      department_id: program?.department_id || "",
+      department_id: program?.department_id || (departments.length === 1 ? departments[0].id : ""),
       institution_id: program?.institution_id || "",
       organization_id: program?.organization_id || "",
     })
-  }, [program])
+  }, [program, departments])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,37 +124,39 @@ export function CreateProgramDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="department">
-              Department *
-            </Label>
+          {departments.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="department">
+                Department *
+              </Label>
 
-            <select
-              id="department"
-              value={formData.department_id || ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  department_id: e.target.value,
-                })
-              }
-              className="w-full px-3 py-2 border rounded-md"
-              required
-            >
-              <option value="">
-                Select Department
-              </option>
-
-              {departments.map((dept) => (
-                <option
-                  key={dept.id}
-                  value={dept.id}
-                >
-                  {dept.name}
+              <select
+                id="department"
+                value={formData.department_id || ""}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    department_id: e.target.value,
+                  })
+                }
+                className="w-full px-3 py-2 border rounded-md"
+                required
+              >
+                <option value="">
+                  Select Department
                 </option>
-              ))}
-            </select>
-          </div>
+
+                {departments.map((dept) => (
+                  <option
+                    key={dept.id}
+                    value={dept.id}
+                  >
+                    {dept.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-4">
             <Button

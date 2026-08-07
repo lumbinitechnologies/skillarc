@@ -44,11 +44,11 @@ export function CreateFacultyDialog({
     setFormData({
       name: faculty?.name || "",
       email: faculty?.email || "",
-      department_id: faculty?.department_id || "",
+      department_id: faculty?.department_id || (departments.length === 1 ? departments[0].id : ""),
       role: (faculty?.role || "FACULTY") as any,
       is_timetable_builder: faculty?.is_timetable_builder || false,
     })
-  }, [faculty])
+  }, [faculty, departments])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,7 +129,7 @@ export function CreateFacultyDialog({
             )}
           </div>
 
-          {departments.length > 0 && (
+          {departments.length > 1 && (
             <div className="space-y-2">
               <Label htmlFor="department">Department</Label>
               <select

@@ -111,6 +111,10 @@ export async function GET(
       request.nextUrl.searchParams.get(
         "institution_id"
       )
+    const departmentId =
+      request.nextUrl.searchParams.get(
+        "department_id"
+      )
 
     let query = supabase
       .from("programs")
@@ -126,6 +130,13 @@ export async function GET(
       query = query.eq(
         "institution_id",
         institutionId
+      )
+    }
+
+    if (departmentId) {
+      query = query.eq(
+        "department_id",
+        departmentId
       )
     }
 

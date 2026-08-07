@@ -16,19 +16,25 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { institution_id, name, code, semester, program_id, credits, subject_type } = body
+    const { institution_id, name, code, semester, program_id, program_ids, credits, subject_type } = body
+
+    const targetProgramIds = Array.isArray(program_ids)
+      ? program_ids
+      : (program_id ? [program_id] : [null])
+
+    const rowsToInsert = targetProgramIds.map((progId) => ({
+      institution_id,
+      name,
+      code,
+      semester,
+      program_id: progId || null,
+      credits,
+      subject_type,
+    }))
 
     const { data, error } = await supabase
       .from("subjects")
-      .insert([{
-        institution_id,
-        name,
-        code,
-        semester,
-        program_id: program_id || null,
-        credits,
-        subject_type,
-      }])
+      .insert(rowsToInsert)
       .select(`
         *,
         program:program_id(
@@ -36,11 +42,13 @@ export async function POST(request: NextRequest) {
           department:department_id(id, name)
         )
       `)
-      .single()
 
     if (error) throw error
 
-    return NextResponse.json(data)
+    // If a single ID was requested and single row created, return single object to maintain compatibility
+    const responseData = !Array.isArray(program_ids) && data && data.length > 0 ? data[0] : data
+
+    return NextResponse.json(responseData)
   } catch (error) {
     console.error("Subject create error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -48,14 +56,16 @@ export async function POST(request: NextRequest) {
 }
 
 // GET SUBJECTS
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
 
     const profile = await getCurrentUserContext()
     if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data, error } = await supabase
+    const departmentId = request.nextUrl.searchParams.get("department_id")
+
+    let query = supabase
       .from("subjects")
       .select(`
         *,
@@ -65,8 +75,23 @@ export async function GET() {
         )
       `)
       .eq("institution_id", profile?.institution_id)
-      .order("semester")
-      .order("name")
+
+    if (departmentId) {
+      const { data: deptPrograms } = await supabase
+        .from("programs")
+        .select("id")
+        .eq("department_id", departmentId)
+      
+      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      
+      if (programIds.length > 0) {
+        query = query.in("program_id", programIds)
+      } else {
+        return NextResponse.json([])
+      }
+    }
+
+    const { data, error } = await query.order("semester").order("name")
 
     if (error) throw error
 

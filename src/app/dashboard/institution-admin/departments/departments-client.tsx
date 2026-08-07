@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Building2, Plus, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -177,7 +178,14 @@ export function DepartmentsClientPage({
               ) : (
                 filteredDepartments.map((dept) => (
                   <TableRow key={dept.id} className="!border-0 hover:bg-slate-50/70">
-                    <TableCell className="px-4 py-3 font-medium text-slate-800">{dept.name}</TableCell>
+                    <TableCell className="px-4 py-3 font-medium text-slate-800">
+                      <Link
+                        href={`/dashboard/institution-admin/departments/${dept.id}`}
+                        className="text-[#6C63FF] hover:text-[#8B5CF6] transition-colors hover:underline"
+                      >
+                        {dept.name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="px-4 py-3 text-right">
                       <Button
                         variant="ghost"

@@ -127,9 +127,50 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const institutionId = request.nextUrl.searchParams.get("institution_id")
+    const departmentId = request.nextUrl.searchParams.get("department_id")
+    let targetParentIds: string[] | null = null
+
+    if (departmentId) {
+      const adminClient = createSupabaseAdminClient()
+      const { data: deptPrograms } = await adminClient
+        .from("programs")
+        .select("id")
+        .eq("department_id", departmentId)
+      
+      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      
+      if (programIds.length > 0) {
+        const { data: deptStudents } = await adminClient
+          .from("students")
+          .select("id")
+          .in("program_id", programIds)
+        
+        const studentIds = (deptStudents ?? []).map((s: any) => s.id)
+        
+        if (studentIds.length > 0) {
+          const { data: relations } = await adminClient
+            .from("parent_student_relations")
+            .select("parent_id")
+            .in("student_id", studentIds)
+          
+          targetParentIds = Array.from(new Set((relations ?? []).map((r: any) => r.parent_id)))
+        } else {
+          targetParentIds = []
+        }
+      } else {
+        targetParentIds = []
+      }
+    }
 
     let query = supabase.from("users").select("*").eq("role", ROLES.PARENT)
     if (institutionId) query = query.eq("institution_id", institutionId)
+    if (targetParentIds !== null) {
+      if (targetParentIds.length > 0) {
+        query = query.in("id", targetParentIds)
+      } else {
+        return NextResponse.json([])
+      }
+    }
 
     const { data: parents, error } = await query.order("name")
     if (error) throw error
