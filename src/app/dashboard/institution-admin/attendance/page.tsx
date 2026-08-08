@@ -24,10 +24,10 @@ export default async function AttendancePage() {
 
   const institutionId = profile.institution_id
 
-  const [programsRes, sectionsRes, subjectsRes, studentRecordsRes] = await Promise.all([
+  const [programsRes, sectionsRes, subjectsRes, studentRecordsRes, departmentsRes] = await Promise.all([
     supabase
       .from("programs")
-      .select("id,name")
+      .select("id,name,department_id")
       .eq("institution_id", institutionId)
       .order("name"),
     supabase
@@ -44,12 +44,18 @@ export default async function AttendancePage() {
       .from("students")
       .select("*")
       .eq("institution_id", institutionId),
+    supabase
+      .from("departments")
+      .select("id,name")
+      .eq("institution_id", institutionId)
+      .order("name"),
   ])
 
   const programs = programsRes.data ?? []
   const sections = sectionsRes.data ?? []
   const subjects = subjectsRes.data ?? []
   const studentRecords = studentRecordsRes.data ?? []
+  const departments = departmentsRes.data ?? []
 
   const studentIds = studentRecords.map((s: any) => s.id)
   const { data: userRecords = [] } = studentIds.length
@@ -69,6 +75,11 @@ export default async function AttendancePage() {
     }
   })
 
+  // Load institution-wide analytics stats
+  const { getInstitutionAllAttendanceAnalyticsAction } = await import("../../faculty/attendance/actions")
+  const statsRes = await getInstitutionAllAttendanceAnalyticsAction(institutionId)
+  const allStats = statsRes.success ? statsRes.stats || [] : []
+
   return (
     <AttendanceClient
       institutionId={institutionId}
@@ -76,6 +87,8 @@ export default async function AttendancePage() {
       sections={sections ?? []}
       subjects={subjects ?? []}
       students={students ?? []}
+      departments={departments}
+      allStats={allStats}
     />
   )
 }

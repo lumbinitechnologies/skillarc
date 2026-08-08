@@ -57,6 +57,7 @@ import {
 import {
   createSubjectAnnouncementAction,
   deleteSubjectAnnouncementAction,
+  replyToAnnouncementAction,
 } from "@/app/actions/announcements"
 import { detectAIContent } from "@/lib/ai-detector"
 import { supabase } from "@/lib/supabase"
@@ -113,6 +114,38 @@ export function FacultySubjectDetailClient({
   const [modalType, setModalType] = useState<FacultyWorksheetType>("Assignment")
   const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
   const [localAnnouncements, setLocalAnnouncements] = useState<any[]>(announcements)
+  const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
+  const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
+
+  const handleReplyToAnnouncement = async (announcementId: string) => {
+    const replyText = replyTextByAnnouncement[announcementId]?.trim() || ""
+    if (!replyText) return
+
+    setIsReplying(prev => ({ ...prev, [announcementId]: true }))
+    const res = await replyToAnnouncementAction({
+      announcement_id: announcementId,
+      student_id: facultyId,
+      subject_id: subject.id,
+      content: replyText,
+      author_role: "FACULTY",
+    })
+
+    setIsReplying(prev => ({ ...prev, [announcementId]: false }))
+
+    if (res.error) {
+      alert("Error sending reply: " + res.error)
+      return
+    }
+
+    setReplyTextByAnnouncement(prev => ({ ...prev, [announcementId]: "" }))
+    setLocalAnnouncements(prev =>
+      prev.map(ann =>
+        ann.id === announcementId
+          ? { ...ann, replies: [...(ann.replies || []), res.reply] }
+          : ann
+      )
+    )
+  }
 
   // Project groups states
   const [localProjects, setLocalProjects] = useState(projects)
@@ -1494,26 +1527,65 @@ export function FacultySubjectDetailClient({
             ) : (
               <div className="space-y-4">
                 {announcementsList.map((ann) => (
-                  <div key={ann.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex items-start gap-4 hover:shadow-md transition-all">
-                    <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0 font-bold text-xs uppercase">
-                      {facultyName.substring(0, 2)}
-                    </div>
-                    <div className="flex-grow min-w-0">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-extrabold text-slate-800 text-sm">{facultyName}</h4>
-                        <div className="text-[10px] text-slate-400 font-semibold">
-                          {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </div>
+                  <div key={ann.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col gap-4 hover:shadow-md transition-all">
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0 font-bold text-xs uppercase">
+                        {facultyName.substring(0, 2)}
                       </div>
-                      <p className="text-xs text-slate-600 font-normal leading-relaxed mt-2 whitespace-pre-wrap">{ann.description}</p>
+                      <div className="flex-grow min-w-0">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-extrabold text-slate-800 text-sm">{facultyName}</h4>
+                          <div className="text-[10px] text-slate-400 font-semibold">
+                            {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-600 font-normal leading-relaxed mt-2 whitespace-pre-wrap">{ann.description}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAssignment(ann.id)}
+                        className="text-slate-300 hover:text-red-500 p-1"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDeleteAssignment(ann.id)}
-                      className="text-slate-300 hover:text-red-500 p-1"
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+
+                    {/* Replies list */}
+                    <div className="rounded-3xl bg-slate-50 border border-slate-100 p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500 mb-3">Replies</div>
+                      {(!ann.replies || ann.replies.length === 0) ? (
+                        <p className="text-xs text-slate-400">No replies yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {ann.replies.map((reply: any) => (
+                            <div key={reply.id} className="rounded-2xl bg-white p-3 border border-slate-100">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-xs font-semibold text-slate-700">{reply.users?.name || "Student"}</span>
+                                <span className="text-[10px] text-slate-400">{new Date(reply.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{reply.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-4 space-y-2">
+                        <textarea
+                          rows={3}
+                          value={replyTextByAnnouncement[ann.id] || ""}
+                          onChange={(e) => setReplyTextByAnnouncement(prev => ({ ...prev, [ann.id]: e.target.value }))}
+                          className="w-full rounded-2xl border border-slate-200 p-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="Write a reply to this announcement..."
+                        />
+                        <button
+                          onClick={() => handleReplyToAnnouncement(ann.id)}
+                          disabled={isReplying[ann.id] || !replyTextByAnnouncement[ann.id]?.trim()}
+                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition"
+                        >
+                          {isReplying[ann.id] ? "Sending..." : "Reply"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

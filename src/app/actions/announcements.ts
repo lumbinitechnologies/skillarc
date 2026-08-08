@@ -114,6 +114,7 @@ export async function replyToAnnouncementAction(data: {
   student_id: string
   subject_id: string
   content: string
+  author_role?: string
 }) {
   const supabase = createSupabaseAdminClient()
 
@@ -122,7 +123,7 @@ export async function replyToAnnouncementAction(data: {
     .insert({
       post_id: data.announcement_id,
       author_id: data.student_id,
-      author_role: "STUDENT",
+      author_role: data.author_role || "STUDENT",
       message: data.content,
     })
     .select(`

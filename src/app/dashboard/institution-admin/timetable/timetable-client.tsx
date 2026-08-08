@@ -2,7 +2,9 @@
 
 import { TimetableSelector } from "@/components/timetable/timetable-selector"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
+import { TimetableSettingsDialog } from "@/components/timetable/timetable-settings-dialog"
 import { useState } from "react"
+import { Settings } from "lucide-react"
 
 interface Department {
   id: string
@@ -36,6 +38,7 @@ export function TimetableClientPage({
   institutionId = "",
 }: Props) {
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   return (
     <div className="space-y-6 p-6">
@@ -49,12 +52,20 @@ export function TimetableClientPage({
             Select a Program, Semester and Section to build a timetable.
           </p>
         </div>
-        <button
-          onClick={() => setIsImportOpen(true)}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Import CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
+          >
+            <Settings size={15} /> Configure Timetable
+          </button>
+          <button
+            onClick={() => setIsImportOpen(true)}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Import CSV
+          </button>
+        </div>
       </div>
 
       <TimetableSelector
@@ -69,6 +80,11 @@ export function TimetableClientPage({
         entity="timetable"
         institutionId={institutionId}
         onImported={() => window.location.reload()}
+      />
+
+      <TimetableSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
       />
     </div>
   )

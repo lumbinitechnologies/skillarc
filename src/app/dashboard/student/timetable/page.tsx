@@ -57,11 +57,21 @@ export default async function StudentTimetablePage() {
     })
   }
 
+  // Fetch timetable settings
+  const { data: settings } = await supabase
+    .from("institution_timetable_settings")
+    .select("period_timings")
+    .eq("institution_id", profile.institution_id)
+    .maybeSingle()
+
+  const periodTimings = settings?.period_timings as Array<{ id: string; label: string; time: string }> || []
+
   return (
     <StudentTimetableClient
       timetableRows={timetableRows ?? []}
       subjectMap={subjectObj}
       facultyMap={facultyObj}
+      periodTimings={periodTimings}
     />
   )
 }

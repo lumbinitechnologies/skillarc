@@ -6,13 +6,6 @@ import { ROLES } from "@/constants/roles"
 export const dynamic = "force-dynamic"
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-const PERIOD_LABELS: Record<number, string> = {
-  1: "8:45 – 9:45",
-  2: "9:45 – 10:45",
-  3: "11:00 – 12:00",
-  4: "12:00 – 1:00",
-  5: "2:00 – 3:00",
-}
 
 export default async function FacultyTimetablePage() {
   const supabase = await createSupabaseServerClient()
@@ -29,6 +22,30 @@ export default async function FacultyTimetablePage() {
     .single()
 
   if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
+
+  // Fetch timetable settings
+  const { data: settings } = await supabase
+    .from("institution_timetable_settings")
+    .select("period_timings")
+    .eq("institution_id", profile.institution_id)
+    .maybeSingle()
+
+  const periodTimings = settings?.period_timings as Array<{ id: string; label: string; time: string }> || []
+  const periodLabelsMap: Record<number, string> = {}
+  periodTimings.forEach((p) => {
+    const num = Number(p.id.replace("P", ""))
+    if (!isNaN(num)) {
+      periodLabelsMap[num] = p.time
+    }
+  })
+
+  const finalPeriodLabels = Object.keys(periodLabelsMap).length > 0 ? periodLabelsMap : {
+    1: "8:45 – 9:45",
+    2: "9:45 – 10:45",
+    3: "11:00 – 12:00",
+    4: "12:00 – 1:00",
+    5: "2:00 – 3:00",
+  }
 
   const { data: timetableRows = [] } = await supabase
     .from("timetable_slots")
@@ -54,7 +71,7 @@ export default async function FacultyTimetablePage() {
         subject: slot.subjects?.code ?? slot.subjects?.name ?? "Class",
         section: slot.sections?.name ?? "Section",
         room: slot.sections?.name ? `Room ${slot.sections.name}` : "Main Hall",
-        time: `Period ${slot.period} · ${PERIOD_LABELS[slot.period] ?? "TBD"}`,
+        time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
       }))
       .sort((a, b) => a.period - b.period),
   })).filter((dayEntry) => dayEntry.slots.length > 0)

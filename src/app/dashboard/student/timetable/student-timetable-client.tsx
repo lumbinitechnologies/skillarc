@@ -28,14 +28,28 @@ interface StudentTimetableClientProps {
   timetableRows: TimetableSlot[]
   subjectMap: Record<string, SubjectInfo>
   facultyMap: Record<string, string>
+  periodTimings?: Array<{ id: string; label: string; time: string }>
 }
 
 export default function StudentTimetableClient({
   timetableRows,
   subjectMap,
   facultyMap,
+  periodTimings,
 }: StudentTimetableClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+
+  const periodLabelsMap: Record<number, string> = {}
+  if (periodTimings) {
+    periodTimings.forEach((p) => {
+      const num = Number(p.id.replace("P", ""))
+      if (!isNaN(num)) {
+        periodLabelsMap[num] = p.time
+      }
+    })
+  }
+
+  const finalPeriodLabels = Object.keys(periodLabelsMap).length > 0 ? periodLabelsMap : PERIOD_LABELS
 
   // Prepare list format grouped by day
   const timetableByDay = DAY_ORDER.map((day) => ({
@@ -49,7 +63,7 @@ export default function StudentTimetableClient({
           subject: subject?.code ?? "Class",
           subjectName: subject?.name ?? "Subject pending",
           faculty: facultyMap[slot.faculty_id] ?? "Faculty advisor pending",
-          time: `Period ${slot.period} · ${PERIOD_LABELS[slot.period] ?? "TBD"}`,
+          time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
         }
       })
       .sort((a, b) => a.period - b.period),
@@ -121,7 +135,7 @@ export default function StudentTimetableClient({
                     <th key={p} className="p-4 text-center text-xs font-bold text-slate-500 border-l border-slate-100">
                       <span className="block font-extrabold text-slate-800">Period {p}</span>
                       <span className="block text-[9px] text-slate-400 font-sans font-semibold mt-1">
-                        {PERIOD_LABELS[p] || "TBD"}
+                        {finalPeriodLabels[p] || "TBD"}
                       </span>
                     </th>
                   ))}

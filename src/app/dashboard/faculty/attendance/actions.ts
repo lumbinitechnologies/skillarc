@@ -415,3 +415,63 @@ export async function saveAdminAttendanceAction({
 
   return { success: true }
 }
+
+export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: string) {
+  const adminClient = createSupabaseAdminClient()
+
+  // 1. Fetch all section IDs of the institution
+  const { data: sections, error: sectionsErr } = await adminClient
+    .from("sections")
+    .select("id")
+    .eq("institution_id", institutionId)
+
+  if (sectionsErr || !sections) {
+    return { success: false, error: sectionsErr?.message || "Failed to fetch sections" }
+  }
+
+  const sectionIds = sections.map(s => s.id)
+  if (sectionIds.length === 0) {
+    return { success: true, stats: [] }
+  }
+
+  // 2. Fetch all sessions with their attendance records status
+  const { data: sessions, error: sessionsErr } = await adminClient
+    .from("attendance_sessions")
+    .select(`
+      id,
+      subject_id,
+      section_id,
+      attendance_date,
+      period,
+      attendance_records (
+        status
+      )
+    `)
+    .in("section_id", sectionIds)
+
+  if (sessionsErr || !sessions) {
+    return { success: false, error: sessionsErr?.message || "Failed to fetch attendance sessions" }
+  }
+
+  // 3. Map into aggregated format
+  const stats = sessions.map((s: any) => {
+    const records = s.attendance_records as Array<{ status: string }> || []
+    const present = records.filter(r => r.status === "PRESENT").length
+    const absent = records.filter(r => r.status === "ABSENT").length
+    const late = records.filter(r => r.status === "LATE").length
+    const total = records.length
+    return {
+      session_id: s.id,
+      subject_id: s.subject_id,
+      section_id: s.section_id,
+      attendance_date: s.attendance_date,
+      period: s.period,
+      present_count: present,
+      absent_count: absent,
+      late_count: late,
+      total_count: total,
+    }
+  })
+
+  return { success: true, stats }
+}
