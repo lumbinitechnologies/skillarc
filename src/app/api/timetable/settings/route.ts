@@ -38,9 +38,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(data)
-  } catch (error) {
+  } catch (error: any) {
     console.error("Timetable settings fetch error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -71,13 +71,12 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       }, { onConflict: "institution_id" })
       .select()
-      .single()
 
     if (error) throw error
 
-    return NextResponse.json(data)
-  } catch (error) {
+    return NextResponse.json(data?.[0] || {})
+  } catch (error: any) {
     console.error("Timetable settings save error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
   }
 }

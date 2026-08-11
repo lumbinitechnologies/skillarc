@@ -1,4 +1,5 @@
 import "./globals.css"
+import ChatbotWidget from "@/components/chatbot/ChatbotWidget"
 
 export const metadata = {
   title: "SkillArc LMS",
@@ -14,6 +15,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <ChatbotWidget />
       </body>
     </html>
   )
