@@ -1,0 +1,13 @@
+{
+  "user": {
+    "name": "nikhilkrishnasathvikedu",
+    "email": "nikhilkrishnasathvikedu@gmail.com",
+    "role": "Institution Admin"
+  },
+  "rag_config": {
+    "auto_process_documents": true,
+    "show_source_citations": true,
+    "top_k_retrieval": 4,
+    "chunk_size": 1000
+  }
+}
