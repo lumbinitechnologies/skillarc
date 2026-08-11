@@ -18,6 +18,7 @@ def get_chroma_client() -> "chromadb.ClientAPI":
     )
 
 
+@lru_cache(maxsize=1)
 def get_collection():
     client = get_chroma_client()
     return client.get_or_create_collection(
