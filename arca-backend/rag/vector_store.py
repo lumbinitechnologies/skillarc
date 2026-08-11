@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from functools import lru_cache
 
 import chromadb
@@ -21,8 +21,12 @@ def get_chroma_client() -> "chromadb.ClientAPI":
 @lru_cache(maxsize=1)
 def get_collection():
     client = get_chroma_client()
+    # Pass the embedding function directly to the collection so Chroma
+    # handles embedding internally (documents=... / query_texts=...)
+    # instead of us calling embed_documents/embed_query manually.
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
+        embedding_function=get_embedding_function(),
         metadata={"hnsw:space": "cosine"},
     )
 
@@ -37,7 +41,6 @@ def add_chunks(
         return 0
 
     collection = get_collection()
-    embed_fn = get_embedding_function()
 
     ids = [f"{document_id}_{i}" for i in range(len(chunks))]
     metadatas = [
@@ -45,11 +48,10 @@ def add_chunks(
         for i in range(len(chunks))
     ]
 
-    vectors = embed_fn.embed_documents(chunks)
-
+    # No need to embed manually — Chroma calls the collection's
+    # embedding_function on these documents internally.
     collection.add(
         ids=ids,
-        embeddings=vectors,
         documents=chunks,
         metadatas=metadatas,
     )
@@ -73,20 +75,21 @@ def clear_all() -> None:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
         pass
+    # Reset caches so the next call recreates a fresh collection/client
+    get_collection.cache_clear()
 
 
 def similarity_search(query: str, top_k: int = 4) -> List[Dict[str, Any]]:
     """Return top_k most similar chunks with metadata and similarity score."""
     collection = get_collection()
-    embed_fn = get_embedding_function()
 
     if collection.count() == 0:
         return []
 
-    query_vector = embed_fn.embed_query(query)
-
+    # No need to embed manually — pass query_texts and let Chroma's
+    # embedding_function handle it internally.
     results = collection.query(
-        query_embeddings=[query_vector],
+        query_texts=[query],
         n_results=min(top_k, max(collection.count(), 1)),
     )
 
