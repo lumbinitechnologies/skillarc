@@ -1,9 +1,16 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
 python-multipart==0.0.9
 pydantic==2.7.4
 pydantic-settings==2.3.4
 python-dotenv==1.0.1
+
+# Torch (CPU-only build — must be pinned before sentence-transformers pulls it in,
+# otherwise pip resolves the default CUDA build which drags in ~1.5GB of nvidia_*
+# packages that a CPU-only host like Render will never use, and blows the RAM budget)
+torch==2.3.1
 
 # LangChain + RAG
 langchain==0.2.6
