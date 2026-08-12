@@ -51,27 +51,31 @@ import {
   runPlagiarismScanAction
 } from "@/app/actions/assignments"
 import {
+  createGradeColumnAction,
+  deleteGradeColumnAction,
+  updateGradeColumnAction,
+  upsertGradeEntryAction,
+} from "@/app/actions/gradebook"
+import { buildGradeValueMap } from "@/lib/gradebook"
+import {
   createMeetingAction,
   endMeetingAction
 } from "@/app/actions/meetings"
 import {
   createSubjectAnnouncementAction,
   deleteSubjectAnnouncementAction,
-  replyToAnnouncementAction,
 } from "@/app/actions/announcements"
+import {
+  createProjectWithGroupsAction,
+  suggestTeamsAIAction,
+} from "@/app/actions/project-groups"
 import { detectAIContent } from "@/lib/ai-detector"
 import { supabase } from "@/lib/supabase"
 import {
   getExistingAttendanceAction,
   saveAttendanceAction
 } from "@/app/dashboard/faculty/attendance/actions"
-import {
-  createProjectWithGroupsAction,
-  getSubjectStudentsAction,
-  suggestTeamsAIAction
-} from "@/app/actions/project-groups"
-
-type FacultyTab = "assignments" | "modules" | "syllabus" | "grades" | "students" | "meetings" | "attendance" | "groups" | "announcements"
+type FacultyTab = "assignments" | "modules" | "syllabus" | "evaluation" | "grades" | "students" | "meetings" | "attendance" | "announcements"
 
 type FacultyWorksheetType = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
 
@@ -94,6 +98,8 @@ interface FacultySubjectDetailClientProps {
   students: Array<any>
   meetings: Array<any>
   projects: Array<any>
+  gradeColumns?: Array<any>
+  gradeEntries?: Array<any>
 }
 
 export function FacultySubjectDetailClient({
@@ -108,44 +114,14 @@ export function FacultySubjectDetailClient({
   students,
   meetings,
   projects,
+  gradeColumns = [],
+  gradeEntries = [],
 }: FacultySubjectDetailClientProps) {
   const [activeTab, setActiveTab] = useState<FacultyTab>("assignments")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState<FacultyWorksheetType>("Assignment")
   const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
   const [localAnnouncements, setLocalAnnouncements] = useState<any[]>(announcements)
-  const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
-  const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
-
-  const handleReplyToAnnouncement = async (announcementId: string) => {
-    const replyText = replyTextByAnnouncement[announcementId]?.trim() || ""
-    if (!replyText) return
-
-    setIsReplying(prev => ({ ...prev, [announcementId]: true }))
-    const res = await replyToAnnouncementAction({
-      announcement_id: announcementId,
-      student_id: facultyId,
-      subject_id: subject.id,
-      content: replyText,
-      author_role: "FACULTY",
-    })
-
-    setIsReplying(prev => ({ ...prev, [announcementId]: false }))
-
-    if (res.error) {
-      alert("Error sending reply: " + res.error)
-      return
-    }
-
-    setReplyTextByAnnouncement(prev => ({ ...prev, [announcementId]: "" }))
-    setLocalAnnouncements(prev =>
-      prev.map(ann =>
-        ann.id === announcementId
-          ? { ...ann, replies: [...(ann.replies || []), res.reply] }
-          : ann
-      )
-    )
-  }
 
   // Project groups states
   const [localProjects, setLocalProjects] = useState(projects)
@@ -202,11 +178,189 @@ export function FacultySubjectDetailClient({
 
   // Attendance specific states
   const [selectedSection, setSelectedSection] = useState(sections[0]?.id || "")
+  const [selectedGradeSection, setSelectedGradeSection] = useState(sections[0]?.id || "")
+  const [studentPanelTab, setStudentPanelTab] = useState<"students" | "project_groups">("students")
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   const [selectedPeriod, setSelectedPeriod] = useState("")
   const [attendance, setAttendance] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
+
+  const [assignmentGradeColumns, setAssignmentGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>([])
+  const [customGradeColumns, setCustomGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>(
+    (gradeColumns ?? []).map((column: any) => ({
+      id: column.id,
+      label: column.title,
+      max_score: Number(column.max_score ?? 100),
+      weight: Number(column.weight ?? 0),
+    }))
+  )
+  const [gradeValues, setGradeValues] = useState<Record<string, Record<string, string>>>(() => buildGradeValueMap(gradeEntries || []))
+  const [gradeWeightMode, setGradeWeightMode] = useState<"percentage" | "marks">("percentage")
+
+  useEffect(() => {
+    const filtered = assignments.filter((a) => a.type !== "Material" && a.type !== "Syllabus")
+    const defaultWeight = filtered.length ? Math.floor(100 / filtered.length) : 0
+    setAssignmentGradeColumns((prev) => {
+      const prevMap = new Map(prev.map((col) => [col.id, col]))
+      return filtered.map((a, index) => {
+        const existing = prevMap.get(a.id)
+        const weight = existing?.weight ?? (index === filtered.length - 1 ? 100 - defaultWeight * (filtered.length - 1) : defaultWeight)
+        return {
+          id: a.id,
+          label: a.title,
+          max_score: a.max_score ?? 0,
+          weight,
+        }
+      })
+    })
+  }, [assignments])
+
+  const assignmentGradesByStudent = React.useMemo(() => {
+    const map: Record<string, Record<string, number | null>> = {}
+    submissions.forEach((sub: any) => {
+      if (!map[sub.student_id]) map[sub.student_id] = {}
+      map[sub.student_id][sub.assignment_id] = sub.grade
+    })
+    return map
+  }, [submissions])
+
+  const gradebookStudents = React.useMemo(() => {
+    return students.filter(student => student.section_id === selectedGradeSection)
+  }, [students, selectedGradeSection])
+
+  const handleAddGradeColumn = async () => {
+    const nextIndex = customGradeColumns.length + 1
+    const label = `Custom ${nextIndex}`
+    const result = await createGradeColumnAction({
+      subject_id: subject.id,
+      title: label,
+      type: "custom",
+      max_score: 100,
+      weight: 0,
+      display_order: customGradeColumns.length,
+      created_by: facultyId,
+    })
+
+    if (result.success && result.column) {
+      setCustomGradeColumns((prev) => [
+        ...prev,
+        {
+          id: result.column.id,
+          label: result.column.title,
+          max_score: Number(result.column.max_score ?? 100),
+          weight: Number(result.column.weight ?? 0),
+        },
+      ])
+      triggerToast("Grade column added.", "success")
+    } else {
+      triggerToast(result.error || "Failed to add column.", "warning")
+    }
+  }
+
+  const handleGradeValueChange = async (studentId: string, colId: string, value: string) => {
+    setGradeValues((prev) => ({
+      ...prev,
+      [studentId]: {
+        ...prev[studentId],
+        [colId]: value,
+      },
+    }))
+
+    const result = await upsertGradeEntryAction({
+      column_id: colId,
+      student_id: studentId,
+      score: value,
+      feedback: null,
+      graded_by: facultyId,
+      subject_id: subject.id,
+    })
+
+    if (!result.success) {
+      triggerToast(result.error || "Failed to save grade.", "warning")
+    }
+  }
+
+  const handleGradeColumnLabelChange = async (colId: string, label: string) => {
+    setCustomGradeColumns((prev) => prev.map((col) => (col.id === colId ? { ...col, label } : col)))
+
+    const target = customGradeColumns.find((col) => col.id === colId)
+    if (!target || !label.trim()) return
+
+    const result = await updateGradeColumnAction({
+      id: colId,
+      subject_id: subject.id,
+      title: label,
+    })
+
+    if (!result.success) {
+      triggerToast(result.error || "Failed to update column name.", "warning")
+    }
+  }
+
+  const handleAssignmentColumnWeightChange = (colId: string, weight: number) => {
+    setAssignmentGradeColumns((prev) => prev.map((col) => (col.id === colId ? { ...col, weight } : col)))
+  }
+
+  const handleGradeColumnWeightChange = async (colId: string, weight: number) => {
+    setCustomGradeColumns((prev) => prev.map((col) => (col.id === colId ? { ...col, weight } : col)))
+
+    const result = await updateGradeColumnAction({
+      id: colId,
+      subject_id: subject.id,
+      weight,
+    })
+
+    if (!result.success) {
+      triggerToast(result.error || "Failed to update column weight.", "warning")
+    }
+  }
+
+  const handleRemoveGradeColumn = async (colId: string) => {
+    const result = await deleteGradeColumnAction(subject.id, colId)
+    if (!result.success) {
+      triggerToast(result.error || "Failed to remove grade column.", "warning")
+      return
+    }
+
+    setCustomGradeColumns((prev) => prev.filter((col) => col.id !== colId))
+    setGradeValues((prev) => {
+      const updated: Record<string, Record<string, string>> = {}
+      Object.entries(prev).forEach(([studentId, grades]) => {
+        const filteredGrades: Record<string, string> = {}
+        Object.entries(grades).forEach(([gradeColId, value]) => {
+          if (gradeColId !== colId) {
+            filteredGrades[gradeColId] = value
+          }
+        })
+        updated[studentId] = filteredGrades
+      })
+      return updated
+    })
+  }
+
+  const getAssignmentGradeForStudent = (studentId: string, assignmentId: string) => {
+    return assignmentGradesByStudent[studentId]?.[assignmentId] ?? null
+  }
+
+  const computeStudentTotal = (studentId: string) => {
+    const assignmentSum = assignmentGradeColumns.reduce((sum, col) => {
+      const grade = getAssignmentGradeForStudent(studentId, col.id)
+      if (!Number.isFinite(Number(grade)) || col.max_score <= 0) return sum
+      return sum + (Number(grade) / col.max_score) * col.weight
+    }, 0)
+
+    const customSum = customGradeColumns.reduce((sum, col) => {
+      const value = Number(gradeValues[studentId]?.[col.id])
+      if (!Number.isFinite(value)) return sum
+      if (gradeWeightMode === "marks") {
+        return sum + Math.min(value, col.weight)
+      }
+      return sum + (value * col.weight) / 100
+    }, 0)
+
+    return Number((assignmentSum + customSum).toFixed(1))
+  }
 
   useEffect(() => {
     setLocalAnnouncements(announcements)
@@ -822,12 +976,12 @@ export function FacultySubjectDetailClient({
             { id: "assignments", label: "Assignments", icon: ListTodo },
             { id: "modules", label: "Modules", icon: BookOpen },
             { id: "syllabus", label: "Syllabus", icon: Book },
-            { id: "grades", label: "Evaluation", icon: Award },
+            { id: "evaluation", label: "Evaluation", icon: CheckCircle },
             { id: "meetings", label: "Video Classroom", icon: Video },
             { id: "announcements", label: "Stream", icon: MessageSquare },
             { id: "students", label: "Roster", icon: Users },
             { id: "attendance", label: "Attendance", icon: ClipboardList },
-            { id: "groups", label: "Project Groups", icon: FolderKanban },
+            { id: "grades", label: "Grades", icon: Award },
           ].map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -908,7 +1062,7 @@ export function FacultySubjectDetailClient({
                     onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
-                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
+                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
                   />
                 )}
 
@@ -923,7 +1077,7 @@ export function FacultySubjectDetailClient({
                     onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
-                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
+                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
                   />
                 )}
 
@@ -938,7 +1092,7 @@ export function FacultySubjectDetailClient({
                     onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
-                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
+                    onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
                   />
                 )}
               </div>
@@ -1004,8 +1158,8 @@ export function FacultySubjectDetailClient({
           </div>
         )}
 
-        {/* Tab 2: Grades & Evaluation */}
-        {activeTab === "grades" && (
+        {/* Tab 4: Evaluation */}
+        {activeTab === "evaluation" && (
           <div>
             {!selectedGradingAssignment ? (
               <div className="space-y-4">
@@ -1489,6 +1643,163 @@ export function FacultySubjectDetailClient({
           </div>
         )}
 
+        {/* Tab 5: Grades */}
+        {activeTab === "grades" && (
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Gradebook</h3>
+                  <p className="text-xs text-slate-500 mt-1">All students in the selected section are fixed rows. Add columns to track grade components, exams, or skill checks.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Section</label>
+                    <select
+                      value={selectedGradeSection}
+                      onChange={(e) => setSelectedGradeSection(e.target.value)}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 focus:border-indigo-500 focus:outline-none"
+                    >
+                      {sections.map((sec) => (
+                        <option key={sec.id} value={sec.id}>
+                          Section {sec.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col items-start gap-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Weight unit</label>
+                    <select
+                      value={gradeWeightMode}
+                      onChange={(e) => setGradeWeightMode(e.target.value as "percentage" | "marks")}
+                      className="rounded-2xl border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-semibold text-slate-700 focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="percentage">% (percentage)</option>
+                      <option value="marks">Marks</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={handleAddGradeColumn}
+                    className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-all"
+                  >
+                    Add Column
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto bg-white border border-slate-200 rounded-3xl shadow-sm">
+              <table className="min-w-full text-left border-collapse">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 border-b border-slate-200">Student</th>
+                    <th className="px-4 py-3 border-b border-slate-200">Email</th>
+                    {assignmentGradeColumns.map((col) => (
+                      <th key={col.id} className="px-4 py-3 border-b border-slate-200 align-top min-w-[180px]">
+                        <div className="space-y-2">
+                          <div className="rounded-2xl bg-slate-50 border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-900">
+                            {col.label}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-[0.12em]">Max {col.max_score}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              max={gradeWeightMode === "percentage" ? 100 : undefined}
+                              value={col.weight}
+                              onChange={(e) => handleAssignmentColumnWeightChange(col.id, Number(e.target.value))}
+                              className="w-20 bg-white border border-slate-200 rounded-2xl px-2 py-1 text-[10px] font-semibold text-slate-900 focus:border-indigo-400 focus:outline-none"
+                            />
+                            <span className="text-[10px] text-slate-400">{gradeWeightMode === "marks" ? "marks" : "%"}</span>
+                          </div>
+                        </div>
+                      </th>
+                    ))}
+                    {customGradeColumns.map((col) => (
+                      <th key={col.id} className="px-4 py-3 border-b border-slate-200 align-top min-w-[180px]">
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={col.label}
+                            onChange={(e) => handleGradeColumnLabelChange(col.id, e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-3 py-2 text-[11px] font-semibold text-slate-900 placeholder:text-slate-400 focus:border-indigo-400 focus:outline-none"
+                          />
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] text-slate-500 font-semibold">Weight</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={gradeWeightMode === "percentage" ? 100 : undefined}
+                                value={col.weight}
+                                onChange={(e) => handleGradeColumnWeightChange(col.id, Number(e.target.value))}
+                                className="w-20 bg-white border border-slate-200 rounded-2xl px-2 py-1 text-[10px] font-semibold text-slate-900 focus:border-indigo-400 focus:outline-none"
+                              />
+                              <span className="text-[10px] text-slate-400">{gradeWeightMode === "marks" ? "marks" : "%"}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGradeColumn(col.id)}
+                              className="self-start rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+                              aria-label={`Remove ${col.label} column`}
+                            >
+                              Remove column
+                            </button>
+                          </div>
+                        </div>
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 border-b border-slate-200">
+                      <div className="space-y-2">
+                        <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Total {gradeWeightMode === "marks" ? "marks" : "%"}</span>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-slate-100 text-sm">
+                  {gradebookStudents.length > 0 ? (
+                    gradebookStudents.map((student) => (
+                      <tr key={student.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-semibold text-slate-800 text-sm">{student.name}</div>
+                          <div className="text-[10px] text-slate-400 mt-1">Section {sectionMap.get(student.section_id) || "N/A"}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[10px] text-slate-500 font-mono">{student.email}</td>
+                        {assignmentGradeColumns.map((col) => (
+                          <td key={col.id} className="px-4 py-3">
+                            <div className="text-[11px] text-slate-800 font-semibold">
+                              {getAssignmentGradeForStudent(student.id, col.id) ?? "-"}
+                            </div>
+                          </td>
+                        ))}
+                        {customGradeColumns.map((col) => (
+                          <td key={col.id} className="px-4 py-3">
+                            <input
+                              type="text"
+                              value={gradeValues[student.id]?.[col.id] || ""}
+                              onChange={(e) => handleGradeValueChange(student.id, col.id, e.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] text-slate-700 focus:border-indigo-400 focus:outline-none"
+                            />
+                          </td>
+                        ))}
+                        <td className="px-4 py-3 font-semibold text-slate-800">
+                          {computeStudentTotal(student.id)}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3 + assignmentGradeColumns.length + customGradeColumns.length} className="px-4 py-10 text-center text-slate-400 text-xs">
+                        No students enrolled in this section.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* Tab 3: Announcements Feed */}
         {activeTab === "announcements" && (
           <div className="space-y-6">
@@ -1527,65 +1838,26 @@ export function FacultySubjectDetailClient({
             ) : (
               <div className="space-y-4">
                 {announcementsList.map((ann) => (
-                  <div key={ann.id} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col gap-4 hover:shadow-md transition-all">
-                    <div className="flex items-start gap-4">
-                      <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0 font-bold text-xs uppercase">
-                        {facultyName.substring(0, 2)}
-                      </div>
-                      <div className="flex-grow min-w-0">
-                        <div className="flex justify-between items-center">
-                          <h4 className="font-extrabold text-slate-800 text-sm">{facultyName}</h4>
-                          <div className="text-[10px] text-slate-400 font-semibold">
-                            {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-600 font-normal leading-relaxed mt-2 whitespace-pre-wrap">{ann.description}</p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteAssignment(ann.id)}
-                        className="text-slate-300 hover:text-red-500 p-1"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                  <div key={ann.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex items-start gap-4 hover:shadow-md transition-all">
+                    <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0 font-bold text-xs uppercase">
+                      {facultyName.substring(0, 2)}
                     </div>
-
-                    {/* Replies list */}
-                    <div className="rounded-3xl bg-slate-50 border border-slate-100 p-4">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500 mb-3">Replies</div>
-                      {(!ann.replies || ann.replies.length === 0) ? (
-                        <p className="text-xs text-slate-400">No replies yet.</p>
-                      ) : (
-                        <div className="space-y-3">
-                          {ann.replies.map((reply: any) => (
-                            <div key={reply.id} className="rounded-2xl bg-white p-3 border border-slate-100">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-xs font-semibold text-slate-700">{reply.users?.name || "Student"}</span>
-                                <span className="text-[10px] text-slate-400">{new Date(reply.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{reply.message}</p>
-                            </div>
-                          ))}
+                    <div className="flex-grow min-w-0">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-extrabold text-slate-800 text-sm">{facultyName}</h4>
+                        <div className="text-[10px] text-slate-400 font-semibold">
+                          {new Date(ann.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </div>
-                      )}
-
-                      <div className="mt-4 space-y-2">
-                        <textarea
-                          rows={3}
-                          value={replyTextByAnnouncement[ann.id] || ""}
-                          onChange={(e) => setReplyTextByAnnouncement(prev => ({ ...prev, [ann.id]: e.target.value }))}
-                          className="w-full rounded-2xl border border-slate-200 p-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          placeholder="Write a reply to this announcement..."
-                        />
-                        <button
-                          onClick={() => handleReplyToAnnouncement(ann.id)}
-                          disabled={isReplying[ann.id] || !replyTextByAnnouncement[ann.id]?.trim()}
-                          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50 transition"
-                        >
-                          {isReplying[ann.id] ? "Sending..." : "Reply"}
-                        </button>
                       </div>
+                      <p className="text-xs text-slate-600 font-normal leading-relaxed mt-2 whitespace-pre-wrap">{ann.description}</p>
                     </div>
+                    <button
+                      onClick={() => handleDeleteAssignment(ann.id)}
+                      className="text-slate-300 hover:text-red-500 p-1"
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1595,60 +1867,291 @@ export function FacultySubjectDetailClient({
 
         {/* Tab 4: Student Directory */}
         {activeTab === "students" && (
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b bg-slate-50 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800">Assigned Student Roster</h3>
-              <span className="text-xs font-bold bg-indigo-50 border border-indigo-100 text-indigo-600 px-3 py-1 rounded-full">
-                {students.length} Students
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase bg-slate-50/50">
-                    <th className="px-6 py-3">Student Name</th>
-                    <th className="px-6 py-3">University Email</th>
-                    <th className="px-6 py-3">Section</th>
-                    <th className="px-6 py-3">Submission Record</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {students.map((student) => {
-                    const studentSubs = submissions.filter(s => s.student_id === student.id)
-                    const gradedCount = studentSubs.filter(s => s.status === "graded").length
-                    return (
-                      <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
-                              {student.name.split(" ").map((n: string) => n[0]).join("")}
-                            </div>
-                            <span className="font-bold text-slate-800 text-xs">{student.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-slate-500 font-mono">{student.email}</td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
-                            Section {sectionMap.get(student.section_id) || "N/A"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-bold text-slate-600">
-                            {studentSubs.length} submitted ({gradedCount} graded)
-                          </span>
-                        </td>
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+              <div className="p-6 border-b bg-slate-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-slate-800">Assigned Student Roster</h3>
+                  <p className="text-xs text-slate-500 mt-1">View enrolled students or manage section project group allocation from one place.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setStudentPanelTab("students")}
+                    className={`rounded-2xl px-4 py-2 text-xs font-bold transition ${
+                      studentPanelTab === "students"
+                        ? "bg-[#6C63FF] text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Roster
+                  </button>
+                  <button
+                    onClick={() => setStudentPanelTab("project_groups")}
+                    className={`rounded-2xl px-4 py-2 text-xs font-bold transition ${
+                      studentPanelTab === "project_groups"
+                        ? "bg-[#6C63FF] text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Project Groups
+                  </button>
+                </div>
+              </div>
+
+              {studentPanelTab === "students" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase bg-slate-50/50">
+                        <th className="px-6 py-3">Student Name</th>
+                        <th className="px-6 py-3">University Email</th>
+                        <th className="px-6 py-3">Section</th>
+                        <th className="px-6 py-3">Submission Record</th>
                       </tr>
-                    )
-                  })}
-                  {students.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="text-center py-10 text-slate-400 text-xs">
-                        No students are enrolled in the sections assigned to this course.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {students.map((student) => {
+                        const studentSubs = submissions.filter(s => s.student_id === student.id)
+                        const gradedCount = studentSubs.filter(s => s.status === "graded").length
+                        return (
+                          <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
+                                  {student.name.split(" ").map((n: string) => n[0]).join("")}
+                                </div>
+                                <span className="font-bold text-slate-800 text-xs">{student.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-xs font-semibold text-slate-500 font-mono">{student.email}</td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
+                                Section {sectionMap.get(student.section_id) || "N/A"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-bold text-slate-600">
+                                {studentSubs.length} submitted ({gradedCount} graded)
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {students.length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-center py-10 text-slate-400 text-xs">
+                            No students are enrolled in the sections assigned to this course.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="space-y-6 p-6">
+                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">Project Group Allocation</h4>
+                        <p className="text-xs text-slate-500 mt-1">Create and inspect group allocations for students in a specific section.</p>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-2xl bg-slate-50 p-1">
+                        <button
+                          onClick={() => setAllocateTab("projects")}
+                          className={`rounded-xl px-3 py-1 text-[10px] font-bold transition ${
+                            allocateTab === "projects"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          Projects
+                        </button>
+                        <button
+                          onClick={() => setAllocateTab("allocate")}
+                          className={`rounded-xl px-3 py-1 text-[10px] font-bold transition ${
+                            allocateTab === "allocate"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          New Allocate
+                        </button>
+                      </div>
+                    </div>
+
+                    {allocateTab === "allocate" ? (
+                      <div className="space-y-5">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Select Target Section</label>
+                          <select
+                            value={selectedSectionId}
+                            onChange={(e) => handleSectionChange(e.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                          >
+                            <option value="">Choose section...</option>
+                            {sections.map((sec) => (
+                              <option key={sec.id} value={sec.id}>
+                                Section {sec.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Project Title</label>
+                          <input
+                            type="text"
+                            value={projectTitle}
+                            onChange={(e) => setProjectTitle(e.target.value)}
+                            placeholder="Enter project name..."
+                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Project Description</label>
+                          <textarea
+                            rows={3}
+                            value={projectDesc}
+                            onChange={(e) => setProjectDesc(e.target.value)}
+                            placeholder="Brief description..."
+                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Target Squad Count</label>
+                            <input
+                              type="number"
+                              min={2}
+                              max={12}
+                              value={teamCount}
+                              onChange={(e) => setTeamCount(parseInt(e.target.value) || 2)}
+                              className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Designation Theme</label>
+                            <select
+                              value={themeId}
+                              onChange={(e) => setThemeId(e.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                            >
+                              {SQUAD_THEMES.map(theme => (
+                                <option key={theme.id} value={theme.id}>
+                                  {theme.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Balance Focus</label>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setFocus("skill_balance")}
+                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                                focus === "skill_balance"
+                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                                  : "bg-slate-50 border-slate-200 text-slate-600"
+                              }`}
+                            >
+                              Skill Balanced
+                            </button>
+                            <button
+                              onClick={() => setFocus("role_distribution")}
+                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                                focus === "role_distribution"
+                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                                  : "bg-slate-50 border-slate-200 text-slate-600"
+                              }`}
+                            >
+                              Role Distributed
+                            </button>
+                            <button
+                              onClick={() => setFocus("random")}
+                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
+                                focus === "random"
+                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
+                                  : "bg-slate-50 border-slate-200 text-slate-600"
+                              }`}
+                            >
+                              Random
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+                          <button
+                            onClick={handleAISplit}
+                            disabled={roster.length === 0 || allocating}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-100 transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+                          >
+                            <Sparkles size={16} />
+                            {allocating ? "Allocating..." : "Allocate via Gemini AI"}
+                          </button>
+                          <button
+                            onClick={handleOfflineSplit}
+                            disabled={roster.length === 0}
+                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                          >
+                            Manual Offline Split
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {localProjects.length === 0 ? (
+                          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
+                            <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
+                            <h3 className="mt-4 text-base font-semibold text-slate-900">No project groups created yet</h3>
+                            <p className="mt-2 text-sm text-slate-500">Switch to the "New Allocate" tab to split project teams for a section.</p>
+                          </div>
+                        ) : (
+                          localProjects.map((proj) => (
+                            <div key={proj.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <h3 className="text-lg font-bold text-slate-900">{proj.title}</h3>
+                                  <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
+                                  <p className="mt-2 text-xs text-slate-400">Created: {new Date(proj.created_at).toLocaleDateString()}</p>
+                                </div>
+                                <button
+                                  onClick={() => setExpandedProjId(expandedProjId === proj.id ? null : proj.id)}
+                                  className="rounded-xl border border-slate-100 px-4 py-2 text-xs font-semibold hover:bg-slate-50"
+                                >
+                                  {expandedProjId === proj.id ? "Hide details" : "View groups"}
+                                </button>
+                              </div>
+
+                              {expandedProjId === proj.id && (
+                                <div className="mt-6 border-t border-slate-100 pt-6">
+                                  <div className="grid gap-6 sm:grid-cols-2">
+                                    {proj.project_groups?.map((group: any) => (
+                                      <div key={group.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+                                        <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">{group.group_name}</h4>
+                                        <div className="space-y-2">
+                                          {group.group_members?.map((member: any, mIdx: number) => (
+                                            <div key={mIdx} className="flex flex-col rounded-xl bg-white p-2 text-xs border border-slate-100">
+                                              <span className="font-semibold text-slate-700">{member.users?.name}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2035,346 +2538,6 @@ export function FacultySubjectDetailClient({
                 Schedule Slot
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 7: Project Groups Allocation Workspace */}
-      {activeTab === "groups" && (
-        <div className="grid gap-8 lg:grid-cols-12 text-left">
-          {/* Settings panel */}
-          <div className="space-y-6 lg:col-span-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
-                <span className="text-sm font-black text-slate-800">Allocation Workspace</span>
-                <div className="flex gap-1.5 bg-slate-100 p-0.5 rounded-xl">
-                  <button
-                    onClick={() => setAllocateTab("projects")}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition ${
-                      allocateTab === "projects"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    Projects
-                  </button>
-                  <button
-                    onClick={() => setAllocateTab("allocate")}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition ${
-                      allocateTab === "allocate"
-                        ? "bg-white text-slate-900 shadow-sm"
-                        : "text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    New Allocate
-                  </button>
-                </div>
-              </div>
-
-              {allocateTab === "allocate" ? (
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Select Target Section
-                    </label>
-                    <select
-                      value={selectedSectionId}
-                      onChange={(e) => handleSectionChange(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                    >
-                      <option value="">Choose section...</option>
-                      {sections.map((sec) => (
-                        <option key={sec.id} value={sec.id}>
-                          Section {sec.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Project Title
-                    </label>
-                    <input
-                      type="text"
-                      value={projectTitle}
-                      onChange={(e) => setProjectTitle(e.target.value)}
-                      placeholder="Enter project name..."
-                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Project Description
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={projectDesc}
-                      onChange={(e) => setProjectDesc(e.target.value)}
-                      placeholder="Brief description..."
-                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Target Squad Count
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={12}
-                      value={teamCount}
-                      onChange={(e) => setTeamCount(parseInt(e.target.value) || 2)}
-                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Designation Theme
-                    </label>
-                    <select
-                      value={themeId}
-                      onChange={(e) => setThemeId(e.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                    >
-                      {SQUAD_THEMES.map(theme => (
-                        <option key={theme.id} value={theme.id}>
-                          {theme.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-                      Balance Focus
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setFocus("skill_balance")}
-                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                          focus === "skill_balance"
-                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                            : "bg-slate-50 border-slate-200 text-slate-600"
-                        }`}
-                      >
-                        Skill Balanced
-                      </button>
-                      <button
-                        onClick={() => setFocus("role_distribution")}
-                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                          focus === "role_distribution"
-                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                            : "bg-slate-50 border-slate-200 text-slate-600"
-                        }`}
-                      >
-                        Role Distributed
-                      </button>
-                      <button
-                        onClick={() => setFocus("random")}
-                        className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                          focus === "random"
-                            ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                            : "bg-slate-50 border-slate-200 text-slate-600"
-                        }`}
-                      >
-                        Random
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
-                    <button
-                      onClick={handleAISplit}
-                      disabled={roster.length === 0 || allocating}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-100 transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                    >
-                      <Sparkles size={16} />
-                      {allocating ? "Allocating..." : "Allocate via Gemini AI"}
-                    </button>
-
-                    <button
-                      onClick={handleOfflineSplit}
-                      disabled={roster.length === 0}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                    >
-                      Manual Offline Split
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400 leading-normal">
-                    Click "View groups" on any active project on the right side to inspect team segregation metrics, synergy values, and mottos.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Results Pane */}
-          <div className="space-y-6 lg:col-span-8">
-            {allocateTab === "allocate" ? (
-              <>
-                {/* Roster profiles table */}
-                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="font-extrabold text-slate-800 text-sm">Roster Profiles</h3>
-                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                      {roster.length} students enrolled
-                    </span>
-                  </div>
-
-                  {loadingRoster ? (
-                    <div className="py-12 text-center text-sm text-slate-400">Loading student roster...</div>
-                  ) : roster.length === 0 ? (
-                    <div className="py-12 text-center text-sm text-slate-400">
-                      Select a section on the left to configure roles & skill ratings.
-                    </div>
-                  ) : (
-                    <div className="max-h-[300px] overflow-y-auto border border-slate-100 rounded-2xl">
-                      <table className="min-w-full divide-y divide-slate-100 text-sm">
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {roster.map((student) => (
-                            <tr key={student.id}>
-                              <td className="px-4 py-2 font-semibold text-slate-800">{student.name}</td>
-                              <td className="px-4 py-2">
-                                <select
-                                  value={student.role}
-                                  onChange={(e) => handleRosterUpdate(student.id, "role", e.target.value)}
-                                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none"
-                                >
-                                  {POPULAR_ROLES.map(role => (
-                                    <option key={role} value={role}>{role}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-4 py-2">
-                                <select
-                                  value={student.skill}
-                                  onChange={(e) => handleRosterUpdate(student.id, "skill", parseInt(e.target.value) || 3)}
-                                  className="rounded-lg border border-slate-200 px-2 py-1 text-xs focus:outline-none"
-                                >
-                                  <option value="1">1 Star</option>
-                                  <option value="2">2 Stars</option>
-                                  <option value="3">3 Stars</option>
-                                  <option value="4">4 Stars</option>
-                                  <option value="5">5 Stars</option>
-                                </select>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                {/* Allocation Preview results */}
-                {generatedTeams.length > 0 && (
-                  <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                      <div>
-                        <h3 className="font-extrabold text-slate-800 text-sm">Allocation Preview</h3>
-                        <p className="mt-1 text-xs text-slate-500">{overallFeedback}</p>
-                      </div>
-                      <button
-                        onClick={handlePublish}
-                        disabled={saving}
-                        className="rounded-2xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-indigo-100 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                      >
-                        {saving ? "Publishing..." : "Publish Allocation"}
-                      </button>
-                    </div>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      {generatedTeams.map((team, idx) => (
-                        <div key={idx} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-black text-slate-850">{team.name}</span>
-                            {team.synergyScore && (
-                              <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
-                                <Star size={10} className="fill-emerald-600" />
-                                {team.synergyScore}% Synergy
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-400 italic mb-3">"{team.motto}"</p>
-                          
-                          <div className="space-y-1.5 mt-4">
-                            {team.memberIds.map((memId: string) => {
-                              const student = roster.find(r => r.id === memId)
-                              if (!student) return null
-                              return (
-                                <div key={memId} className="flex items-center justify-between rounded-xl bg-white p-2 border border-slate-100 text-xs">
-                                  <span className="font-semibold text-slate-700">{student.name}</span>
-                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
-                                    {student.role}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Projects Tab Right Panel List */
-              <div className="space-y-4">
-                {localProjects.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
-                    <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
-                    <h3 className="mt-4 text-base font-semibold text-slate-900">No project groups created yet</h3>
-                    <p className="mt-2 text-sm text-slate-500">Switch to the "New Allocate" tab on the left to split groups.</p>
-                  </div>
-                ) : (
-                  localProjects.map((proj) => (
-                    <div key={proj.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="text-lg font-bold text-slate-900">{proj.title}</h3>
-                          <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
-                          <p className="mt-2 text-xs text-slate-400">Created: {new Date(proj.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <button
-                          onClick={() => setExpandedProjId(expandedProjId === proj.id ? null : proj.id)}
-                          className="rounded-xl border border-slate-100 px-4 py-2 text-xs font-semibold hover:bg-slate-50"
-                        >
-                          {expandedProjId === proj.id ? "Hide details" : "View groups"}
-                        </button>
-                      </div>
-
-                      {expandedProjId === proj.id && (
-                        <div className="mt-6 border-t border-slate-100 pt-6">
-                          <div className="grid gap-6 sm:grid-cols-2">
-                            {proj.project_groups?.map((group: any) => (
-                              <div key={group.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
-                                <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">
-                                  {group.group_name}
-                                </h4>
-                                <div className="space-y-2">
-                                  {group.group_members?.map((member: any, mIdx: number) => (
-                                    <div key={mIdx} className="flex flex-col rounded-xl bg-white p-2 text-xs border border-slate-100">
-                                      <span className="font-semibold text-slate-700">{member.users?.name}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}

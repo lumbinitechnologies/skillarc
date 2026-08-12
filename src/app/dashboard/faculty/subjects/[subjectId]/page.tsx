@@ -4,6 +4,10 @@ import { ROLES } from "@/constants/roles"
 import { FacultySubjectDetailClient } from "./faculty-subject-detail-client"
 import { getProjectsBySubjectAction } from "@/app/actions/project-groups"
 import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
+import {
+  getGradeColumnsBySubjectAction,
+  getGradeEntriesBySubjectAction,
+} from "@/app/actions/gradebook"
 
 export const dynamic = "force-dynamic"
 
@@ -136,6 +140,10 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   // 7. Fetch Project Groups for this subject
   const projects = await getProjectsBySubjectAction(subjectId)
 
+  // 8. Fetch custom gradebook columns and entries
+  const gradeColumns = await getGradeColumnsBySubjectAction(subjectId)
+  const gradeEntries = await getGradeEntriesBySubjectAction(subjectId)
+
   return (
     <FacultySubjectDetailClient
       facultyId={user.id}
@@ -149,6 +157,8 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
       students={students ?? []}
       meetings={meetings ?? []}
       projects={projects ?? []}
+      gradeColumns={gradeColumns}
+      gradeEntries={gradeEntries}
     />
   )
 }

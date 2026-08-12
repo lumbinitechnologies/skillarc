@@ -210,6 +210,36 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
   const studentGroupsAll = await getStudentProjectGroupsAction(user.id)
   const projectGroups = (studentGroupsAll || []).filter((sg: any) => sg.project?.subject_id === subjectId)
 
+  let gradeColumns: any[] = []
+  let gradeEntries: any[] = []
+
+  try {
+    const { data: columns, error: columnsError } = await adminClient
+      .from("grade_columns")
+      .select("*")
+      .eq("subject_id", subjectId)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true })
+
+    if (!columnsError && columns?.length) {
+      gradeColumns = columns
+      const columnIds = columns.map((column: any) => column.id)
+
+      const { data: entries, error: entriesError } = await adminClient
+        .from("grade_entries")
+        .select("*")
+        .eq("student_id", user.id)
+        .in("column_id", columnIds)
+
+      if (!entriesError) {
+        gradeEntries = entries ?? []
+      }
+    }
+  } catch {
+    gradeColumns = []
+    gradeEntries = []
+  }
+
   return (
     <StudentSubjectDetailClient
       studentId={user.id}
@@ -224,7 +254,9 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       attendanceEntries={attendanceEntries}
       attendanceSummary={attendanceSummary}
       projectGroups={projectGroups ?? []}
-  subjectAnnouncements={subjectAnnouncements ?? []}
+      subjectAnnouncements={subjectAnnouncements ?? []}
+      gradeColumns={gradeColumns}
+      gradeEntries={gradeEntries}
     />
   )
 }

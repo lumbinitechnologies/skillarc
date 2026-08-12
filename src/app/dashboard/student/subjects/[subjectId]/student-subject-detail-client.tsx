@@ -49,6 +49,8 @@ interface StudentSubjectDetailClientProps {
   attendanceSummary: any
   projectGroups: Array<any>
   subjectAnnouncements: Array<any>
+  gradeColumns?: Array<any>
+  gradeEntries?: Array<any>
 }
 
 export function StudentSubjectDetailClient({
@@ -65,8 +67,10 @@ export function StudentSubjectDetailClient({
   attendanceSummary,
   projectGroups,
   subjectAnnouncements,
+  gradeColumns = [],
+  gradeEntries = [],
 }: StudentSubjectDetailClientProps) {
-  const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
+  const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "grades" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
   const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<any[]>(subjectAnnouncements)
   const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
@@ -121,6 +125,34 @@ export function StudentSubjectDetailClient({
   const assignmentItems = assignments.filter(item => item.type !== "Material" && item.type !== "Syllabus")
   const moduleItems = assignments.filter(item => item.type === "Material")
   const syllabusItems = assignments.filter(item => item.type === "Syllabus")
+
+  const gradeValueMap = React.useMemo(() => {
+    const map: Record<string, string | null> = {}
+    ;(gradeEntries || []).forEach((entry: any) => {
+      if (entry?.column_id) {
+        map[entry.column_id] = entry.score != null ? String(entry.score) : null
+      }
+    })
+    return map
+  }, [gradeEntries])
+
+  const gradeSummary = React.useMemo(() => {
+    const validColumns = (gradeColumns || []).filter((column: any) => Number(column.max_score || 0) > 0)
+    const graded = validColumns.filter((column: any) => gradeValueMap[column.id] != null && gradeValueMap[column.id] !== "")
+    const totalScore = validColumns.reduce((sum, column: any) => {
+      const value = Number(gradeValueMap[column.id] ?? 0)
+      if (!Number.isFinite(value)) return sum
+      return sum + Math.min(value, Number(column.max_score || 0))
+    }, 0)
+    const totalMax = validColumns.reduce((sum, column: any) => sum + Number(column.max_score || 0), 0)
+    const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
+
+    return {
+      totalColumns: validColumns.length,
+      gradedCount: graded.length,
+      average: pct,
+    }
+  }, [gradeColumns, gradeValueMap])
 
   // Helper to map assignment ID to student submission status
   const getAssignmentStatusMeta = (item: any) => {
@@ -224,6 +256,7 @@ export function StudentSubjectDetailClient({
           { id: "assignments", label: "Assignments", icon: ListTodo },
           { id: "modules", label: "Modules", icon: BookOpen },
           { id: "syllabus", label: "Syllabus", icon: Book },
+          { id: "grades", label: "Grades", icon: ClipboardList },
           { id: "meetings", label: "Video Classroom", icon: Video },
           { id: "stream", label: "Feed", icon: MessageSquare },
           { id: "people", label: "Class Roster", icon: Users },
@@ -399,6 +432,95 @@ export function StudentSubjectDetailClient({
                     </div>
                   </Link>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 4: Grades */}
+        {activeTab === "grades" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Grade Book</p>
+                <h3 className="mt-2 text-2xl font-black text-slate-900 font-['Space_Grotesk']">{gradeSummary.average}%</h3>
+                <p className="text-[11px] text-slate-500 mt-1">Average across custom evaluation columns</p>
+              </div>
+              <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Graded</p>
+                <h3 className="mt-2 text-2xl font-black text-slate-900 font-['Space_Grotesk']">{gradeSummary.gradedCount}/{gradeSummary.totalColumns}</h3>
+                <p className="text-[11px] text-slate-500 mt-1">Columns with marks recorded</p>
+              </div>
+              <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Course</p>
+                <h3 className="mt-2 text-lg font-black text-slate-900">{subject.name}</h3>
+                <p className="text-[11px] text-slate-500 mt-1">{subject.code}</p>
+              </div>
+            </div>
+
+            {gradeColumns.length === 0 ? (
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+                <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-900 font-bold text-sm">No grade columns yet</p>
+                <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">Your instructor has not created assessment columns for this subject yet.</p>
+              </div>
+            ) : (
+              <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                    <ClipboardList size={18} className="text-[#6C63FF]" /> Subject Gradebook
+                  </h3>
+                  <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100/50 text-[#6C63FF] px-2.5 py-1 rounded-full font-['Space_Grotesk']">
+                    {gradeColumns.length} Columns
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-100 text-left">
+                    <thead className="bg-slate-50/50">
+                      <tr className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                        <th className="px-6 py-3 font-bold">Assessment</th>
+                        <th className="px-6 py-3 font-bold">Type</th>
+                        <th className="px-6 py-3 font-bold">Max</th>
+                        <th className="px-6 py-3 font-bold">Weight</th>
+                        <th className="px-6 py-3 font-bold">Score</th>
+                        <th className="px-6 py-3 font-bold">Feedback</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {gradeColumns.map((column: any) => {
+                        const rawScore = gradeValueMap[column.id]
+                        const numericScore = rawScore != null && rawScore !== "" ? Number(rawScore) : null
+                        const maxScore = Number(column.max_score ?? 100)
+                        const percent = numericScore != null && maxScore > 0 ? Math.round((numericScore / maxScore) * 100) : null
+
+                        return (
+                          <tr key={column.id} className="hover:bg-slate-50/40 transition-colors duration-200">
+                            <td className="px-6 py-4 text-xs font-bold text-slate-800">{column.title}</td>
+                            <td className="px-6 py-4 text-[11px] text-slate-500 uppercase tracking-wider">{column.type || "Custom"}</td>
+                            <td className="px-6 py-4 text-[11px] text-slate-600 font-semibold">{maxScore}</td>
+                            <td className="px-6 py-4 text-[11px] text-slate-600 font-semibold">{Number(column.weight ?? 0)}%</td>
+                            <td className="px-6 py-4">
+                              {numericScore == null ? (
+                                <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">Not graded</span>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-sm font-black text-slate-900 font-['Space_Grotesk']">{numericScore}/{maxScore}</span>
+                                  {percent != null && (
+                                    <span className="text-[10px] font-bold text-[#6C63FF]">{percent}%</span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-[11px] text-slate-500 max-w-[240px] whitespace-pre-wrap">
+                              {gradeEntries.find((entry: any) => entry.column_id === column.id)?.feedback || "No feedback provided."}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

@@ -40,6 +40,8 @@ interface StudentReportCardClientProps {
   }>
   assignments: Array<any>
   submissions: Array<any>
+  gradeColumns?: Array<any>
+  gradeEntries?: Array<any>
 }
 
 const CLASS_COLORS = ["#4f46e5", "#0d9488", "#e11d48", "#d97706", "#7c3aed"]
@@ -74,6 +76,8 @@ export function StudentReportCardClient({
   subjects,
   assignments,
   submissions,
+  gradeColumns = [],
+  gradeEntries = [],
 }: StudentReportCardClientProps) {
   const [expandedSubject, setExpandedSubject] = useState<string | null>(subjects[0]?.id || null)
 
@@ -84,6 +88,11 @@ export function StudentReportCardClient({
       subjectAssignments.some(a => a.id === s.assignment_id) &&
       s.status === "graded" &&
       s.grade !== null
+    )
+
+    const subjectGradeColumns = (gradeColumns || []).filter((column: any) => column.subject_id === subj.id)
+    const subjectGradeEntries = (gradeEntries || []).filter((entry: any) =>
+      subjectGradeColumns.some((column: any) => column.id === entry.column_id)
     )
 
     const gradedItems = mySubmissions.map(sub => {
@@ -103,23 +112,41 @@ export function StudentReportCardClient({
       }
     })
 
-    const totalScored = mySubmissions.reduce((sum, sub) => sum + (sub.grade || 0), 0)
-    const totalMax = mySubmissions.reduce((sum, sub) => {
-      const a = subjectAssignments.find(a => a.id === sub.assignment_id)
-      return sum + (a?.max_score || 100)
-    }, 0)
-    
+    const customGradedItems = subjectGradeColumns.map((column: any) => {
+      const entry = subjectGradeEntries.find((item: any) => item.column_id === column.id)
+      const score = entry?.score != null ? Number(entry.score) : null
+      const maxScore = Number(column.max_score ?? 100)
+      const pct = score != null && maxScore > 0 ? Math.round((score / maxScore) * 100) : null
+
+      return {
+        id: column.id,
+        title: column.title,
+        fullTitle: column.title,
+        type: column.type,
+        score: score ?? 0,
+        maxScore,
+        pct,
+        feedback: entry?.feedback ?? null,
+        submittedAt: entry?.graded_at ?? null,
+      }
+    }).filter((item: any) => item.score !== 0 || item.score === 0)
+
+    const allItems = [...gradedItems, ...customGradedItems]
+
+    const totalScored = allItems.reduce((sum, item) => sum + (Number(item.score) || 0), 0)
+    const totalMax = allItems.reduce((sum, item) => sum + (Number(item.maxScore) || 100), 0)
+
     const overallPct = totalMax > 0 ? Math.round((totalScored / totalMax) * 100) : null
     const pendingCount = subjectAssignments.filter(a => !submissions.some(s => s.assignment_id === a.id)).length
 
     return {
       subject: subj,
       color: CLASS_COLORS[idx % CLASS_COLORS.length],
-      graded: gradedItems,
+      graded: allItems,
       overallPct,
       pending: pendingCount,
-      totalAssignments: subjectAssignments.length,
-      submitted: mySubmissions.length,
+      totalAssignments: subjectAssignments.length + subjectGradeColumns.length,
+      submitted: allItems.length,
     }
   })
 
@@ -320,7 +347,8 @@ export function StudentReportCardClient({
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-700">
                           {report.graded.map((g, gi) => {
-                            const gradeMeta = getGrade(g.pct)
+                            const pctValue = g.pct ?? 0
+                            const gradeMeta = getGrade(pctValue)
                             return (
                               <tr key={gi} className="hover:bg-slate-50/40 transition-colors">
                                 <td className="px-4 py-3 font-bold text-slate-800 max-w-[200px] truncate" title={g.fullTitle}>
@@ -331,9 +359,9 @@ export function StudentReportCardClient({
                                 <td className="px-4 py-3">
                                   <div className="flex items-center justify-center gap-2">
                                     <div className="w-16 bg-slate-100 rounded-full h-1">
-                                      <div className="h-1 rounded-full" style={{ width: `${g.pct}%`, backgroundColor: report.color }} />
+                                      <div className="h-1 rounded-full" style={{ width: `${pctValue}%`, backgroundColor: report.color }} />
                                     </div>
-                                    <span className="font-bold text-slate-600">{g.pct}%</span>
+                                    <span className="font-bold text-slate-600">{pctValue}%</span>
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">

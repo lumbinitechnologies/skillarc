@@ -63,16 +63,8 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="p-10">
-          <div className="mb-8 flex items-center gap-4 px-1">
-            <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-16 w-16 object-contain transition-transform duration-200 hover:scale-[1.03]" />
-            <div className="flex flex-col">
-              <span className="text-2xl font-black tracking-[-0.03em] leading-none text-slate-900">
-                SkillArc
-              </span>
-              <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#6C63FF] mt-2 leading-none">
-                Academic Hub
-              </span>
-            </div>
+          <div className="mb-8 flex justify-center px-1">
+            <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-24 w-24 object-contain transition-transform duration-200 hover:scale-[1.03]" />
           </div>
           <div className="mb-8 space-y-3">
             <h1 className="text-3xl font-black text-slate-950">Sign in to your account</h1>

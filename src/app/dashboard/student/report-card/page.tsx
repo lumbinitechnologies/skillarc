@@ -93,12 +93,33 @@ export default async function StudentReportCardPage() {
     .select("*")
     .eq("student_id", user.id)
 
+  // 4. Fetch custom gradebook columns and values for the student's subjects
+  const gradeColumns = subjectIds.length
+    ? await supabase
+        .from("grade_columns")
+        .select("*")
+        .in("subject_id", subjectIds)
+        .eq("is_active", true)
+        .order("display_order", { ascending: true })
+    : { data: [] }
+
+  const columnIds = (gradeColumns.data ?? []).map((column: any) => column.id)
+  const gradeEntries = columnIds.length
+    ? await supabase
+        .from("grade_entries")
+        .select("*")
+        .eq("student_id", user.id)
+        .in("column_id", columnIds)
+    : { data: [] }
+
   return (
     <StudentReportCardClient
       studentName={profile.name}
       subjects={subjects ?? []}
       assignments={sectionAssignments}
       submissions={submissions ?? []}
+      gradeColumns={gradeColumns.data ?? []}
+      gradeEntries={gradeEntries.data ?? []}
     />
   )
 }
