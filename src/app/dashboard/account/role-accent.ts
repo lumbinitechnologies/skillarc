@@ -31,7 +31,7 @@ export const roleGradients: Record<Role, string> = {
   [ROLES.INSTITUTION_ADMIN]: "from-blue-500 to-indigo-600",
   [ROLES.HOD]: "from-emerald-500 to-teal-600",
   [ROLES.PROGRAM_HEAD]: "from-pink-500 to-fuchsia-600",
-  [ROLES.FACULTY]: "from-[#6c63ff] to-[#8b5cf6]",
+  [ROLES.FACULTY]: "from-[var(--primary)] to-[var(--secondary)]",
   [ROLES.STUDENT]: "from-green-500 to-emerald-600",
   [ROLES.PARENT]: "from-fuchsia-500 to-purple-600",
 }

@@ -296,7 +296,7 @@ export default function StudentBillingPage() {
                         ) : (
                           <Button
                             onClick={() => setSelectedInvoice(inv)}
-                            className="rounded-xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:opacity-95 active:scale-95 transition"
+                            className="rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:opacity-95 active:scale-95 transition"
                           >
                             Pay Now <ArrowRight size={12} className="ml-1" />
                           </Button>

@@ -770,7 +770,7 @@ export function DepartmentDetailClient({
                   setSelectedProgram(null)
                   setIsProgramOpen(true)
                 }}
-                className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Program
@@ -800,7 +800,7 @@ export function DepartmentDetailClient({
                   setSelectedSection(null)
                   setIsSectionOpen(true)
                 }}
-                className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 New Section
@@ -838,7 +838,7 @@ export function DepartmentDetailClient({
                   onClick={() => {
                     setIsSubjectOpen(true)
                   }}
-                  className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                  className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Course
@@ -900,7 +900,7 @@ export function DepartmentDetailClient({
                     setSelectedFaculty(null)
                     setIsFacultyOpen(true)
                   }}
-                  className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                  className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add Faculty
@@ -940,7 +940,7 @@ export function DepartmentDetailClient({
                     setSelectedStudent(null)
                     setIsStudentOpen(true)
                   }}
-                  className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                  className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Student
@@ -1007,7 +1007,7 @@ export function DepartmentDetailClient({
                     setSelectedParent(null)
                     setIsParentOpen(true)
                   }}
-                  className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white font-semibold hover:shadow-md transition"
+                  className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   New Parent

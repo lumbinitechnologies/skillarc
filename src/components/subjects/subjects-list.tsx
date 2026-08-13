@@ -3,7 +3,7 @@
 import { Trash2, BookMarked, GraduationCap, BookOpen, Target, Edit2, Building2, Layers } from "lucide-react"
 
 const typeConfig: Record<string, { label: string; icon: string; textClass: string; bgClass: string; gradientClass: string }> = {
-  THEORY:   { label: "Theory",   icon: "📖", textClass: "text-[#6C63FF]", bgClass: "bg-[#6C63FF]/8", gradientClass: "from-[#6C63FF] to-[#8B5CF6]" },
+  THEORY:   { label: "Theory",   icon: "📖", textClass: "text-[var(--primary)]", bgClass: "bg-[var(--primary-50)]", gradientClass: "from-[var(--primary)] to-[var(--secondary)]" },
   LAB:      { label: "Lab",      icon: "🧪", textClass: "text-[#00C2A8]", bgClass: "bg-[#00C2A8]/8", gradientClass: "from-[#00C2A8] to-[#00DDAA]" },
   ELECTIVE: { label: "Elective", icon: "🎯", textClass: "text-[#FFB020]", bgClass: "bg-[#FFB020]/8", gradientClass: "from-[#FFB020] to-[#FFC550]" },
 }

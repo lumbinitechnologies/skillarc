@@ -235,7 +235,7 @@ export function TimetableSettingsDialog({ open, onOpenChange }: {
             type="button"
             onClick={handleSave}
             disabled={saving || loading}
-            className="flex-[2] py-2.5 text-xs font-bold text-white bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] hover:from-[#5C53EF] hover:to-[#7B4CE6] rounded-xl shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50"
+            className="flex-[2] py-2.5 text-xs font-bold text-white bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] rounded-xl shadow-sm flex items-center justify-center gap-2 transition disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Save Settings
           </button>

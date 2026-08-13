@@ -136,7 +136,7 @@ export function FacultyClientPage({
             <Upload className="mr-2 h-4 w-4" />
             Import CSV
           </Button>
-          <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
+          <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
             <Plus className="mr-2 h-4 w-4" />
             Add Faculty
           </Button>

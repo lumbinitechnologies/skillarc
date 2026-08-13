@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, Search, LogOut, User, Settings, ChevronDown, KeyRound } from "lucide-react"
+import { Bell, Search, LogOut, User, Settings, ChevronDown, KeyRound, Menu } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
 import type { UserContext } from "@/lib/user-context"
@@ -123,6 +123,14 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl shadow-sm">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        {/* Mobile hamburger */}
+        <button
+          aria-label="Toggle sidebar"
+          onClick={() => document.body.classList.toggle("sidebar-open")}
+          className="mr-2 inline-flex items-center justify-center rounded-md bg-white/0 p-2 text-slate-700 hover:bg-slate-50 md:hidden"
+        >
+          <Menu size={18} />
+        </button>
         <div>
           <h1 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-900">Dashboard</h1>
           <p className="mt-1 text-xs text-indigo-600">
@@ -136,7 +144,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <div className="flex min-w-[280px] items-center gap-3 rounded-[18px] border border-indigo-100 bg-white/90 px-4 py-2 shadow-[0_16px_40px_rgba(99,102,241,0.06)] transition focus-within:border-indigo-300 focus-within:bg-white">
+          <div className="hidden sm:flex min-w-0 items-center gap-3 rounded-[18px] border border-indigo-100 bg-white/90 px-4 py-2 shadow-[0_16px_40px_rgba(99,102,241,0.06)] transition focus-within:border-indigo-300 focus-within:bg-white">
             <Search size={14} className="text-indigo-300" />
             <input
               type="search"
@@ -146,6 +154,15 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
               className="min-w-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
             />
           </div>
+
+          {/* Mobile search button */}
+          <button
+            onClick={() => document.body.classList.toggle("search-open")}
+            className="sm:hidden inline-flex h-10 w-10 items-center justify-center rounded-md bg-white/0 text-slate-700 hover:bg-slate-50"
+            aria-label="Open search"
+          >
+            <Search size={16} />
+          </button>
 
           <div className="relative" ref={notifRef}>
             <button
@@ -166,7 +183,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full z-30 mt-3 min-w-[320px] max-w-[360px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-30 mt-3 min-w-[90vw] sm:min-w-[320px] max-w-[360px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
                 <div className="border-b border-slate-200/70 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-900">Notifications</p>
                 </div>
@@ -220,7 +237,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 top-full z-30 mt-3 min-w-[220px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+              <div className="absolute right-0 top-full z-30 mt-3 min-w-[90vw] sm:min-w-[220px] overflow-hidden rounded-[20px] border border-slate-200 bg-white/95 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl">
                 <button
                   type="button"
                   onClick={() => {
@@ -265,6 +282,29 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile search sheet (controlled by body.search-open) */}
+      <div className="mobile-search-sheet">
+        <div className="sheet-inner">
+          <div className="glass-panel p-3">
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search anything…"
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              />
+              <button
+                onClick={() => document.body.classList.remove("search-open")}
+                className="ml-2 inline-flex items-center justify-center rounded-lg px-3 py-2 bg-white/90"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>

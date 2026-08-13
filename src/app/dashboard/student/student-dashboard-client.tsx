@@ -87,7 +87,7 @@ export default function StudentPage({
         <div className="absolute right-0 top-0 w-80 h-80 bg-radial-gradient from-indigo-50/50 to-transparent rounded-full -mr-16 -mt-16 pointer-events-none" />
         <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] text-white shadow-lg shadow-indigo-100/50 flex-shrink-0">
+            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white shadow-lg shadow-indigo-100/50 flex-shrink-0">
               <GraduationCap size={24} />
             </div>
             <div>

@@ -81,7 +81,7 @@ export default function FacultyDashboardClient({
         <div className="absolute right-0 top-0 w-80 h-80 bg-radial-gradient from-indigo-50/50 to-transparent rounded-full -mr-16 -mt-16 pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="flex items-center gap-4 sm:gap-5">
-            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] text-white shadow-lg shadow-indigo-100/50 flex-shrink-0">
+            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] text-white shadow-lg shadow-indigo-100/50 flex-shrink-0">
               <span className="text-2xl">👩‍🏫</span>
             </div>
             <div>
@@ -104,7 +104,7 @@ export default function FacultyDashboardClient({
             </Link>
             <Link 
               href="/dashboard/faculty/attendance" 
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] hover:from-[#5C53EF] hover:to-[#7B4CE6] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Log Attendance
@@ -298,7 +298,7 @@ export default function FacultyDashboardClient({
               className="group relative bg-white border border-slate-100 rounded-3xl p-5 shadow-[0_2px_6px_rgba(15,23,42,0.01)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(108,99,255,0.04)] hover:border-indigo-100 flex flex-col justify-between overflow-hidden min-h-[120px]"
             >
               {/* Decorative side tag */}
-              <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-[#6C63FF] to-[#8B5CF6]" />
+              <div className="absolute top-0 bottom-0 left-0 w-1 bg-gradient-to-b from-[var(--primary)] to-[var(--secondary)]" />
               <div className="pl-2">
                 <div className="flex justify-between items-start gap-4">
                   <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#6C63FF] transition-colors">{subject.name}</h4>

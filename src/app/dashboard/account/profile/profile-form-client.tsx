@@ -117,7 +117,7 @@ export function ProfileFormClient() {
   }
 
   const role = data.role as (typeof ROLES)[keyof typeof ROLES]
-  const gradient = roleGradients[role] ?? "from-[#6c63ff] to-[#8b5cf6]"
+  const gradient = roleGradients[role] ?? "from-[var(--primary)] to-[var(--secondary)]"
 
   return (
     <div className="flex flex-col gap-6">

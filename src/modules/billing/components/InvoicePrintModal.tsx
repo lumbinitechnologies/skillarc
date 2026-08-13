@@ -64,7 +64,7 @@ export default function InvoicePrintModal({
           <div className="flex items-center gap-3">
             <Button
               onClick={handlePrint}
-              className="rounded-xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white text-xs font-bold px-4 py-2 shadow-sm hover:opacity-95 transition"
+              className="rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white text-xs font-bold px-4 py-2 shadow-sm hover:opacity-95 transition"
             >
               <Printer size={15} className="mr-2" /> Print / Save PDF
             </Button>

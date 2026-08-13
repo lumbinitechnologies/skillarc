@@ -403,7 +403,7 @@ export default function AttendanceClient({
           {activeView === "sheets" && (
             <Button
               onClick={() => setIsPrintModalOpen(true)}
-              className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white text-xs font-bold px-4 py-2.5 shadow-sm hover:opacity-95 transition"
+              className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white text-xs font-bold px-4 py-2.5 shadow-sm hover:opacity-95 transition"
             >
               <Printer size={16} className="mr-2" /> Print Sheet
             </Button>
@@ -582,7 +582,7 @@ export default function AttendanceClient({
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
                         <div 
-                          className="bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] h-full rounded-full transition-all duration-500" 
+                          className="bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] h-full rounded-full transition-all duration-500"
                           style={{ width: `${d.rate}%` }}
                         />
                       </div>
@@ -608,7 +608,7 @@ export default function AttendanceClient({
                       <div className="relative w-full flex justify-center">
                         <span className="absolute -top-6 bg-slate-800 text-white text-[9px] font-bold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition duration-200 shadow-sm">{s.rate}%</span>
                         <div 
-                          className="w-7 rounded-t-lg bg-gradient-to-b from-[#6C63FF] to-indigo-400/80 hover:from-[#5b52e0] transition-all duration-500 shadow-sm shadow-indigo-100" 
+                          className="w-7 rounded-t-lg bg-gradient-to-b from-[var(--primary)] to-[var(--primary-400)] hover:from-[var(--primary-600)] transition-all duration-500 shadow-sm shadow-indigo-100"
                           style={{ height: `${(s.rate / 100) * 120}px` }}
                         />
                       </div>

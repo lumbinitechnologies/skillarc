@@ -125,7 +125,34 @@ export function ChatbotWidget() {
       })
 
       if (!res.ok) {
-        throw new Error(await res.text())
+        // Try to extract a helpful error message from the response body
+        let bodyText = ""
+        try {
+          const contentType = res.headers.get("content-type") || ""
+          if (contentType.includes("application/json")) {
+            const json = await res.json()
+            bodyText = typeof json === "string" ? json : JSON.stringify(json)
+          } else {
+            bodyText = await res.text()
+          }
+        } catch (e) {
+          bodyText = `Status ${res.status} (failed to read body)`
+        }
+
+        const errMsg = `Assistant error ${res.status}: ${bodyText}`
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `bot-err-${Date.now()}`,
+            from: "bot",
+            text: errMsg,
+            timestamp: new Date()
+          }
+        ])
+
+        // Return early so we don't attempt to parse a success body
+        return
       }
 
       const data = await res.json()
@@ -217,7 +244,7 @@ export function ChatbotWidget() {
           <div className="w-[360px] h-[520px] bg-white/75 backdrop-blur-xl border border-white/40 shadow-2xl rounded-[32px] overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-6">
 
             {/* Header */}
-            <div className="px-5 py-4 bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white flex items-center justify-between shadow-md">
+            <div className="px-5 py-4 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white flex items-center justify-between shadow-md">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
                   <Sparkles size={20} className="text-white animate-pulse" />

@@ -137,7 +137,7 @@ export function DepartmentsClientPage({
             />
             <Button
               onClick={createDepartment}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:shadow-md"
             >
               <Plus className="h-4 w-4" />
               Create

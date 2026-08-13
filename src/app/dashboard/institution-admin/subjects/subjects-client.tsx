@@ -126,7 +126,7 @@ export function SubjectsClientPage({
           </button>
           <button
             onClick={() => setOpen(true)}
-            className="self-start md:self-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] hover:from-[#5C53EF] hover:to-[#7B4CE6] text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95 flex-shrink-0"
+                 className="self-start md:self-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-100 transition-all duration-200 active:scale-95 flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
             New Subject

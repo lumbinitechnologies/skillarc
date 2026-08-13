@@ -230,7 +230,9 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
     : "U"
 
   return (
-    <aside className="sticky top-0 h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-white/90 px-6 py-8 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+    <>
+      <div className="sidebar-backdrop" onClick={() => document.body.classList.remove("sidebar-open")} />
+      <aside className="sidebar-mobile sticky top-0 h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-white/90 px-6 py-8 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
       <div className="mb-10 mt-2 flex items-center justify-center px-2">
         <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-28 w-28 object-contain transition-transform duration-200 hover:scale-[1.03]" />
       </div>
@@ -262,6 +264,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
               <Link
                 key={item.path}
                 href={item.path}
+                onClick={() => document.body.classList.remove("sidebar-open")}
                 className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive ? "border border-indigo-100 bg-indigo-50 text-slate-900 shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}
               >
                 <Icon className={`h-4 w-4 ${isActive ? "text-indigo-600" : "text-slate-400 group-hover:text-indigo-600"}`} />
@@ -277,6 +280,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
 
       <Link
         href="/dashboard/account/profile"
+        onClick={() => document.body.classList.remove("sidebar-open")}
         className={`mt-5 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
           pathname.startsWith("/dashboard/account")
             ? "border border-indigo-100 bg-indigo-50 text-slate-900 shadow-sm"
@@ -289,7 +293,10 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
 
       <button
         type="button"
-        onClick={handleLogout}
+        onClick={async () => {
+          document.body.classList.remove("sidebar-open")
+          await handleLogout()
+        }}
         className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
       >
         <LogOut className="h-4 w-4" />
@@ -308,5 +315,6 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
         </div>
       </div>
     </aside>
+      </>
   )
 }

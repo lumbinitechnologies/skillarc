@@ -313,7 +313,7 @@ export default function BillingPage() {
         </div>
         <Button
           onClick={openCreateModal}
-          className="rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white text-xs font-bold px-4 py-2.5 shadow-sm hover:opacity-95 transition"
+          className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white text-xs font-bold px-4 py-2.5 shadow-sm hover:opacity-95 transition"
         >
           <Plus size={16} className="mr-1.5" /> Create Payment Plan
         </Button>
