@@ -1,11 +1,22 @@
-import { UserProfile } from "@/modules/users/types"
-
-export interface Parent extends UserProfile {
-  section_id: null
-  semester: null
+export type Parent = {
+  id: string
+  name: string
+  email: string
+  institution_id?: string | null
+  organization_id?: string | null
+  students?: Array<{
+    id: string
+    name: string
+    registration_number?: string | null
+    relationship?: string | null
+  }>
 }
 
-export interface CreateParentInput {
+export type ParentProfile = Parent
+
+export type ParentRecord = Parent
+
+export type CreateParentInput = {
   name: string
   email: string
   password?: string
@@ -13,6 +24,4 @@ export interface CreateParentInput {
   organization_id?: string | null
 }
 
-export interface UpdateParentInput {
-  name?: string
-}
+export type UpdateParentInput = Partial<CreateParentInput>

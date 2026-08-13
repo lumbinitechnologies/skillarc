@@ -28,6 +28,14 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
+
+  if (pathname.startsWith("/api/")) {
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    return response
+  }
+
   // Support both legacy `/login` and new `/auth/login` routes
   const isAuthRoute =
     pathname === "/login" ||

@@ -30,5 +30,11 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "skillarc-backend", "work-given-by-teams"]
+  "exclude": [
+    "node_modules",
+    "skillarc-backend",
+    "work-given-by-teams",
+    "EduRAG",
+    "skillarc-account-pages"
+  ]
 }

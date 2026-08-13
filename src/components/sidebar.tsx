@@ -21,6 +21,7 @@ import {
   ClipboardList,
   BarChart3,
   User,
+  UserCircle2,
   Briefcase,
   ListTodo,
   Award,
@@ -273,6 +274,18 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
       </nav>
 
       <div className="mt-6 h-px bg-slate-200/80" />
+
+      <Link
+        href="/dashboard/account/profile"
+        className={`mt-5 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+          pathname.startsWith("/dashboard/account")
+            ? "border border-indigo-100 bg-indigo-50 text-slate-900 shadow-sm"
+            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+        }`}
+      >
+        <UserCircle2 className="h-4 w-4" />
+        Account
+      </Link>
 
       <button
         type="button"

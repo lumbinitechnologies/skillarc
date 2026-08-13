@@ -36,13 +36,23 @@ export function ChatbotWidget() {
     async function loadProfile() {
       try {
         const res = await fetch("/api/auth/profile")
-        if (res.ok) {
-          const data = await res.json()
-          setProfile({
-            name: data.name || data.email?.split("@")[0] || "User",
-            role: data.role || "STUDENT"
-          })
+
+        if (!res.ok) {
+          if (res.status === 401) return
+          throw new Error(`Profile fetch failed: ${res.status}`)
         }
+
+        const contentType = res.headers.get("content-type") || ""
+        if (!contentType.includes("application/json")) {
+          console.warn("Expected JSON from /api/auth/profile but got:", contentType)
+          return
+        }
+
+        const data = await res.json()
+        setProfile({
+          name: data.name || data.email?.split("@")[0] || "User",
+          role: data.role || "STUDENT"
+        })
       } catch (err) {
         console.error("Failed to load profile for chatbot widget:", err)
       }

@@ -1,2 +1,2 @@
 export * from "./types/parent.types"
-export * from "./services/parentService"
+export { getParents, getParentById, createParent, updateParent } from "./services/parentService"
