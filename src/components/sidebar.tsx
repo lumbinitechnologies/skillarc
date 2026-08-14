@@ -265,11 +265,15 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
                 key={item.path}
                 href={item.path}
                 onClick={() => document.body.classList.remove("sidebar-open")}
-                className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${isActive ? "border border-indigo-100 bg-indigo-50 text-slate-900 shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}
+                className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold transition-all duration-150 ${
+                  isActive
+                    ? "border-l-4 border-l-[var(--primary)] rounded-r-2xl bg-[var(--primary)]/[0.06] text-slate-900 shadow-sm pl-3.5"
+                    : "text-slate-600 rounded-2xl hover:bg-slate-100/80 hover:text-slate-950 hover:pl-5"
+                }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? "text-indigo-600" : "text-slate-400 group-hover:text-indigo-600"}`} />
+                <Icon className={`h-4 w-4 ${isActive ? "text-[var(--primary)]" : "text-slate-400 group-hover:text-[var(--primary)]"}`} />
                 <span>{item.name}</span>
-                {!isActive && <ChevronRight className="ml-auto h-4 w-4 text-slate-300 transition group-hover:text-indigo-500" />}
+                {!isActive && <ChevronRight className="ml-auto h-4 w-4 text-slate-300 transition group-hover:text-[var(--primary)] group-hover:translate-x-1" />}
               </Link>
             )
           })
@@ -281,13 +285,13 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
       <Link
         href="/dashboard/account/profile"
         onClick={() => document.body.classList.remove("sidebar-open")}
-        className={`mt-5 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+        className={`mt-5 flex items-center gap-3 py-3 px-4 text-sm font-semibold transition-all duration-150 ${
           pathname.startsWith("/dashboard/account")
-            ? "border border-indigo-100 bg-indigo-50 text-slate-900 shadow-sm"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+            ? "border-l-4 border-l-[var(--primary)] rounded-r-2xl bg-[var(--primary)]/[0.06] text-slate-900 shadow-sm pl-3.5"
+            : "text-slate-600 rounded-2xl hover:bg-slate-100/80 hover:text-slate-950 hover:pl-5"
         }`}
       >
-        <UserCircle2 className="h-4 w-4" />
+        <UserCircle2 className="h-4 w-4 text-slate-400 group-hover:text-[var(--primary)]" />
         Account
       </Link>
 
@@ -297,16 +301,16 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
           document.body.classList.remove("sidebar-open")
           await handleLogout()
         }}
-        className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+        className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition-all duration-150 hover:bg-slate-100 active:scale-97"
       >
-        <LogOut className="h-4 w-4" />
+        <LogOut className="h-4 w-4 text-slate-400" />
         Log out
       </button>
 
       <div className="mt-6 h-px bg-slate-200/80" />
 
       <div className="mt-6 flex items-center gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white shadow-md">
           {initials}
         </div>
         <div className="min-w-0">

@@ -113,10 +113,10 @@ export default function OrgAdminDashboardClient({
           ))}
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+        <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
           <aside className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
             <div className="flex items-center gap-4 pb-4">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-indigo-100 text-indigo-700">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)]">
                 <Plus size={18} />
               </div>
               <div>
@@ -141,7 +141,7 @@ export default function OrgAdminDashboardClient({
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                   placeholder="e.g. RVCE, MIT Manipal"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
                 />
               </div>
               <div>
@@ -150,7 +150,7 @@ export default function OrgAdminDashboardClient({
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   placeholder="e.g. rvce.edu.in"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
                 />
               </div>
               <div>
@@ -160,13 +160,13 @@ export default function OrgAdminDashboardClient({
                   type="email"
                   onChange={(e) => setAdminEmail(e.target.value)}
                   placeholder="admin@college.edu"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
                 />
               </div>
               <button
                 onClick={handleCreate}
                 disabled={!isValid || createStatus === "loading"}
-                className="mt-2 w-full rounded-3xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-400 bg-indigo-600 hover:bg-indigo-700"
+                className="mt-2 w-full rounded-3xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-400 bg-[var(--primary)] hover:bg-[var(--accent)] active:scale-97 hover-button-scale"
               >
                 {createStatus === "loading" ? "Creating institution..." : "Create Institution"}
               </button>
@@ -190,7 +190,7 @@ export default function OrgAdminDashboardClient({
                 </div>
               ) : (
                 initialInstitutions.map((inst) => (
-                  <div key={inst.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={inst.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 transition hover:border-[var(--primary)]/20 hover-card-lift">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-950 truncate">{inst.name}</p>
@@ -235,12 +235,12 @@ export default function OrgAdminDashboardClient({
                         <input
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
                         />
                         <input
                           value={editDomain}
                           onChange={(e) => setEditDomain(e.target.value)}
-                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
                         />
                       </div>
                     )}

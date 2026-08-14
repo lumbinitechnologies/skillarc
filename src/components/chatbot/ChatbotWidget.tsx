@@ -125,39 +125,46 @@ export function ChatbotWidget() {
       })
 
       if (!res.ok) {
-        // Try to extract a helpful error message from the response body
-        let bodyText = ""
+        let friendlyErrText = ""
         try {
           const contentType = res.headers.get("content-type") || ""
           if (contentType.includes("application/json")) {
             const json = await res.json()
-            bodyText = typeof json === "string" ? json : JSON.stringify(json)
+            if (json && json.error) {
+              if (json.error.includes("fetch failed") || json.error.toLowerCase().includes("backend failure")) {
+                friendlyErrText = "Arca AI chatbot service is currently offline. Please ensure the backend server is running and try again in a few moments."
+              } else {
+                friendlyErrText = json.error
+              }
+            } else {
+              friendlyErrText = JSON.stringify(json)
+            }
           } else {
-            bodyText = await res.text()
+            friendlyErrText = await res.text()
           }
         } catch (e) {
-          bodyText = `Status ${res.status} (failed to read body)`
+          friendlyErrText = `Failed to connect (Status ${res.status})`
         }
 
-        const errMsg = `Assistant error ${res.status}: ${bodyText}`
+        if (!friendlyErrText) {
+          friendlyErrText = "An unexpected error occurred while communicating with the AI service. Please try again."
+        }
 
         setMessages((prev) => [
           ...prev,
           {
             id: `bot-err-${Date.now()}`,
             from: "bot",
-            text: errMsg,
+            text: friendlyErrText,
             timestamp: new Date()
           }
         ])
 
-        // Return early so we don't attempt to parse a success body
         return
       }
 
       const data = await res.json()
 
-      // Store session ID if provided by the backend to maintain context
       if (data.session_id) {
         setSessionId(data.session_id)
       }
@@ -178,7 +185,7 @@ export function ChatbotWidget() {
         {
           id: `bot-err-${Date.now()}`,
           from: "bot",
-          text: `Error connecting to assistant: ${err.message || "FastAPI offline"}`,
+          text: "Unable to connect to assistant: FastAPI database service is offline.",
           timestamp: new Date()
         }
       ])
@@ -236,12 +243,12 @@ export function ChatbotWidget() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 font-sans">
+    <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-50 font-sans">
       <div className="flex items-end flex-col gap-3">
 
         {/* Chat Window Panel */}
         {open && (
-          <div className="w-[360px] h-[520px] bg-white/75 backdrop-blur-xl border border-white/40 shadow-2xl rounded-[32px] overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-6">
+          <div className="w-full sm:w-[360px] h-[calc(100vh-140px)] sm:h-[520px] max-h-[560px] bg-white/75 backdrop-blur-xl border border-white/40 shadow-2xl rounded-[32px] overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-6">
 
             {/* Header */}
             <div className="px-5 py-4 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white flex items-center justify-between shadow-md">
@@ -286,7 +293,7 @@ export function ChatbotWidget() {
 
                   {/* Bot Avatar */}
                   {m.from === "bot" && (
-                    <div className="w-7 h-7 rounded-lg bg-indigo-50 text-[#6C63FF] border border-indigo-100 flex items-center justify-center shrink-0 shadow-sm mt-1">
+                    <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/[0.04] text-[var(--primary)] border border-[var(--primary)]/10 flex items-center justify-center shrink-0 shadow-sm mt-1">
                       <Bot size={14} />
                     </div>
                   )}
@@ -295,7 +302,7 @@ export function ChatbotWidget() {
                     <div
                       className={`text-xs p-3.5 shadow-sm rounded-2xl ${
                         m.from === "user"
-                          ? "bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white rounded-tr-none font-medium"
+                          ? "bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] text-white rounded-tr-none font-medium"
                           : "bg-white border border-slate-100 text-slate-800 rounded-tl-none"
                       }`}
                     >
@@ -312,7 +319,7 @@ export function ChatbotWidget() {
                               <span
                                 key={sidx}
                                 title={m.sources?.filter(s => s.filename === filename).map(s => s.snippet).join("\n\n")}
-                                className="text-[9px] font-bold text-[#6C63FF] bg-indigo-50/70 border border-indigo-100/50 rounded px-1.5 py-0.5 cursor-help max-w-[140px] truncate block"
+                                className="text-[9px] font-bold text-[var(--primary)] bg-[var(--primary)]/[0.05] border border-[var(--primary)]/10 rounded px-1.5 py-0.5 cursor-help max-w-[140px] truncate block"
                               >
                                 {filename}
                               </span>
@@ -339,7 +346,7 @@ export function ChatbotWidget() {
               {/* Loader Skeleton (Glass 2.0 feel) */}
               {loading && (
                 <div className="flex items-start gap-2.5 animate-pulse">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0 shadow-sm mt-1">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/[0.04] border border-[var(--primary)]/10 flex items-center justify-center shrink-0 shadow-sm mt-1">
                     <Bot size={14} className="text-slate-400" />
                   </div>
                   <div className="max-w-[78%] bg-white border border-slate-100 rounded-2xl rounded-tl-none p-3.5 space-y-2 w-full shadow-sm">
@@ -358,12 +365,12 @@ export function ChatbotWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Ask EduRAG a question..."
-                className="flex-1 bg-slate-50 border border-slate-100 text-xs text-slate-800 rounded-2xl px-4 py-2.5 outline-none hover:border-slate-200 focus:border-[#6C63FF] focus:bg-white transition"
+                className="flex-1 bg-slate-50 border border-slate-100 text-xs text-slate-800 rounded-2xl px-4 py-2.5 outline-none hover:border-slate-200 focus:border-[var(--primary)] focus:bg-white transition"
               />
               <button
                 onClick={handleSend}
                 disabled={loading || !input.trim()}
-                className="w-9 h-9 rounded-2xl bg-[#6C63FF] hover:bg-[#5b52e0] text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                className="w-9 h-9 rounded-2xl bg-[var(--primary)] hover:bg-[var(--accent)] text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
               >
                 <Send size={14} />
               </button>
@@ -376,7 +383,7 @@ export function ChatbotWidget() {
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Open AI assistant"
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] hover:from-[#5b52e0] hover:to-[#7a4be5] shadow-xl flex items-center justify-center text-white transition-all duration-300 active:scale-90 hover:scale-105 shadow-indigo-200/50 group border-4 border-white/80"
+          className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] hover:from-[var(--accent)] hover:to-[#0f5f89] shadow-xl flex items-center justify-center text-white transition-all duration-300 active:scale-90 hover:scale-105 shadow-[var(--primary)]/20 group border-4 border-white/80"
         >
           <Bot size={22} className="group-hover:rotate-12 transition duration-300" />
         </button>

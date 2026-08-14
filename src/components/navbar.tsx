@@ -132,8 +132,8 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
           <Menu size={18} />
         </button>
         <div>
-          <h1 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-900">Dashboard</h1>
-          <p className="mt-1 text-xs text-indigo-600">
+          <h1 className="text-xs sm:text-sm font-semibold uppercase tracking-[0.22em] text-slate-900">Dashboard</h1>
+          <p className="hidden sm:block mt-1 text-xs text-[var(--primary)]">
             {new Date().toLocaleDateString("en-US", {
               weekday: "long",
               year: "numeric",
@@ -144,8 +144,8 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <div className="hidden sm:flex min-w-0 items-center gap-3 rounded-[18px] border border-indigo-100 bg-white/90 px-4 py-2 shadow-[0_16px_40px_rgba(99,102,241,0.06)] transition focus-within:border-indigo-300 focus-within:bg-white">
-            <Search size={14} className="text-indigo-300" />
+          <div className="hidden sm:flex min-w-0 items-center gap-3 rounded-[18px] border border-[var(--primary)]/10 bg-white/90 px-4 py-2 shadow-[0_16px_40px_rgba(22,144,199,0.05)] transition focus-within:border-[var(--primary)]/30 focus-within:bg-white">
+            <Search size={14} className="text-[var(--primary)]/30" />
             <input
               type="search"
               value={query}
@@ -171,13 +171,13 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                 setNotifOpen((open) => !open)
                 setDropdownOpen(false)
               }}
-              className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-indigo-100 bg-white/90 text-slate-600 transition hover:bg-slate-50 ${notifOpen ? "ring-1 ring-indigo-200" : ""}`}
+              className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-[var(--primary)]/10 bg-white/90 text-slate-600 transition hover:bg-slate-50 ${notifOpen ? "ring-1 ring-[var(--primary)]/20" : ""}`}
             >
               <Bell size={16} />
               {notifications.some(n => !n.is_read) && (
                 <>
-                  <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-orange-400/90 shadow-[0_0_0_4px_rgba(248,113,113,0.14)] animate-ping" />
-                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-orange-400" />
+                  <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--secondary)]/90 shadow-[0_0_0_4px_rgba(252,132,2,0.14)] animate-ping" />
+                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[var(--secondary)]" />
                 </>
               )}
             </button>
@@ -198,9 +198,9 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                         key={notification.id}
                         type="button"
                         onClick={() => markAsRead(notification.id)}
-                        className={`flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition ${!notification.is_read ? "bg-indigo-50/40 hover:bg-indigo-50/70" : "hover:bg-slate-100"}`}
+                        className={`flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition ${!notification.is_read ? "bg-[var(--primary)]/[0.03] hover:bg-[var(--primary)]/[0.06]" : "hover:bg-slate-50"}`}
                       >
-                        {!notification.is_read && <span className="mt-1.5 inline-flex h-2 w-2 shrink-0 rounded-full bg-indigo-500" />}
+                        {!notification.is_read && <span className="mt-1.5 inline-flex h-2 w-2 shrink-0 rounded-full bg-[var(--primary)]" />}
                         <div className="min-w-0">
                           <p className="font-semibold text-slate-900 text-xs">{notification.title}</p>
                           <p className="text-xs text-slate-600 mt-0.5 leading-normal">{notification.message}</p>
@@ -209,7 +209,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                       </button>
                     ))
                   )}
-                  <button type="button" className="w-full border-t border-slate-200/70 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600 transition hover:bg-indigo-50">
+                  <button type="button" className="w-full border-t border-slate-200/70 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.24em] text-[var(--primary)] transition hover:bg-[var(--primary)]/[0.04]">
                     View all notifications
                   </button>
                 </div>
@@ -224,16 +224,16 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                 setDropdownOpen((open) => !open)
                 setNotifOpen(false)
               }}
-              className={`inline-flex items-center gap-3 rounded-[16px] border border-indigo-100 bg-white/90 px-3 py-2 transition hover:bg-slate-50 ${dropdownOpen ? "ring-1 ring-indigo-200" : ""}`}
+              className={`inline-flex items-center gap-1.5 sm:gap-3 rounded-[16px] border border-[var(--primary)]/10 bg-white/90 p-1 sm:px-3 sm:py-2 transition hover:bg-slate-50 ${dropdownOpen ? "ring-1 ring-[var(--primary)]/20" : ""}`}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white shadow-md">
                 {profile ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() : "U"}
               </div>
-              <div className="min-w-0 text-left">
+              <div className="hidden sm:block min-w-0 text-left">
                 <p className="truncate text-sm font-semibold text-slate-900">{profile ? profile.name : "Loading..."}</p>
-                <p className="text-xs text-indigo-600">{profile ? profile.role.replace(/_/g, " ") : "Loading..."}</p>
+                <p className="text-xs text-[var(--primary)]">{profile ? profile.role.replace(/_/g, " ") : "Loading..."}</p>
               </div>
-              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform duration-150 ${dropdownOpen ? "rotate-180" : "rotate-0"}`} />
+              <ChevronDown className={`hidden sm:block h-4 w-4 text-slate-500 transition-transform duration-150 ${dropdownOpen ? "rotate-180" : "rotate-0"}`} />
             </button>
 
             {dropdownOpen && (
@@ -244,9 +244,9 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                     router.push(profilePath)
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-[var(--primary)]/[0.04]"
                 >
-                  <User size={14} className="text-indigo-500" />
+                  <User size={14} className="text-[var(--primary)]" />
                   My Profile
                 </button>
                 <button
@@ -255,9 +255,9 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                     router.push(settingsPath)
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-[var(--primary)]/[0.04]"
                 >
-                  <Settings size={14} className="text-indigo-500" />
+                  <Settings size={14} className="text-[var(--primary)]" />
                   Settings
                 </button>
                 <button
@@ -266,9 +266,9 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                     router.push("/dashboard/change-password")
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-[var(--primary)]/[0.04]"
                 >
-                  <KeyRound size={14} className="text-indigo-500" />
+                  <KeyRound size={14} className="text-[var(--primary)]" />
                   Change Password
                 </button>
                 <div className="border-t border-slate-200/70" />

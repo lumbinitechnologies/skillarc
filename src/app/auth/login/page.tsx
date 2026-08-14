@@ -33,9 +33,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.16),_transparent_24%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.08),_transparent_20%),linear-gradient(180deg,#f8fbff,#eff6ff)] flex items-center justify-center px-4 py-10">
-      <div className="grid w-full max-w-5xl grid-cols-1 gap-8 overflow-hidden rounded-[32px] border border-white/70 bg-white/90 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-600 p-10 text-white">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(22,144,199,0.12),_transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(252,132,2,0.06),_transparent_20%),linear-gradient(180deg,#fbfdff,#eff6ff)] flex items-center justify-center px-4 py-6 sm:py-10">
+      <div className="grid w-full max-w-5xl grid-cols-1 overflow-hidden rounded-[32px] border border-white/70 bg-white/90 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="hidden lg:block relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[var(--primary)] via-[var(--accent)] to-sky-600 p-10 text-white">
           <div className="absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_transparent_55%)]" />
           <div className="relative flex h-full flex-col justify-between gap-10">
             <div>
@@ -62,12 +62,12 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
-        <div className="p-10">
-          <div className="mb-8 flex justify-center px-1">
-            <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-24 w-24 object-contain transition-transform duration-200 hover:scale-[1.03]" />
+        <div className="p-6 sm:p-10">
+          <div className="mb-6 flex justify-center px-1">
+            <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-20 w-20 object-contain transition-transform duration-200 hover:scale-[1.03]" />
           </div>
-          <div className="mb-8 space-y-3">
-            <h1 className="text-3xl font-black text-slate-950">Sign in to your account</h1>
+          <div className="mb-6 space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950">Sign in to your account</h1>
             <p className="text-sm text-slate-500">Enter your email and password to sign in.</p>
           </div>
           {error && (
@@ -75,7 +75,7 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700">Email address</label>
               <input
@@ -83,7 +83,7 @@ export default function LoginPage() {
                 placeholder="you@institution.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                className="mt-2.5 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
               />
             </div>
             <div>
@@ -92,7 +92,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => router.push("/auth/forgot-password")}
-                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition hover:underline"
+                  className="text-xs font-semibold text-[var(--primary)] hover:text-[var(--accent)] transition hover:underline"
                 >
                   Forgot password?
                 </button>
@@ -102,7 +102,7 @@ export default function LoginPage() {
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                className="mt-2.5 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
               />
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function LoginPage() {
             type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="mt-10 inline-flex w-full cursor-pointer items-center justify-center rounded-3xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="mt-8 inline-flex w-full cursor-pointer items-center justify-center rounded-3xl bg-[var(--primary)] hover:bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition active:scale-97 hover-button-scale disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

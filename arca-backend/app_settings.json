@@ -1,8 +1,8 @@
 {
   "user": {
-    "name": "test1orgadmin",
-    "email": "nikhilkrishnasathvik2007@gmail.com",
-    "role": "ORG_ADMIN"
+    "name": "Nikhil Krishna Sathvik",
+    "email": "iskalasailajatest4@gmail.com",
+    "role": "Student"
   },
   "rag_config": {
     "auto_process_documents": true,

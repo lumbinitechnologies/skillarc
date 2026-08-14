@@ -181,7 +181,7 @@ export default function ParentDashboardClient({
             </div>
 
             {/* Split Schedule & Courses Content */}
-            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
               
               {/* Timetable Section */}
               <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm space-y-5">
