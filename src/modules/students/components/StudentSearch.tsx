@@ -26,16 +26,22 @@ export default function StudentSearch({
           w-full
           rounded-2xl
           border
+          border-slate-200/80
           bg-white
           pl-11
           pr-4
           text-sm
           shadow-sm
           outline-none
-          transition
-          focus:border-blue-500
+          transition-all
+          duration-300
+          focus:border-[#6C63FF]
           focus:ring-2
-          focus:ring-blue-100
+          focus:ring-indigo-100
+          hover:border-slate-300
+          hover:shadow-md
+          text-slate-800
+          placeholder-slate-400
         "
       />
     </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { BookOpen, GraduationCap, LayoutGrid, Award, CheckCircle2, ChevronRight, Settings } from "lucide-react"
 
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
@@ -31,14 +32,23 @@ export default function ProgramHeadDashboardClient({
   ])
 
   return (
-    <div style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}>
+    <motion.div 
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}
+    >
       
       {/* Header */}
-      <div style={{
-        backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
-        border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
+          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 44, height: 44, borderRadius: 12,
@@ -67,7 +77,7 @@ export default function ProgramHeadDashboardClient({
         >
           <BookOpen size={13} /> Manage Curriculum
         </button>
-      </div>
+      </motion.div>
 
       {/* Stats Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
@@ -75,12 +85,18 @@ export default function ProgramHeadDashboardClient({
           { label: "Active Cohorts", value: cohorts.length, accent: "#ede9fe", text: "#6d28d9", icon: <LayoutGrid size={17} color="#6d28d9" /> },
           { label: "Core Courses", value: stats.coursesCount, accent: "#dbeafe", text: "#1d4ed8", icon: <BookOpen size={17} color="#1d4ed8" /> },
           { label: "Total Students Enrolled", value: stats.studentsCount, accent: "#fef3c7", text: "#b45309", icon: <GraduationCap size={17} color="#b45309" /> },
-        ].map(s => (
-          <div key={s.label} style={{
-            backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
-            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-            display: "flex", alignItems: "center", gap: 14,
-          }}>
+        ].map((s, idx) => (
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.12 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -6 }}
+            style={{
+              backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
+              border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(20,35,75,0.08)",
+              display: "flex", alignItems: "center", gap: 14,
+            }}>
             <div style={{
               width: 40, height: 40, borderRadius: 10, backgroundColor: s.accent,
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -91,7 +107,7 @@ export default function ProgramHeadDashboardClient({
               <p style={{ fontSize: 22, fontWeight: 800, color: s.text, lineHeight: 1 }}>{s.value}</p>
               <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.label}</p>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
@@ -99,11 +115,15 @@ export default function ProgramHeadDashboardClient({
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16 }}>
         
         {/* Left Side: Active Student Cohorts */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          display: "flex", flexDirection: "column", gap: 14,
-        }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Academic Cohorts & Batches</h2>
             <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Monitor batch schedules, student density, and syllabus progress</p>
@@ -144,14 +164,18 @@ export default function ProgramHeadDashboardClient({
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Right Side: Core Syllabus Programs */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          display: "flex", flexDirection: "column", gap: 14,
-        }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Mapped Core Courses</h2>
             <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Curricular streams assigned to this program</p>
@@ -191,9 +215,9 @@ export default function ProgramHeadDashboardClient({
               ))
             )}
           </div>
-        </div>
+        </motion.div>
 
       </div>
-    </div>
+    </motion.div>
   )
 }

@@ -2,6 +2,31 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
 import { 
   Users, 
   Sparkles, 
@@ -266,18 +291,29 @@ export default function ProjectGroupsClient({
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.04),_transparent_25%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.03),_transparent_20%)] p-6 lg:p-8">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.04),_transparent_25%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.03),_transparent_20%)] p-6 lg:p-8"
+    >
       
       {/* Header Banner */}
-      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <motion.div
+        variants={itemVariants}
+        className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center"
+      >
         <div>
           <h1 className="text-3xl font-black tracking-tight text-slate-900">Project Group Allocation</h1>
           <p className="mt-2 text-sm text-slate-500">Divide, balance, and configure project groups with Google Gemini AI integration.</p>
         </div>
-      </div>
+      </motion.div>
 
       {/* Shared Tabs Navigation */}
-      <div className="mb-8 flex border-b border-slate-200">
+      <motion.div
+        variants={itemVariants}
+        className="mb-8 flex border-b border-slate-200"
+      >
         <button
           onClick={() => setActiveTab("projects")}
           className={`flex items-center gap-2 border-b-2 px-6 py-3.5 text-sm font-semibold transition ${
@@ -289,7 +325,7 @@ export default function ProjectGroupsClient({
           <FolderOpen size={16} />
           {profile.role === ROLES.STUDENT ? "My Allocated Projects" : "Published Projects"}
         </button>
-
+ 
         {profile.role === ROLES.FACULTY && (
           <button
             onClick={() => setActiveTab("allocate")}
@@ -303,9 +339,10 @@ export default function ProjectGroupsClient({
             AI Segregation Workspace
           </button>
         )}
-      </div>
+      </motion.div>
 
       {/* Workspace Area */}
+      <motion.div variants={itemVariants} className="w-full">
       {activeTab === "projects" && (
         <div className="space-y-6">
           {profile.role === ROLES.STUDENT ? (
@@ -667,7 +704,8 @@ export default function ProjectGroupsClient({
           </div>
         </div>
       )}
+      </motion.div>
 
-    </div>
+    </motion.div>
   )
 }
