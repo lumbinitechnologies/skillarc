@@ -33,7 +33,15 @@ export default function EditorialNavbar() {
         </Link>
 
         {/* Unique Magnetic "Menu" Trigger Pill */}
-        <div className="pointer-events-auto flex items-center gap-4 font-sans">
+        <div className="pointer-events-auto flex items-center gap-3 font-sans">
+          <Link
+            href="/auth/login"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
+          >
+            <span>Log In</span>
+          </Link>
+
           <button
             onClick={() => setIsOpen(!isOpen)}
             className={`group relative flex items-center gap-3 px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${isOpen
@@ -125,7 +133,11 @@ export default function EditorialNavbar() {
               <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center pt-8 border-t border-[#3A6DAF]/30 font-mono text-xs text-[#94BAC4]">
                 <div>SKILLARC ACADEMIC OS // 2026 EDITION</div>
                 <div className="flex gap-6 mt-4 sm:mt-0 text-[#ECDFCB]">
-                  <Link href="/auth/login" className="hover:text-[#EAAD62] transition-colors flex items-center gap-1">
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setIsOpen(false)}
+                    className="hover:text-[#EAAD62] transition-colors flex items-center gap-1"
+                  >
                     <span>ACCOUNT LOG IN</span>
                     <span className="text-[#E57D37]">→</span>
                   </Link>

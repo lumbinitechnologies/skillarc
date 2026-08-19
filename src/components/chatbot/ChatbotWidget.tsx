@@ -1,7 +1,8 @@
 "use client"
 
 import React, { useEffect, useRef, useState, useMemo } from "react"
-import { Sparkles, Send, X, Bot, User, FileText, Trash2 } from "lucide-react"
+import { Sparkles, Send, X, Bot, User, FileText, Trash2, Terminal } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 
 interface SourceCitation {
   document_id: string
@@ -233,160 +234,192 @@ export function ChatbotWidget() {
 
       if (line.startsWith("- ") || line.startsWith("* ")) {
         return (
-          <li key={i} className="ml-4 list-disc text-slate-700 mt-1 pl-1">
+          <li key={i} className="ml-4 list-disc text-slate-700 mt-1 pl-0.5">
             {parsedLine}
           </li>
         )
       }
-      return <p key={i} className="mt-1.5 leading-relaxed text-slate-700">{parsedLine}</p>
+      return <p key={i} className="mt-1 leading-relaxed text-slate-700">{parsedLine}</p>
     })
   }
 
   return (
     <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-50 font-sans">
-      <div className="flex items-end flex-col gap-3">
+      <div className="flex items-end flex-col gap-3.5">
 
         {/* Chat Window Panel */}
-        {open && (
-          <div className="w-full sm:w-[360px] h-[calc(100vh-140px)] sm:h-[520px] max-h-[560px] bg-white/75 backdrop-blur-xl border border-white/40 shadow-2xl rounded-[32px] overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-6">
-
-            {/* Header */}
-            <div className="px-5 py-4 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white flex items-center justify-between shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
-                  <Sparkles size={20} className="text-white animate-pulse" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm font-['Plus_Jakarta_Sans'] tracking-tight">Arca AI</h3>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="w-1.5 h-1.5 bg-[#00C2A8] rounded-full animate-ping" />
-                    <span className="text-[10px] text-white/80 font-medium">Learn smarter. Go further.</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleClear}
-                  title="Reset conversation"
-                  className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95"
-                >
-                  <Trash2 size={14} className="text-white" />
-                </button>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition active:scale-95"
-                >
-                  <X size={15} className="text-white" />
-                </button>
-              </div>
-            </div>
-
-            {/* Message Area */}
-            <div
-              ref={listRef}
-              className="flex-1 overflow-y-auto p-4 space-y-4 bg-gradient-to-b from-slate-50/50 to-slate-100/30"
-              style={{ scrollBehavior: "smooth" }}
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 250, damping: 25 }}
+              className="w-full sm:w-[380px] h-[calc(100vh-140px)] sm:h-[550px] max-h-[580px] bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-2xl rounded-[28px] overflow-hidden flex flex-col relative"
             >
-              {messages.map((m) => (
-                <div key={m.id} className={`flex items-start gap-2.5 ${m.from === "user" ? "justify-end" : "justify-start"}`}>
 
-                  {/* Bot Avatar */}
-                  {m.from === "bot" && (
-                    <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/[0.04] text-[var(--primary)] border border-[var(--primary)]/10 flex items-center justify-center shrink-0 shadow-sm mt-1">
-                      <Bot size={14} />
-                    </div>
-                  )}
-
-                  <div className="max-w-[78%] space-y-1">
-                    <div
-                      className={`text-xs p-3.5 shadow-sm rounded-2xl ${
-                        m.from === "user"
-                          ? "bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] text-white rounded-tr-none font-medium"
-                          : "bg-white border border-slate-100 text-slate-800 rounded-tl-none"
-                      }`}
-                    >
-                      {m.from === "user" ? m.text : formatText(m.text)}
-
-                      {/* Cited Sources */}
-                      {m.from === "bot" && m.sources && m.sources.length > 0 && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1">
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                            <FileText size={10} /> Sources Cited:
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {Array.from(new Set(m.sources.map(s => s.filename))).map((filename, sidx) => (
-                              <span
-                                key={sidx}
-                                title={m.sources?.filter(s => s.filename === filename).map(s => s.snippet).join("\n\n")}
-                                className="text-[9px] font-bold text-[var(--primary)] bg-[var(--primary)]/[0.05] border border-[var(--primary)]/10 rounded px-1.5 py-0.5 cursor-help max-w-[140px] truncate block"
-                              >
-                                {filename}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-[9px] text-slate-400 block px-1">
-                      {m.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+              {/* Header */}
+              <div className="px-5 py-4 bg-white border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-50 border border-slate-200/60 rounded-2xl flex items-center justify-center shadow-sm">
+                    <Sparkles size={18} className="text-slate-800" />
                   </div>
-
-                  {/* User Avatar */}
-                  {m.from === "user" && (
-                    <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center shrink-0 shadow-sm mt-1">
-                      <User size={13} />
+                  <div>
+                    <h3 className="font-extrabold text-sm font-['Plus_Jakarta_Sans'] text-slate-900 tracking-tight leading-none">Arca AI</h3>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="w-1.5 h-1.5 bg-[#EAAD62] rounded-full animate-pulse" />
+                      <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider font-['Space_Mono',monospace]">Secure Uplink Connected</span>
                     </div>
-                  )}
-
-                </div>
-              ))}
-
-              {/* Loader Skeleton (Glass 2.0 feel) */}
-              {loading && (
-                <div className="flex items-start gap-2.5 animate-pulse">
-                  <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/[0.04] border border-[var(--primary)]/10 flex items-center justify-center shrink-0 shadow-sm mt-1">
-                    <Bot size={14} className="text-slate-400" />
-                  </div>
-                  <div className="max-w-[78%] bg-white border border-slate-100 rounded-2xl rounded-tl-none p-3.5 space-y-2 w-full shadow-sm">
-                    <div className="h-2 bg-slate-150 rounded w-5/6" />
-                    <div className="h-2 bg-slate-150 rounded w-4/6" />
-                    <div className="h-2 bg-slate-150 rounded w-2/6" />
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Input Box */}
-            <div className="p-3.5 border-t border-slate-100 bg-white/90 backdrop-blur-md rounded-b-[32px] flex items-center gap-2">
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                placeholder="Ask EduRAG a question..."
-                className="flex-1 bg-slate-50 border border-slate-100 text-xs text-slate-800 rounded-2xl px-4 py-2.5 outline-none hover:border-slate-200 focus:border-[var(--primary)] focus:bg-white transition"
-              />
-              <button
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
-                className="w-9 h-9 rounded-2xl bg-[var(--primary)] hover:bg-[var(--accent)] text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleClear}
+                    title="Reset conversation"
+                    className="w-8 h-8 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-250 flex items-center justify-center transition active:scale-95 text-slate-400 hover:text-slate-700"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Message Area */}
+              <div
+                ref={listRef}
+                className="flex-1 overflow-y-auto p-5 space-y-4 bg-slate-50/20"
+                style={{ scrollBehavior: "smooth" }}
               >
-                <Send size={14} />
-              </button>
-            </div>
+                {messages.map((m) => (
+                  <motion.div
+                    key={m.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className={`flex items-start gap-2.5 ${m.from === "user" ? "justify-end" : "justify-start"}`}
+                  >
 
-          </div>
-        )}
+                    {/* Bot Avatar */}
+                    {m.from === "bot" && (
+                      <div className="w-7 h-7 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                        <Terminal size={12} />
+                      </div>
+                    )}
 
-        {/* Pulsing Floating Action Button (Glass 2.0 glow) */}
-        <button
+                    <div className="max-w-[78%] space-y-1">
+                      <div
+                        className={`text-xs p-3.5 leading-relaxed rounded-2xl ${
+                          m.from === "user"
+                            ? "bg-slate-900 text-white rounded-tr-none font-semibold shadow-sm"
+                            : "bg-slate-50/70 border border-slate-200/50 text-slate-800 rounded-tl-none font-medium"
+                        }`}
+                      >
+                        {m.from === "user" ? m.text : formatText(m.text)}
+
+                        {/* Cited Sources */}
+                        {m.from === "bot" && m.sources && m.sources.length > 0 && (
+                          <div className="mt-3 pt-2.5 border-t border-slate-200/60 space-y-1">
+                            <p className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                              <FileText size={10} /> Sources Cited:
+                            </p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Array.from(new Set(m.sources.map(s => s.filename))).map((filename, sidx) => (
+                                <span
+                                  key={sidx}
+                                  title={m.sources?.filter(s => s.filename === filename).map(s => s.snippet).join("\n\n")}
+                                  className="text-[9px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 cursor-help max-w-[140px] truncate block hover:bg-slate-200 transition-colors"
+                                >
+                                  {filename}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[9px] text-slate-400 block px-1">
+                        {m.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+
+                    {/* User Avatar */}
+                    {m.from === "user" && (
+                      <div className="w-7 h-7 rounded-xl bg-slate-900 text-[#ECDFCB] border border-slate-800 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                        <User size={12} />
+                      </div>
+                    )}
+
+                  </motion.div>
+                ))}
+
+                {/* Loader Skeleton */}
+                {loading && (
+                  <div className="flex items-start gap-2.5 animate-pulse">
+                    <div className="w-7 h-7 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 shadow-sm mt-0.5">
+                      <Terminal size={12} className="text-slate-400" />
+                    </div>
+                    <div className="max-w-[78%] bg-slate-50/70 border border-slate-200/50 rounded-2xl rounded-tl-none p-3.5 space-y-2 w-full shadow-sm">
+                      <div className="h-2 bg-slate-200 rounded w-5/6" />
+                      <div className="h-2 bg-slate-200 rounded w-4/6" />
+                      <div className="h-2 bg-slate-200 rounded w-2/6" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input Box */}
+              <div className="p-3.5 border-t border-slate-100 bg-slate-50/50 rounded-b-[28px] flex items-center gap-2">
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  placeholder="Type a message or query..."
+                  className="flex-1 bg-white border border-slate-200/85 text-xs text-slate-800 rounded-2xl px-4 py-3 outline-none hover:border-slate-350 focus:border-slate-900 transition-all duration-300 font-medium placeholder-slate-400"
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={loading || !input.trim()}
+                  className="w-10 h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-md shadow-slate-100 transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer border-none outline-none"
+                >
+                  <Send size={13} />
+                </button>
+              </div>
+
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Pulsing Floating Action Button */}
+        <motion.button
           onClick={() => setOpen((o) => !o)}
           aria-label="Open AI assistant"
-          className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] hover:from-[var(--accent)] hover:to-[#0f5f89] shadow-xl flex items-center justify-center text-white transition-all duration-300 active:scale-90 hover:scale-105 shadow-[var(--primary)]/20 group border-4 border-white/80"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="w-14 h-14 rounded-full bg-slate-900 border-2 border-slate-800 text-[#ECDFCB] shadow-xl flex items-center justify-center transition-all duration-300 shadow-slate-950/20 group cursor-pointer"
         >
-          <Bot size={22} className="group-hover:rotate-12 transition duration-300" />
-        </button>
+          <AnimatePresence mode="wait">
+            {open ? (
+              <motion.div
+                key="close"
+                initial={{ rotate: -90, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                exit={{ rotate: 90, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <X size={20} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="open"
+                initial={{ rotate: 90, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                exit={{ rotate: -90, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Sparkles size={20} className="text-[#EAAD62] animate-pulse" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
 
       </div>
     </div>

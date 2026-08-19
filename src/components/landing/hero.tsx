@@ -31,6 +31,31 @@ const INSTRUMENTS = [
   },
 ]
 
+const heroVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.15,
+      delayChildren: 0.1,
+    }
+  }
+}
+
+const lineVariants = {
+  hidden: { y: 35, opacity: 0, filter: "blur(4px)" },
+  visible: {
+    y: 0,
+    opacity: 1,
+    filter: "blur(0px)",
+    transition: {
+      type: "spring" as const,
+      stiffness: 110,
+      damping: 18,
+    }
+  }
+}
+
 export default function Hero() {
   const [active, setActive] = useState(0)
 
@@ -47,7 +72,12 @@ export default function Hero() {
         <section className="relative min-h-screen pt-32 px-6 sm:px-12 md:px-16 flex flex-col justify-between z-10 border-b border-[#0B132B]/20">
 
           {/* Headline Display Block */}
-          <div className="my-auto py-16 z-10 relative">
+          <motion.div
+            variants={heroVariants}
+            initial="hidden"
+            animate="visible"
+            className="my-auto py-16 z-10 relative"
+          >
 
             {/* Kinetic Floating Badge */}
             <motion.div
@@ -62,22 +92,26 @@ export default function Hero() {
             </motion.div>
 
             <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[105px] leading-[0.9] font-black uppercase tracking-tight text-[#0B132B]">
-              <span>EVERYTHING YOUR </span>
-              <br />
-              <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#0B132B] text-[#EFEAD8] text-xs font-['Space_Mono',monospace] tracking-widest uppercase align-middle mr-4 shadow-xl select-none font-bold">
-                <span className="w-2 h-2 rounded-full bg-[#E57D37]" />
-                ✦ OS CORE
-              </span>
-              <span className="font-['Playfair_Display',serif] italic font-bold text-[#E57D37] lowercase text-6xl sm:text-8xl md:text-9xl tracking-normal">
-                institution{" "}
-              </span>
-              <span className="text-[#0B132B]">NEEDS.</span>
-              <br />
-              <span className="font-light tracking-widest text-[#0B132B]/80">ONE PLATFORM.</span>
+              <motion.span variants={lineVariants} className="block">
+                EVERYTHING YOUR
+              </motion.span>
+              <motion.span variants={lineVariants} className="block mt-2">
+                <span className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-[#0B132B] text-[#EFEAD8] text-xs font-['Space_Mono',monospace] tracking-widest uppercase align-middle mr-4 shadow-xl select-none font-bold">
+                  <span className="w-2 h-2 rounded-full bg-[#E57D37]" />
+                  ✦ OS CORE
+                </span>
+                <span className="font-['Playfair_Display',serif] italic font-bold text-[#E57D37] lowercase text-6xl sm:text-8xl md:text-9xl tracking-normal">
+                  institution{" "}
+                </span>
+                <span className="text-[#0B132B]">NEEDS.</span>
+              </motion.span>
+              <motion.span variants={lineVariants} className="block mt-2 font-light tracking-widest text-[#0B132B]/80">
+                ONE PLATFORM.
+              </motion.span>
             </h1>
 
             {/* Subtext and Main CTA */}
-            <div className="mt-16 grid grid-cols-1 md:grid-cols-12 gap-8 items-end w-full">
+            <motion.div variants={lineVariants} className="mt-16 grid grid-cols-1 md:grid-cols-12 gap-8 items-end w-full">
               <p className="md:col-span-6 font-['Space_Mono',monospace] text-xs text-[#0B132B]/90 leading-relaxed uppercase tracking-wider font-bold">
                 {"{ SkillArc unifies institutions, departments, programs, faculty, and students into a singular high-performance visual architecture. }"}
               </p>
@@ -95,8 +129,8 @@ export default function Hero() {
                   <ArrowUpRight className="text-[#EAAD62] group-hover:text-[#EFEAD8] transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" />
                 </button>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Scroll Indicator */}
           <div className="py-5 border-t border-[#0B132B]/20 flex justify-between items-center font-['Space_Mono',monospace] text-xs text-[#0B132B] font-bold">
@@ -109,7 +143,13 @@ export default function Hero() {
         <section id="instruments-section" className="relative z-10 py-28 bg-[#EFEAD8]">
           <div className="max-w-7xl mx-auto px-6 lg:px-8">
 
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 pb-6 border-b border-[#0B132B]/20">
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+              className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 pb-6 border-b border-[#0B132B]/20"
+            >
               <div>
                 <div className="font-['Space_Mono',monospace] text-xs text-[#3A6DAF] tracking-[0.2em] uppercase mb-2 flex items-center gap-2 font-bold">
                   <span className="text-[#E57D37]">//</span>
@@ -122,7 +162,7 @@ export default function Hero() {
               <p className="font-['Space_Mono',monospace] text-xs text-[#0B132B]/70 max-w-xs mt-4 md:mt-0 uppercase font-bold">
                 Hover over modules to inspect real-time node processing output.
               </p>
-            </div>
+            </motion.div>
 
             <div className="grid lg:grid-cols-12 gap-12 items-start">
 
@@ -131,8 +171,12 @@ export default function Hero() {
                 {INSTRUMENTS.map((item, idx) => {
                   const isActive = active === idx
                   return (
-                    <div
+                    <motion.div
                       key={item.id}
+                      initial={{ opacity: 0, y: 30 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true, margin: "-120px" }}
+                      transition={{ duration: 0.5, delay: idx * 0.1 }}
                       onMouseEnter={() => setActive(idx)}
                       onClick={() => setActive(idx)}
                       className={`cursor-pointer p-8 rounded-3xl transition-all duration-300 border-2 ${isActive
@@ -164,14 +208,20 @@ export default function Hero() {
                       <p className={`font-['Space_Mono',monospace] text-xs leading-relaxed font-bold ${isActive ? "text-[#EFEAD8]/80" : "text-[#0B132B]/70"}`}>
                         {item.desc}
                       </p>
-                    </div>
+                    </motion.div>
                   )
                 })}
               </div>
 
               {/* Right Column: Embedded Dynamic Console */}
               <div className="lg:col-span-6 lg:sticky lg:top-32">
-                <div className="w-full aspect-[4/3] bg-[#0B132B] text-[#EFEAD8] border-2 border-[#0B132B] rounded-3xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 0.6, type: "spring", stiffness: 90 }}
+                  className="w-full aspect-[4/3] bg-[#0B132B] text-[#EFEAD8] border-2 border-[#0B132B] rounded-3xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden"
+                >
 
                   {/* Console Top Header */}
                   <div className="flex justify-between items-center pb-4 border-b border-white/15">
@@ -297,7 +347,7 @@ export default function Hero() {
                     </span>
                     <span>Port 443 // SSL</span>
                   </div>
-                </div>
+                </motion.div>
               </div>
 
             </div>
