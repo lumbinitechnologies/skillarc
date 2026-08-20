@@ -171,7 +171,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    router.push("/auth/login")
+    window.location.replace("/auth/login")
   }
 
   let baseItems = profile ? [...(roleMenus[profile.role] ?? [])] : []

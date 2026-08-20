@@ -4,6 +4,9 @@ import ChatbotWidget from "@/components/chatbot/ChatbotWidget"
 export const metadata = {
   title: "SkillArc LMS",
   description: "Learning Management System",
+  icons: {
+    icon: "/skillarc_logo.svg",
+  },
 }
 
 export default function RootLayout({

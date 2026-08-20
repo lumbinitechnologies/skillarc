@@ -90,7 +90,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
   async function handleLogout() {
     setDropdownOpen(false)
     await supabase.auth.signOut()
-    router.push("/auth/login")
+    window.location.replace("/auth/login")
   }
 
   async function markAsRead(id: string) {

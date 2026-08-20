@@ -26,15 +26,15 @@ export type UserContext = {
 export const getCurrentUserContext = cache(async (): Promise<UserContext | null> => {
   const supabase = await createSupabaseServerClient()
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession()
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  if (sessionError || !session?.user?.id) {
+  if (userError || !user?.id) {
     return null
   }
 
-  const userId = session.user.id
+  const userId = user.id
 
   const { data: actualProfile, error: profileError } = await supabase
     .from("users")
