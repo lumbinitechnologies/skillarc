@@ -99,8 +99,7 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
               className="h-8 w-auto object-contain brightness-0 contrast-200"
             />
             <div>
-              <span className="text-xl font-black uppercase tracking-tight text-[#0B132B] block leading-none">SkillArc</span>
-              <span className="text-[9px] font-mono text-[#0B132B]/50 uppercase tracking-widest font-black">Academic OS</span>
+              <span className="text-[13px] font-mono text-[#0B132B]/50 uppercase tracking-widest font-black">Academic OS</span>
             </div>
           </div>
           <p className="text-xs text-[#0B132B]/70 max-w-xs leading-relaxed font-mono font-bold">

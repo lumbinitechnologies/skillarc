@@ -58,15 +58,6 @@ export default function Ecosystem() {
         duration: 3,
         ease: "sine.inOut",
       })
-
-      gsap.to(".floating-card-2", {
-        y: 15,
-        rotation: 1,
-        repeat: -1,
-        yoyo: true,
-        duration: 3.5,
-        ease: "sine.inOut",
-      })
     }, containerRef)
 
     return () => ctx.revert()

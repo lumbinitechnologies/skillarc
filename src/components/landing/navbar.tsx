@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { label: "About", index: "05" },
 ]
 
-const MotionLink = motion(Link)
+const MotionLink = motion.create(Link)
 
 export default function EditorialNavbar() {
   const [isOpen, setIsOpen] = useState(false)

@@ -8,7 +8,7 @@ import { CtaSection, Footer } from "@/components/landing/footer"
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-[#0B132B] text-[#EFEAD8] antialiased overflow-x-hidden selection:bg-[#FF5500] selection:text-[#EFEAD8]">
+    <div className="min-h-screen bg-[#0B132B] text-[#EFEAD8] antialiased selection:bg-[#FF5500] selection:text-[#EFEAD8]">
       {/* 1. NAVBAR */}
       <LandingNavbar />
 

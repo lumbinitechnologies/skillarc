@@ -193,6 +193,7 @@
 
   html {
     font-family: var(--font-sans);
+    overflow-x: hidden;
   }
 
   body {
@@ -216,7 +217,6 @@
   .editorial-page {
     position: relative;
     isolation: isolate;
-    overflow-x: hidden;
     background: #0a0a0a;
   }
 

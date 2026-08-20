@@ -60,7 +60,7 @@ export default function SolutionsPage() {
   }, [])
 
   return (
-    <div className="editorial-page min-h-screen bg-[#EFEAD8] text-[#0B132B] antialiased overflow-x-hidden selection:bg-[#E57D37]/20 selection:text-[#E57D37] font-['Space_Grotesk',sans-serif]">
+    <div className="editorial-page min-h-screen bg-[#EFEAD8] text-[#0B132B] antialiased selection:bg-[#E57D37]/20 selection:text-[#E57D37] font-['Space_Grotesk',sans-serif]">
       <LandingNavbar />
 
       <section ref={heroRef} className="editorial-hero relative pt-40 pb-20 px-6 sm:px-12 md:px-16 flex flex-col justify-between overflow-hidden z-10 bg-[#0B132B] text-[#EFEAD8] border-b border-white/10">

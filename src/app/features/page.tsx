@@ -39,7 +39,7 @@ export default function FeaturesPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0E0F12] text-[#F4F4F0] antialiased overflow-x-hidden selection:bg-[#FF5500]/20 selection:text-[#FF5500]">
+    <div className="min-h-screen bg-[#0E0F12] text-[#F4F4F0] antialiased selection:bg-[#FF5500]/20 selection:text-[#FF5500]">
       <LandingNavbar />
 
       {/* GSAP EDITORIAL HERO */}

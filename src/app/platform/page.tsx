@@ -57,7 +57,7 @@ export default function PlatformPage() {
   }, [])
 
   return (
-    <div className="editorial-page min-h-screen bg-[#0A0A0A] text-[#F4F4F0] antialiased overflow-x-hidden selection:bg-[#38BDF8]/20 selection:text-[#38BDF8]">
+    <div className="editorial-page min-h-screen bg-[#0A0A0A] text-[#F4F4F0] antialiased selection:bg-[#38BDF8]/20 selection:text-[#38BDF8]">
       <LandingNavbar />
 
       <section ref={heroRef} className="editorial-hero relative pt-40 pb-20 px-6 sm:px-12 md:px-16 flex flex-col justify-between overflow-hidden z-10 border-b border-white/10">
