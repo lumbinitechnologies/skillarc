@@ -29,7 +29,9 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  if (pathname.startsWith("/api/")) {
+  const isPublicChatRoute = pathname === "/api/chatbot/public"
+
+  if (pathname.startsWith("/api/") && !isPublicChatRoute) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

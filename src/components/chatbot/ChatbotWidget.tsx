@@ -111,6 +111,7 @@ export function ChatbotWidget() {
 
   // User profile context state
   const [profile, setProfile] = useState<ChatProfile | null>(null)
+  const [profileStatus, setProfileStatus] = useState<"loading" | "authenticated" | "guest">("loading")
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -123,7 +124,10 @@ export function ChatbotWidget() {
         const res = await fetch("/api/auth/profile")
 
         if (!res.ok) {
-          if (res.status === 401) return
+          if (res.status === 401) {
+            setProfileStatus("guest")
+            return
+          }
           throw new Error(`Profile fetch failed: ${res.status}`)
         }
 
@@ -141,8 +145,12 @@ export function ChatbotWidget() {
           institution_id: data.institution_id,
           organization_id: data.organization_id,
         })
+        setProfileStatus("authenticated")
       } catch (err) {
         console.error("Failed to load profile for chatbot widget:", err)
+        // A failed profile lookup must never grant private access. Fall back
+        // to the restricted product-help experience.
+        setProfileStatus("guest")
       }
     }
     loadProfile()
@@ -169,7 +177,7 @@ export function ChatbotWidget() {
 
   // Welcome message based on active role
   const welcomeMessage = useMemo(() => {
-    if (!profile) return "Hello! How can I help you today?"
+    if (!profile) return "Hi! I’m Arca, SkillArc’s product guide. Ask me about the platform, its services, or how to get started. Sign in when you’re ready for account-specific academic help."
     const nameStr = profile.name
     switch (profile.role) {
       case "STUDENT":
@@ -187,7 +195,7 @@ export function ChatbotWidget() {
 
   // Setup initial message when profile is loaded
   useEffect(() => {
-    if (messages.length !== 0 || !profile) return
+    if (messages.length !== 0 || profileStatus === "loading") return
     let active = true
     queueMicrotask(() => {
       if (!active) return
@@ -201,7 +209,7 @@ export function ChatbotWidget() {
       ])
     })
     return () => { active = false }
-  }, [profile, welcomeMessage, messages.length])
+  }, [profile, profileStatus, welcomeMessage, messages.length])
 
   // Auto Scroll
   useEffect(() => {
@@ -211,7 +219,7 @@ export function ChatbotWidget() {
   }, [messages, open, loading])
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return
+    if (!input.trim() || loading || profileStatus === "loading") return
     const userMsgText = input.trim()
     setInput("")
 
@@ -235,14 +243,15 @@ export function ChatbotWidget() {
     setMessages((prev) => [...prev, { id: assistantId, from: "bot", text: "", timestamp: new Date() }])
 
     try {
-      const res = await fetch("/api/chatbot/chat", {
+      const endpoint = profileStatus === "authenticated" ? "/api/chatbot/chat" : "/api/chatbot/public"
+      const body = profileStatus === "authenticated"
+        ? { question: userMsgText, session_id: sessionId }
+        : { question: userMsgText }
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
-        body: JSON.stringify({
-          question: userMsgText,
-          session_id: sessionId
-        })
+        body: JSON.stringify(body)
       })
 
       if (!res.ok) {
@@ -253,7 +262,7 @@ export function ChatbotWidget() {
             const json = await res.json()
             if (json && json.error) {
               if (json.error.includes("fetch failed") || json.error.toLowerCase().includes("backend failure")) {
-                friendlyErrText = "Arca AI chatbot service is currently offline. Please ensure the backend server is running and try again in a few moments."
+                friendlyErrText = "Arca AI chatbot service is currently offline. Please try again in a few moments."
               } else {
                 friendlyErrText = json.error
               }
@@ -482,7 +491,7 @@ export function ChatbotWidget() {
               />
               <button
                 onClick={loading ? handleCancel : handleSend}
-                disabled={!loading && !input.trim()}
+                disabled={!loading && (!input.trim() || profileStatus === "loading")}
                 aria-label={loading ? "Stop response" : "Send message"}
                 className="w-10 h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-md shadow-slate-100 transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer border-none outline-none"
               >

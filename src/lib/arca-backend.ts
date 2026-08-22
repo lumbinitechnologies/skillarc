@@ -52,3 +52,18 @@ export function createArcaBackendHeaders(
     "X-Arca-Request-Id": requestId,
   }
 }
+
+/** Headers for the guest product-help route; intentionally contains no user identity. */
+export function createArcaPublicBackendHeaders(
+  requestId = randomUUID(),
+): Record<string, string> {
+  if (!BACKEND_SECRET) {
+    throw new Error("ARCA_BACKEND_SECRET is not configured")
+  }
+
+  return {
+    "Content-Type": "application/json",
+    "X-Arca-Gateway-Secret": BACKEND_SECRET,
+    "X-Arca-Request-Id": requestId,
+  }
+}
