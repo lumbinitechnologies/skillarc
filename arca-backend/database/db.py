@@ -12,11 +12,8 @@ load_dotenv(BACKEND_DIR / ".env")
 class Settings:
     """Central app settings loaded from environment variables."""
 
-    # Gemini (can keep these even if not used)
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-
-    # Groq (NEW)
+    # Arca's active provider is Groq. Gemini remains isolated in the
+    # independent Next.js Placements AI route.
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv(
         "GROQ_MODEL",

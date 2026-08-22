@@ -24,11 +24,24 @@ def validate_file(file: UploadFile) -> str:
     return ext
 
 
-async def save_upload_file(file: UploadFile, ext: str) -> tuple[str, int]:
-    """Persist an uploaded file to disk with a unique name.
-    Returns (saved_path, file_size_bytes)."""
-    unique_name = f"{uuid.uuid4().hex}.{ext}"
-    destination = settings.UPLOAD_DIR / unique_name
+async def save_upload_file(
+    file: UploadFile,
+    ext: str,
+    institution_id: str,
+    document_id: str,
+    organization_id: str | None = None,
+) -> tuple[str, int]:
+    """Persist an upload in an immutable organization/institution partition.
+
+    The returned path is an absolute server-local path for extraction. The
+    document's public ``storage_path`` must use ``storage_key`` below instead;
+    absolute paths must never be persisted as tenant metadata or returned to a
+    client.
+    """
+    organization_id = organization_id or "unscoped"
+    storage_key = storage_path(organization_id, institution_id, document_id, ext)
+    destination = settings.UPLOAD_DIR / Path(storage_key)
+    destination.parent.mkdir(parents=True, exist_ok=True)
 
     size = 0
     with open(destination, "wb") as out_file:
@@ -42,6 +55,24 @@ async def save_upload_file(file: UploadFile, ext: str) -> tuple[str, int]:
 
     await file.seek(0)
     return str(destination), size
+
+
+def storage_path(
+    organization_id: str, institution_id: str, document_id: str, ext: str
+) -> str:
+    """Return the canonical, tenant-partitioned relative storage key."""
+    # All path components are server-generated UUIDs (or the fixed fallback),
+    # never client supplied filenames. Keep this check defensive for callers.
+    components = (organization_id, institution_id, document_id)
+    if any(
+        not component or component in {".", ".."} or Path(component).name != component
+        for component in components
+    ):
+        raise InvalidFileError("Invalid tenant storage scope")
+    safe_ext = ext.lower().lstrip(".")
+    if safe_ext not in ALLOWED_EXTENSIONS:
+        raise InvalidFileError("Invalid file type")
+    return f"{organization_id}/{institution_id}/{document_id}.{safe_ext}"
 
 
 def delete_file(file_path: str) -> None:
