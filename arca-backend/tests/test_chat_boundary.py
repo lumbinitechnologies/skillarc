@@ -16,7 +16,9 @@ from services.settings_service import SETTINGS_FILE, get_settings
 from main import app
 from auth.dependencies import Principal
 from routes import chat as chat_routes
+from routes import public_chat as public_chat_routes
 from services.tenant_authorization import RelationshipScope
+from services.tenant_authorization import RelationshipLookupError
 
 
 from sqlalchemy.pool import StaticPool
@@ -363,3 +365,46 @@ class TestFastAPIRoutes:
         assert "event: token" in body
         assert "event: sources" in body
         assert "event: done" in body
+
+    def test_public_chat_stream_wraps_text_as_sse(self):
+        with patch.object(
+            public_chat_routes,
+            "generate_public_answer_stream",
+            return_value=iter(["Sign in", " to continue."]),
+        ):
+            body = "".join(public_chat_routes._public_sse_stream("What section am I in?"))
+
+        assert 'event: token\ndata: {"text": "Sign in"}' in body
+        assert 'event: token\ndata: {"text": " to continue."}' in body
+        assert "event: done" in body
+
+    def test_stream_scope_failure_is_sent_as_safe_sse_error(self, test_db):
+        principal = Principal(
+            user_id="11111111-1111-4111-8111-111111111111",
+            actor_user_id="11111111-1111-4111-8111-111111111111",
+            organization_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            institution_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            department_id=None,
+            role="STUDENT",
+            name="Test Student",
+            email="test@example.com",
+            is_impersonating=False,
+            issued_at=1,
+            expires_at=61,
+        )
+
+        with patch.object(
+            chat_service,
+            "resolve_relationship_scope",
+            side_effect=RelationshipLookupError("provider unavailable"),
+        ):
+            body = "".join(chat_service.ask_question_stream(
+                db=test_db,
+                question="What section am I in?",
+                principal=principal,
+                request_id="request-123",
+            ))
+
+        assert "event: error" in body
+        assert "ACADEMIC_CONTEXT_UNAVAILABLE" in body
+        assert "provider unavailable" not in body

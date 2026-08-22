@@ -27,6 +27,17 @@ class SessionAccessError(RuntimeError):
     """Raised when a requested session is not owned by the principal."""
 
 
+def _sse_event(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
+
+def _rollback_quietly(db: Session) -> None:
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
+
 def _clean_question(question: str) -> str:
     cleaned = question.strip()
     if not cleaned:
@@ -197,50 +208,91 @@ def ask_question_stream(
     database_context: Optional[str] = None,
     user_context: Optional[UserContextPayload] = None,
     principal: Principal | None = None,
+    request_id: str | None = None,
 ) -> Generator[str, None, None]:
     """Streaming version: yields SSE-formatted chunks, then a final sources event."""
-    question = _clean_question(question)
-    database_context = _bound_database_context(database_context)
-    top_k = top_k or settings.DEFAULT_TOP_K
-    session = get_or_create_session(db, session_id, principal)
+    try:
+        question = _clean_question(question)
+        database_context = _bound_database_context(database_context)
+        top_k = top_k or settings.DEFAULT_TOP_K
+        session = get_or_create_session(db, session_id, principal)
 
-    user_name = user_context.name if user_context else None
-    user_role = user_context.role if user_context else None
+        user_name = user_context.name if user_context else None
+        user_role = user_context.role if user_context else None
 
-    if principal:
-        try:
+        if principal:
             scope = resolve_relationship_scope(principal)
-        except RelationshipLookupError as exc:
-            raise RuntimeError("relationship scope unavailable") from exc
-        chunks = _authorized_search(db, question, top_k, principal, scope)
-    else:
-        chunks = similarity_search(question, top_k=top_k)
-    sources = _format_sources(chunks)
+            chunks = _authorized_search(db, question, top_k, principal, scope)
+        else:
+            chunks = similarity_search(question, top_k=top_k)
+        sources = _format_sources(chunks)
 
-    _save_message(db, session.id, "user", question)
+        _save_message(db, session.id, "user", question)
 
-    full_answer = ""
-    yield f"event: session\ndata: {json.dumps({'session_id': session.id})}\n\n"
+        full_answer = ""
+        yield _sse_event("session", {"session_id": session.id})
 
-    for text_piece in generate_answer_stream(
-        question,
-        chunks,
-        database_context=database_context,
-        user_name=user_name,
-        user_role=user_role,
-    ):
-        full_answer += text_piece
-        yield f"event: token\ndata: {json.dumps({'text': text_piece})}\n\n"
+        for text_piece in generate_answer_stream(
+            question,
+            chunks,
+            database_context=database_context,
+            user_name=user_name,
+            user_role=user_role,
+        ):
+            if not text_piece:
+                continue
+            full_answer += text_piece
+            yield _sse_event("token", {"text": text_piece})
 
-    _save_message(db, session.id, "assistant", full_answer, sources)
-    _log_query(db, question, chunks, principal)
+        if not full_answer:
+            full_answer = "I'm having trouble reaching the assistant right now. Please try again in a moment."
+            yield _sse_event("token", {"text": full_answer})
 
-    if session.title == "New Conversation":
-        session.title = question[:60] + ("..." if len(question) > 60 else "")
-        db.commit()
+        _save_message(db, session.id, "assistant", full_answer, sources)
+        _log_query(db, question, chunks, principal)
 
-    yield f"event: sources\ndata: {json.dumps({'sources': sources, 'chunks_retrieved': len(chunks)})}\n\n"
-    yield "event: done\ndata: {}\n\n"
+        if session.title == "New Conversation":
+            session.title = question[:60] + ("..." if len(question) > 60 else "")
+            db.commit()
+
+        yield _sse_event("sources", {"sources": sources, "chunks_retrieved": len(chunks)})
+        yield _sse_event("done", {})
+    except SessionAccessError:
+        _rollback_quietly(db)
+        logger.warning("chat stream session access failed request_id=%s", request_id or "unknown")
+        yield _sse_event("error", {
+            "code": "SESSION_NOT_FOUND",
+            "error": "This conversation is no longer available. Please start a new chat.",
+        })
+    except RelationshipLookupError:
+        _rollback_quietly(db)
+        logger.error("chat stream relationship scope failed request_id=%s", request_id or "unknown")
+        yield _sse_event("error", {
+            "code": "ACADEMIC_CONTEXT_UNAVAILABLE",
+            "error": "I couldn't access your academic profile right now. Please try again.",
+        })
+    except RuntimeError as exc:
+        _rollback_quietly(db)
+        logger.error(
+            "chat stream operational failure request_id=%s error_type=%s",
+            request_id or "unknown",
+            type(exc).__name__,
+        )
+        yield _sse_event("error", {
+            "code": "CHAT_SERVICE_UNAVAILABLE",
+            "error": "Arca is temporarily unavailable. Please try again shortly.",
+        })
+    except Exception as exc:
+        _rollback_quietly(db)
+        logger.exception(
+            "chat stream failed request_id=%s error_type=%s",
+            request_id or "unknown",
+            type(exc).__name__,
+        )
+        yield _sse_event("error", {
+            "code": "CHAT_STREAM_FAILED",
+            "error": "Arca couldn't complete that response. Please try again.",
+        })
 
 
 def list_sessions(db: Session, principal: Principal | None = None) -> List[ChatSession]:

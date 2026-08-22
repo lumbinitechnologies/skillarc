@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -39,6 +39,7 @@ def ask_stream(
     request: ChatRequest,
     db: Session = Depends(get_db),
     principal: Principal = Depends(require_principal),
+    http_request: Request = None,
 ):
     generator = chat_service.ask_question_stream(
         db,
@@ -47,6 +48,7 @@ def ask_stream(
         top_k=request.top_k,
         database_context=request.database_context,
         principal=principal,
+        request_id=getattr(getattr(http_request, "state", None), "request_id", None),
     )
     return StreamingResponse(generator, media_type="text/event-stream")
 

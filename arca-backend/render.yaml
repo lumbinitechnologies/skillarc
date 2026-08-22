@@ -5,9 +5,37 @@ services:
     buildCommand: pip install -r requirements.txt
     releaseCommand: python -m database.migrate
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ARCA_BACKEND_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
   - type: worker
     name: arca-ingestion-worker
     runtime: python
     buildCommand: pip install -r requirements.txt
     releaseCommand: python -m database.migrate
     startCommand: python -m worker.main
+    envVars:
+      - key: ARCA_BACKEND_SECRET
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
