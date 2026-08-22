@@ -10,7 +10,7 @@ type NotificationCategory = {
   facultyOnly?: boolean
 }
 
-export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
+const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   {
     key: "due_date",
     label: "Due Date",
