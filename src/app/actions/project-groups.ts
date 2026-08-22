@@ -86,6 +86,87 @@ export async function createProjectWithGroupsAction(data: {
   return { success: true, projectId: project.id }
 }
 
+export async function updateProjectGroupAction(data: {
+  groupId: string
+  groupName: string
+  memberIds: string[]
+  subjectId: string
+}) {
+  const supabase = await createSupabaseServerClient()
+
+  const { error: groupError } = await supabase
+    .from("project_groups")
+    .update({ group_name: data.groupName.trim() })
+    .eq("id", data.groupId)
+
+  if (groupError) {
+    return { success: false, error: groupError.message }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("group_members")
+    .delete()
+    .eq("group_id", data.groupId)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message }
+  }
+
+  if (data.memberIds.length > 0) {
+    const { error: memberError } = await supabase
+      .from("group_members")
+      .insert(data.memberIds.map((studentId) => ({
+        group_id: data.groupId,
+        student_id: studentId,
+      })))
+
+    if (memberError) {
+      return { success: false, error: memberError.message }
+    }
+  }
+
+  revalidatePath(`/dashboard/faculty/subjects/${data.subjectId}`)
+  return { success: true }
+}
+
+export async function sendProjectGroupUpdateAction(data: {
+  groupId: string
+  title: string
+  message: string
+  subjectId: string
+}) {
+  const supabase = await createSupabaseServerClient()
+
+  const { data: members, error: membersError } = await supabase
+    .from("group_members")
+    .select("student_id")
+    .eq("group_id", data.groupId)
+
+  if (membersError) {
+    return { success: false, error: membersError.message }
+  }
+
+  if (!members?.length) {
+    return { success: false, error: "This team has no members." }
+  }
+
+  const { error: notificationError } = await supabase
+    .from("notifications")
+    .insert(members.map((member) => ({
+      user_id: member.student_id,
+      title: data.title.trim(),
+      message: data.message.trim(),
+      is_read: false,
+    })))
+
+  if (notificationError) {
+    return { success: false, error: notificationError.message }
+  }
+
+  revalidatePath(`/dashboard/faculty/subjects/${data.subjectId}`)
+  return { success: true }
+}
+
 export async function getProjectsByFacultyAction(facultyId: string) {
   const supabase = await createSupabaseServerClient()
 

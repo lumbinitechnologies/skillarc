@@ -21,7 +21,7 @@ export default function DashboardRouteTransition({ children }: { children: React
   return (
     <>
       <motion.div
-        className="fixed inset-x-0 top-0 z-[80] h-[3px] origin-left rounded-b-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 shadow-[0_0_18px_rgba(99,102,241,0.45)]"
+        className="fixed inset-x-0 top-0 z-[80] h-[3px] origin-left rounded-b-full bg-gradient-to-r from-[#FF5500] via-[#FFB38A] to-[#7DD3FC] shadow-[0_0_18px_rgba(255,85,0,0.45)]"
         initial={false}
         animate={
           isRouteLoading

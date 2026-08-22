@@ -1,33 +1,44 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { signupAction } from "@/app/actions/auth"
-import { ROLES } from "@/constants/roles"
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { signupAction } from '@/app/actions/auth'
+import { ROLES } from '@/constants/roles'
+import {
+  EditorialButton,
+  EditorialInput,
+  EditorialSelect,
+  EditorialCard,
+  EditorialCardContent,
+  EditorialMetaTag,
+} from '@/components/editorial'
+import { motion } from 'framer-motion'
+import { User, Mail, Lock, UserCheck, Eye, EyeOff } from 'lucide-react'
 
 const ROLE_OPTIONS = [
-  { value: ROLES.STUDENT, label: "Student" },
-  { value: ROLES.FACULTY, label: "Faculty" },
-  { value: ROLES.ORG_ADMIN, label: "Organization Admin" },
-  { value: ROLES.INSTITUTION_ADMIN, label: "Institution Admin" },
-  { value: ROLES.HOD, label: "HOD" },
-  { value: ROLES.PROGRAM_HEAD, label: "Program Head" },
+  { value: ROLES.STUDENT, label: 'Student' },
+  { value: ROLES.FACULTY, label: 'Faculty' },
+  { value: ROLES.ORG_ADMIN, label: 'Organization Admin' },
+  { value: ROLES.INSTITUTION_ADMIN, label: 'Institution Admin' },
+  { value: ROLES.HOD, label: 'Head of Department' },
+  { value: ROLES.PROGRAM_HEAD, label: 'Program Head' },
 ]
 
 export default function SignupPage() {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [role, setRole] = useState<string>(ROLES.STUDENT)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [error, setError] = useState('')
 
   const router = useRouter()
 
   async function handleSignup() {
-    setError("")
+    setError('')
     if (!name || !email || !password) {
-      setError("Please fill in all fields.")
+      setError('Please fill in all fields.')
       return
     }
 
@@ -42,106 +53,166 @@ export default function SignupPage() {
         return
       }
 
-      router.push("/dashboard")
+      router.push('/dashboard')
     } catch (err) {
-      console.error("Signup error:", err)
+      console.error('Signup error:', err)
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(99,102,241,0.16),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.09),_transparent_18%),linear-gradient(180deg,#f8fbff,#eff6ff)] flex items-center justify-center px-4 py-10">
-      <div className="grid w-full max-w-6xl grid-cols-1 gap-8 overflow-hidden rounded-[32px] border border-white/70 bg-white/90 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:grid-cols-[1.2fr_0.9fr]">
-        <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-600 p-10 text-white">
-          <div className="absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.22),_transparent_55%)]" />
-          <div className="relative flex h-full flex-col justify-between gap-10">
-            <div>
-              <div className="mb-8 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-xl">📅</div>
-                <span className="text-sm font-semibold uppercase tracking-[0.22em] text-white/80">SkillArc</span>
-              </div>
-              <h2 className="text-3xl font-black tracking-[-0.04em] text-white">Join your institution on SkillArc.</h2>
-              <p className="mt-4 max-w-sm text-sm leading-7 text-slate-100/80">Create your account and get started with smarter academic management for schedules, users, and classes.</p>
-            </div>
-            <div className="space-y-3 rounded-[26px] bg-white/10 p-6 backdrop-blur">
-              <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/70">Your role</div>
-              <div className="space-y-2">
-                {[
-                  { label: "Student", emoji: "🎓" },
-                  { label: "Faculty", emoji: "👨‍🏫" },
-                  { label: "Timetable Manager", emoji: "📋" },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-3 rounded-3xl bg-white/10 p-3">
-                    <span className="text-lg">{item.emoji}</span>
-                    <span className="text-sm font-semibold text-slate-100">{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="p-10">
-          <div className="mb-8 space-y-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-indigo-600">Create your account</p>
-            <h1 className="text-3xl font-black text-slate-950">Get started with SkillArc</h1>
-            <p className="text-sm text-slate-500">Fill in your details to join your institution and start managing academic operations.</p>
-          </div>
-          {error && (
-            <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-              {error}
-            </div>
-          )}
-          <div className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Full name</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Jane Doe"
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Email address</label>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@institution.com"
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Create a strong password"
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700">Role</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
-              >
-                {ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <button
-            onClick={handleSignup}
-            disabled={loading}
-            className="mt-10 inline-flex w-full items-center justify-center rounded-3xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+    <div className="relative min-h-screen w-full overflow-hidden bg-[#0a1324]">
+      {/* Background */}
+      <div className="fixed inset-0 bg-[#0a1324] -z-10" />
+      <div className="fixed left-1/2 top-1/2 h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#1b2d4f]/30 blur-3xl -z-10" />
+
+      {/* Content */}
+      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md">
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex justify-center mb-12"
           >
-            {loading ? "Creating account..." : "Create account"}
-          </button>
+            <img
+              src="/skillarc_logo.svg"
+              alt="SkillArc Logo"
+              className="h-20 w-20 object-contain drop-shadow-[0_0_20px_rgba(229,125,55,0.25)]"
+            />
+          </motion.div>
+
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="mb-8 space-y-2 text-center"
+          >
+            <h1 className="ed-headline text-3xl text-slate-50">Get Started</h1>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Join your institution and start collaborating today.
+            </p>
+          </motion.div>
+
+          {/* Error Message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-6 p-4 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-sm"
+            >
+              {error}
+            </motion.div>
+          )}
+
+          {/* Signup Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                void handleSignup()
+              }}
+            >
+              <EditorialCard variant="bordered">
+                <EditorialCardContent className="space-y-6">
+                  {/* Name Input */}
+                  <EditorialInput
+                    label="Full Name"
+                    type="text"
+                    placeholder="Jane Doe"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    icon={<User className="w-4 h-4" />}
+                  />
+
+                  {/* Email Input */}
+                  <EditorialInput
+                    label="Email Address"
+                    type="email"
+                    placeholder="institutional.email@edu.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    icon={<Mail className="w-4 h-4" />}
+                  />
+
+                  {/* Password Input */}
+                  <EditorialInput
+                    label="Password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    icon={<Lock className="w-4 h-4" />}
+                    rightSlot={
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    }
+                  />
+
+                  {/* Role Select */}
+                  <EditorialSelect
+                    label="Role"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    options={ROLE_OPTIONS}
+                  />
+
+                  {/* Create Account Button */}
+                  <EditorialButton
+                    variant="primary"
+                    size="md"
+                    type="submit"
+                    isLoading={loading}
+                    className="w-full mt-6"
+                  >
+                    {loading ? 'Creating account...' : 'Create Account'}
+                  </EditorialButton>
+
+                  {/* Login Link */}
+                  <div className="text-center pt-4 border-t border-[#2f4d73]">
+                    <p className="text-slate-300 text-sm">
+                      Already have an account?{' '}
+                      <button
+                        type="button"
+                        onClick={() => router.push('/auth/login')}
+                        className="font-semibold text-[#F4B77F] hover:text-[#F7C98E] transition-colors"
+                      >
+                        Sign in
+                      </button>
+                    </p>
+                  </div>
+                </EditorialCardContent>
+              </EditorialCard>
+            </form>
+          </motion.div>
+
+          {/* Back to Home Link */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="mt-8 text-center"
+          >
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="text-sm text-slate-400 transition-colors hover:text-slate-200"
+            >
+              ← Back to Home
+            </button>
+          </motion.div>
         </div>
       </div>
     </div>

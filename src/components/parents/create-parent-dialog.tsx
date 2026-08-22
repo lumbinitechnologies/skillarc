@@ -7,6 +7,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -272,7 +273,7 @@ export function CreateParentDialog({
                   <select
                     value={relationship}
                     onChange={(e) => setRelationship(e.target.value)}
-                    className="rounded-md border border-gray-200 text-xs px-2 h-9 outline-none focus:border-indigo-500 bg-white"
+                    className="rounded-xl border border-slate-200 text-xs px-2.5 h-9 outline-none focus:border-slate-900 bg-white/50 cursor-pointer text-slate-800 font-semibold"
                   >
                     <option value="Father">Father</option>
                     <option value="Mother">Mother</option>
@@ -294,7 +295,7 @@ export function CreateParentDialog({
                           size="sm"
                           onClick={() => handleLinkStudent(stud)}
                           disabled={isLinking}
-                          className="h-7 px-2.5 text-[11px] bg-[#6C63FF] hover:bg-indigo-700 text-white font-semibold rounded-md"
+                          className="h-7 px-2.5 text-[11px] bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl border-none transition-all hover:scale-[1.02] active:scale-[0.98]"
                         >
                           Link
                         </Button>
@@ -306,19 +307,24 @@ export function CreateParentDialog({
             </div>
           )}
 
-          <div className="flex gap-2 pt-4">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isLoading || isLinking}
+              className="rounded-2xl h-11 text-xs font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || isLinking} className="flex-1">
+            <Button
+              type="submit"
+              disabled={isLoading || isLinking}
+              className="flex-1 h-11 text-xs font-bold text-white rounded-2xl bg-slate-900 hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 shadow-md shadow-slate-100 border-none outline-none"
+            >
               {isLoading ? "Saving..." : parent ? "Update Parent" : "Create Parent"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

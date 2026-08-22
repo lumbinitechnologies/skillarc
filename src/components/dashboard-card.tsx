@@ -1,3 +1,5 @@
+import { motion } from "framer-motion"
+
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
 
 const CARD_CONFIG: Record<string, {
@@ -49,24 +51,44 @@ const FALLBACK = {
 interface DashboardCardProps {
   title: string
   value: string | number
+  index?: number
 }
 
-export default function DashboardCard({ title, value }: DashboardCardProps) {
+export default function DashboardCard({ title, value, index = 0 }: DashboardCardProps) {
   const c = CARD_CONFIG[title] ?? FALLBACK
   const strVal = String(value)
   const isPercent = strVal.includes("%")
   const numeric = parseFloat(strVal.replace("%", ""))
   const barFill = isPercent ? `${Math.min(numeric, 100)}%` : "55%"
 
+  // Four different animation patterns for variety
+  const animations = [
+    // Spring bounce
+    { initial: { scale: 0.8, opacity: 0, y: 20 }, animate: { scale: 1, opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 100, damping: 12, delay: index * 0.1 } } },
+    // Slide left
+    { initial: { x: -60, opacity: 0, filter: "blur(6px)" }, animate: { x: 0, opacity: 1, filter: "blur(0px)", transition: { delay: index * 0.08, duration: 0.6 } } },
+    // Rotate zoom
+    { initial: { scale: 0.5, rotate: -180, opacity: 0 }, animate: { scale: 1, rotate: 0, opacity: 1, transition: { delay: index * 0.09, duration: 0.8 } } },
+    // Slide right
+    { initial: { x: 60, opacity: 0, filter: "blur(6px)" }, animate: { x: 0, opacity: 1, filter: "blur(0px)", transition: { delay: index * 0.08, duration: 0.6 } } },
+  ]
+
+  const anim = animations[index % animations.length]
+
   return (
-    <div style={{
-      backgroundColor: "#ffffff",
-      borderRadius: 16,
-      border: "1px solid #f3f4f6",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-      overflow: "hidden",
-      fontFamily: font,
-    }}>
+    <motion.div
+      initial={anim.initial}
+      animate={anim.animate}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      style={{
+        backgroundColor: "#ffffff",
+        borderRadius: 16,
+        border: "1px solid #f3f4f6",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        overflow: "hidden",
+        fontFamily: font,
+      }}
+    >
       {/* Pastel header band */}
       <div style={{
         backgroundColor: c.bg,
@@ -117,6 +139,6 @@ export default function DashboardCard({ title, value }: DashboardCardProps) {
           <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 5 }}>{value} complete</p>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

@@ -4,6 +4,31 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
+import { motion } from "framer-motion"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
 import { BookOpenCheck, Plus } from "lucide-react"
 
 import { ProgramList } from "@/components/programs/program-list"
@@ -216,8 +241,16 @@ export function ProgramsClientPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8"
+    >
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between"
+      >
         <div className="flex items-center gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF]">
             <BookOpenCheck className="h-6 w-6" />
@@ -241,9 +274,10 @@ export function ProgramsClientPage({
           <Plus className="h-4 w-4" />
           New Program
         </Button>
-      </div>
+      </motion.div>
 
-      <Card className="p-6 shadow-sm">
+      <motion.div variants={itemVariants}>
+        <Card className="p-6 shadow-sm">
         <ProgramList
           programs={programs}
           isLoading={isLoading}
@@ -251,6 +285,7 @@ export function ProgramsClientPage({
           onDelete={handleDeleteProgram}
         />
       </Card>
+      </motion.div>
 
       <CreateProgramDialog
         open={isOpen}
@@ -264,6 +299,6 @@ export function ProgramsClientPage({
         departments={departments}
         isLoading={isLoading}
       />
-    </div>
+    </motion.div>
   )
 }

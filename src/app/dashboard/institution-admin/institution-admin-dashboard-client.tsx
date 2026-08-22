@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Building2, Users, GraduationCap, BookOpen, Plus, Mail, Clock, ChevronRight } from "lucide-react"
+import { Building2, Users, GraduationCap, BookOpen, Mail, Clock } from "lucide-react"
 import { ROLES } from "@/constants/roles"
+import gsap from "gsap"
 
 type Status = "idle" | "loading" | "success" | "error"
 
@@ -29,6 +30,58 @@ export default function InstitutionAdminDashboardClient({
   const [inviteRole, setInviteRole] = useState<string>(ROLES.FACULTY)
   const [inviteStatus, setInviteStatus] = useState<Status>("idle")
   const [inviteError, setInviteError] = useState("")
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      // 1. Greeting reveal
+      gsap.fromTo(
+        ".welcome-title-char",
+        { y: 35, opacity: 0, filter: "blur(4px)" },
+        {
+          y: 0,
+          opacity: 1,
+          filter: "blur(0px)",
+          duration: 0.8,
+          stagger: 0.04,
+          ease: "power3.out",
+        }
+      )
+
+      // 2. Stats cards reveal
+      gsap.fromTo(
+        ".admin-stat-card",
+        { y: 25, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.7,
+          stagger: 0.08,
+          ease: "power2.out",
+          delay: 0.2,
+        }
+      )
+
+      // 3. Grid blocks slide-up
+      gsap.fromTo(
+        ".admin-section",
+        { y: 35, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.8,
+          stagger: 0.1,
+          ease: "power3.out",
+          delay: 0.45,
+        }
+      )
+    }, containerRef)
+
+    return () => ctx.revert()
+  }, [])
 
   async function handleInvite() {
     if (!inviteEmail.trim() || !institution?.id) return
@@ -64,32 +117,40 @@ export default function InstitutionAdminDashboardClient({
   }
 
   const statCards = [
-    { label: "Faculty", value: stats.faculty, accent: "bg-emerald-100 text-emerald-700", icon: <Users size={18} color="#065f46" /> },
-    { label: "Students", value: stats.students, accent: "bg-sky-100 text-sky-700", icon: <GraduationCap size={18} color="#1d4ed8" /> },
-    { label: "Courses", value: stats.courses, accent: "bg-amber-100 text-amber-700", icon: <BookOpen size={18} color="#b45309" /> },
+    { label: "Faculty", value: stats.faculty, accent: "bg-gray-100 text-gray-700 border-gray-200", icon: <Users size={18} className="text-gray-600" /> },
+    { label: "Students", value: stats.students, accent: "bg-gray-100 text-gray-700 border-gray-200", icon: <GraduationCap size={18} className="text-gray-600" /> },
+    { label: "Courses", value: stats.courses, accent: "bg-gray-100 text-gray-700 border-gray-200", icon: <BookOpen size={18} className="text-editorial-amber" /> },
   ]
 
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+  const welcomeText = `${greeting}, admin`
+  const words = welcomeText.split(" ")
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+    <div ref={containerRef} className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
       <div className="space-y-6">
-        <header className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+        <header className="rounded-[28px] border border-editorial-blue border-opacity-30 bg-editorial-navy bg-opacity-40 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-5">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-200/30">
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-editorial-orange to-editorial-amber text-editorial-navy shadow-lg shadow-editorial-orange/30">
                 <Building2 size={24} />
               </div>
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Institution dashboard</p>
-                <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">{greeting}, admin</h1>
-                <p className="mt-2 text-sm text-slate-500">{institution?.name ?? "Institution dashboard"}</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-editorial-orange">Institution dashboard</p>
+                <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-editorial-cream flex flex-wrap">
+                  {words.map((word, idx) => (
+                    <span key={idx} className="inline-block overflow-hidden mr-2">
+                      <span className="welcome-title-char inline-block">
+                        {word}
+                      </span>
+                    </span>
+                  ))}
+                </h1>
+                <p className="mt-2 text-sm text-editorial-sky text-opacity-60">{institution?.name ?? "Institution dashboard"}</p>
               </div>
             </div>
             <button
-              onClick={() => router.push("/dashboard/institution-admin")}
-              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-200/30 transition hover:bg-indigo-700"
+              onClick={() => router.push("/dashboard/institution-admin/faculty")}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-editorial-orange to-editorial-amber px-5 py-3 text-sm font-semibold text-editorial-navy shadow-lg shadow-editorial-orange/30 transition hover:shadow-lg hover:shadow-editorial-orange/40"
             >
               <Mail size={16} /> Invite member
             </button>
@@ -98,21 +159,21 @@ export default function InstitutionAdminDashboardClient({
 
         <div className="grid gap-4 md:grid-cols-3">
           {statCards.map((card) => (
-            <div key={card.label} className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-sm">
-              <div className={`inline-flex h-12 w-12 items-center justify-center rounded-3xl ${card.accent}`}>
+            <div key={card.label} className="admin-stat-card dashboard-card p-5 rounded-[24px] border border-[#3A6DAF]/20 bg-[#FFFFFF] shadow-[0_8px_24px_rgba(20,35,75,0.08)] transition-all duration-300 hover:-translate-y-1">
+              <div className={`inline-flex h-12 w-12 items-center justify-center rounded-3xl border ${card.accent} mb-4`}>
                 {card.icon}
               </div>
-              <p className="mt-4 text-2xl font-bold text-slate-950">{card.value}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{card.label}</p>
+              <p className="text-2xl font-bold text-[#14234B] leading-none">{card.value}</p>
+              <p className="mt-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#E57D37]">{card.label}</p>
             </div>
           ))}
         </div>
 
-        <div className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <div className="admin-section dashboard-card p-6 rounded-[28px] border border-[#3A6DAF]/20 bg-[#FFFFFF] shadow-[0_12px_32px_rgba(20,35,75,0.08)]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Quick actions</p>
-              <h2 className="mt-3 text-xl font-semibold text-slate-950">Manage institutional operations</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#E57D37]">Quick actions</p>
+              <h2 className="mt-2 text-xl font-semibold text-[#14234B]">Manage institutional operations</h2>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
@@ -123,7 +184,7 @@ export default function InstitutionAdminDashboardClient({
                 <button
                   key={action.label}
                   onClick={() => router.push(action.href)}
-                  className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                  className="rounded-3xl border border-[#3A6DAF]/20 bg-[#F8FAFD] px-4 py-3 text-left text-sm font-semibold text-[#14234B] transition hover:border-[#E57D37]/50 hover:bg-[#F0F5FB] hover:text-[#E57D37]"
                 >
                   {action.label}
                 </button>
@@ -133,83 +194,83 @@ export default function InstitutionAdminDashboardClient({
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-          <aside className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <aside className="admin-section dashboard-card p-6 rounded-[28px] border border-[#3A6DAF]/20 bg-[#FFFFFF] shadow-[0_12px_32px_rgba(20,35,75,0.08)]">
             <div className="flex items-center gap-4 pb-4">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-indigo-100 text-indigo-700">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-[#E57D37]/10 text-[#E57D37]">
                 <Clock size={18} />
               </div>
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Parent engagement</p>
-                <h2 className="mt-3 text-xl font-semibold text-slate-950">Invite and connect</h2>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#E57D37]">Add Member</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#14234B]">Invite and connect</h2>
               </div>
             </div>
             <div className="space-y-4">
               {inviteStatus === "success" && (
-                <div className="rounded-3xl bg-emerald-50 p-4 text-sm text-emerald-700">Invite sent successfully.</div>
+                <div className="rounded-3xl bg-emerald-50 border border-gray-200 p-4 text-sm text-emerald-700">Invite sent successfully.</div>
               )}
               {inviteStatus === "error" && (
-                <div className="rounded-3xl bg-rose-50 p-4 text-sm text-rose-700">{inviteError}</div>
+                <div className="rounded-3xl bg-rose-50 border border-rose-200 p-4 text-sm text-rose-700">{inviteError}</div>
               )}
               <div>
-                <label className="block text-sm font-semibold text-slate-700">Email</label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-[#E57D37]">Email</label>
                 <input
                   value={inviteEmail}
                   type="email"
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="faculty@college.edu"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8FAFD] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#E57D37]/50 focus:ring-1 focus:ring-[#E57D37]/20 placeholder:text-[#94BAC4]/30"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700">Role</label>
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-[#E57D37]">Role</label>
                 <select
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                  className="mt-3 w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8FAFD] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#E57D37]/50 focus:ring-1 focus:ring-[#E57D37]/20"
                 >
-                  <option value={ROLES.FACULTY}>Faculty</option>
-                  <option value={ROLES.STUDENT}>Student</option>
-                  <option value={ROLES.HOD}>Head of Department</option>
-                  <option value={ROLES.PROGRAM_HEAD}>Program Head</option>
+                  <option value={ROLES.FACULTY} className="bg-white text-[#14234B]">Faculty</option>
+                  <option value={ROLES.STUDENT} className="bg-white text-[#14234B]">Student</option>
+                  <option value={ROLES.HOD} className="bg-white text-[#14234B]">Head of Department</option>
+                  <option value={ROLES.PROGRAM_HEAD} className="bg-white text-[#14234B]">Program Head</option>
                 </select>
               </div>
               <button
                 onClick={handleInvite}
                 disabled={!inviteEmail.trim() || inviteStatus === "loading"}
-                className="mt-2 w-full rounded-3xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                className="mt-2 w-full rounded-3xl bg-gradient-to-r from-[#E57D37] to-[#EAAD62] px-4 py-3 text-sm font-semibold text-[#14234B] transition hover:shadow-lg hover:shadow-[#E57D37]/20 disabled:cursor-not-allowed disabled:bg-[#94BAC4] disabled:bg-opacity-40"
               >
                 {inviteStatus === "loading" ? "Sending invite..." : "Send invite"}
               </button>
             </div>
           </aside>
 
-          <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <section className="admin-section dashboard-card p-6 rounded-[28px] border border-[#3A6DAF]/20 bg-[#FFFFFF] shadow-[0_12px_32px_rgba(20,35,75,0.08)]">
             <div className="flex items-center justify-between gap-4 pb-4">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Recent members</p>
-                <h2 className="mt-3 text-xl font-semibold text-slate-950">Latest invites</h2>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#E57D37]">Recent members</p>
+                <h2 className="mt-2 text-xl font-semibold text-[#14234B]">Latest invites</h2>
               </div>
               <button
                 onClick={() => router.push("/dashboard/institution-admin/students")}
-                className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:bg-slate-200"
+                className="inline-flex items-center gap-2 rounded-full bg-[#F0F5FB] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#94BAC4] transition hover:bg-[#3A6DAF]/20 border border-[#3A6DAF]/20"
               >
                 View all
               </button>
             </div>
             <div className="space-y-4">
               {recentUsers.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-editorial-blue/30 bg-editorial-navy/20 p-8 text-center text-sm text-editorial-sky text-opacity-60">
                   No recent users to display.
                 </div>
               ) : (
                 recentUsers.map((user) => (
-                  <div key={user.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={user.id} className="rounded-3xl border border-editorial-blue/20 bg-editorial-navy/30 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-950 truncate">{user.email}</p>
-                        <p className="mt-1 text-xs text-slate-500">{formatDate(user.created_at)}</p>
+                        <p className="text-sm font-semibold text-editorial-cream truncate">{user.email}</p>
+                        <p className="mt-1 text-xs text-editorial-sky text-opacity-60">{formatDate(user.created_at)}</p>
                       </div>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+                      <span className="rounded-full bg-editorial-blue/20 border border-editorial-blue/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-editorial-sky self-start sm:self-auto">
                         {user.role}
                       </span>
                     </div>

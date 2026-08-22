@@ -3,6 +3,31 @@
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { motion } from "framer-motion"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
 import { GraduationCap, Plus, Upload } from "lucide-react"
 import { StudentList } from "@/components/students/student-list"
 import { CreateStudentDialog } from "@/components/students/create-student-dialog"
@@ -176,40 +201,72 @@ export function StudentsClientPage({
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      <div className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8"
+    >
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col gap-5 rounded-3xl bg-gradient-to-br from-white via-white to-indigo-50/15 p-6 shadow-sm border border-indigo-100/30 md:flex-row md:items-center md:justify-between"
+      >
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF] border border-indigo-100/50 shadow-sm shadow-indigo-100/40">
             <GraduationCap className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#6C63FF]">Student Operations</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6C63FF]">Student Operations</p>
             <div className="mt-1 flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-slate-900">Students</h1>
-              <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-[#6C63FF]">
+              <h1 className="text-3xl font-extrabold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif] tracking-tight flex">
+                {"Students".split("").map((char, index) => (
+                  <motion.span
+                    key={index}
+                    initial={{ opacity: 0, y: 15, filter: "blur(2px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    transition={{
+                      delay: 0.1 + index * 0.04,
+                      duration: 0.45,
+                      ease: [0.34, 1.56, 0.64, 1]
+                    }}
+                    className="inline-block"
+                  >
+                    {char}
+                  </motion.span>
+                ))}
+              </h1>
+              <span className="rounded-full bg-indigo-50 border border-indigo-100/50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-[#6C63FF] font-['Space_Grotesk']">
                 {totalCount} Records
               </span>
             </div>
             <p className="mt-2 text-sm text-slate-500">Manage enrollments, section assignments, and student records in one place.</p>
           </div>
         </div>
-        {(!enabledFeatures || enabledFeatures.includes("direct_onboarding")) && (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setIsImportOpen(true)} className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              <Upload className="mr-2 h-4 w-4" />
-              Import CSV
-            </Button>
-            <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
-              <Plus className="mr-2 h-4 w-4" />
-              New Student
-            </Button>
-          </div>
-        )}
-      </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+            className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button
+            onClick={() => setIsOpen(true)}
+            className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md transition-all hover:scale-[1.02] active:scale-[0.98] duration-200"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Student
+          </Button>
+        </div>
+      </motion.div>
 
-      <StudentSearch value={search} onChange={(v) => { setSearch(v); setPage(1) }} />
+      <motion.div variants={itemVariants}>
+        <StudentSearch value={search} onChange={(v) => { setSearch(v); setPage(1) }} />
+      </motion.div>
 
-      <StudentFilters
+      <motion.div variants={itemVariants}>
+        <StudentFilters
         programs={programs}
         sections={sections}
         selectedProgram={selectedProgram}
@@ -219,8 +276,10 @@ export function StudentsClientPage({
         onSemesterChange={(v) => { setSelectedSemester(v); setPage(1) }}
         onSectionChange={(v) => { setSelectedSection(v);  setPage(1) }}
       />
+      </motion.div>
 
-      <Card className="overflow-hidden">
+      <motion.div variants={itemVariants}>
+        <Card className="overflow-hidden">
         <StudentList
           students={filteredStudents}
           isLoading={isLoading}
@@ -245,6 +304,7 @@ export function StudentsClientPage({
           onLimitChange={handleLimitChange}
         />
       </Card>
+      </motion.div>
 
       <CreateStudentDialog
         open={isOpen}
@@ -272,6 +332,6 @@ export function StudentsClientPage({
         student={selectedStudent}
         onClose={() => setDrawerOpen(false)}
       />
-    </div>
+    </motion.div>
   )
 }

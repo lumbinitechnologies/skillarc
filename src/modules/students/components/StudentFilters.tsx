@@ -58,7 +58,7 @@ export default function StudentFilters({
       <select
         value={selectedProgram}
         onChange={(e) => onProgramChange(e.target.value)}
-        className="h-11 rounded-xl border bg-white px-4"
+        className="h-12 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm shadow-sm outline-none transition-all duration-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 hover:border-slate-300 hover:shadow-md cursor-pointer text-slate-700"
       >
         <option value="">All Programs</option>
 
@@ -72,7 +72,7 @@ export default function StudentFilters({
       <select
         value={selectedSemester}
         onChange={(e) => onSemesterChange(e.target.value)}
-        className="h-11 rounded-xl border bg-white px-4"
+        className="h-12 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm shadow-sm outline-none transition-all duration-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 hover:border-slate-300 hover:shadow-md cursor-pointer text-slate-700"
       >
         <option value="">All Semesters</option>
 
@@ -86,7 +86,7 @@ export default function StudentFilters({
       <select
         value={selectedSection}
         onChange={(e) => onSectionChange(e.target.value)}
-        className="h-11 rounded-xl border bg-white px-4"
+        className="h-12 rounded-2xl border border-slate-200/80 bg-white px-4 text-sm shadow-sm outline-none transition-all duration-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 hover:border-slate-300 hover:shadow-md cursor-pointer text-slate-700"
       >
         <option value="">All Sections</option>
 

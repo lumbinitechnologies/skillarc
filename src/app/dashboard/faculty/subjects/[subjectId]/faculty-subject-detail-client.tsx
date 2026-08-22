@@ -67,6 +67,8 @@ import {
 } from "@/app/actions/announcements"
 import {
   createProjectWithGroupsAction,
+  updateProjectGroupAction,
+  sendProjectGroupUpdateAction,
   suggestTeamsAIAction,
 } from "@/app/actions/project-groups"
 import { detectAIContent } from "@/lib/ai-detector"
@@ -133,6 +135,11 @@ export function FacultySubjectDetailClient({
   const [roster, setRoster] = useState<any[]>([])
   const [loadingRoster, setLoadingRoster] = useState(false)
   
+  // Team allocation states (NEW)
+  const [teamName, setTeamName] = useState("")
+  const [maxTeamSize, setMaxTeamSize] = useState(4)
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
+  
   // Separation settings
   const [teamCount, setTeamCount] = useState(3)
   const [themeId, setThemeId] = useState("classic")
@@ -144,7 +151,17 @@ export function FacultySubjectDetailClient({
   const [allocating, setAllocating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedProjId, setExpandedProjId] = useState<string | null>(null)
-  const [allocateTab, setAllocateTab] = useState<"projects" | "allocate">("projects")
+  const [allocateTab, setAllocateTab] = useState<"projects" | "allocate" | "auto">("projects")
+  const [autoGroupSize, setAutoGroupSize] = useState(4)
+  const [projectSectionFilter, setProjectSectionFilter] = useState("all")
+  const [editingGroup, setEditingGroup] = useState<any | null>(null)
+  const [editingGroupName, setEditingGroupName] = useState("")
+  const [editingMemberIds, setEditingMemberIds] = useState<string[]>([])
+  const [updatingGroup, setUpdatingGroup] = useState(false)
+  const [updateGroup, setUpdateGroup] = useState<any | null>(null)
+  const [groupUpdateTitle, setGroupUpdateTitle] = useState("")
+  const [groupUpdateMessage, setGroupUpdateMessage] = useState("")
+  const [sendingGroupUpdate, setSendingGroupUpdate] = useState(false)
 
   // Local Toast notification
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "warning" } | null>(null)
@@ -794,6 +811,122 @@ export function FacultySubjectDetailClient({
       gender: i % 2 === 0 ? "Male" : "Female"
     }))
     setRoster(enriched)
+  }
+
+  function getGroupSectionId(group: any) {
+    const memberIds = (group.group_members || []).map((member: any) => member.student_id)
+    const memberSections = memberIds
+      .map((memberId: string) => students.find((student: any) => student.id === memberId)?.section_id)
+      .filter(Boolean)
+    return memberSections.length > 0 && memberSections.every((sectionId: string) => sectionId === memberSections[0])
+      ? memberSections[0]
+      : null
+  }
+
+  function openGroupEditor(group: any) {
+    setEditingGroup(group)
+    setEditingGroupName(group.group_name || "")
+    setEditingMemberIds((group.group_members || []).map((member: any) => member.student_id))
+  }
+
+  async function handleUpdateGroup() {
+    if (!editingGroup || !editingGroupName.trim() || editingMemberIds.length === 0) {
+      triggerToast("Enter a team name and keep at least one member", "warning")
+      return
+    }
+
+    setUpdatingGroup(true)
+    const result = await updateProjectGroupAction({
+      groupId: editingGroup.id,
+      groupName: editingGroupName,
+      memberIds: editingMemberIds,
+      subjectId: subject.id,
+    })
+
+    if (result.success) {
+      setLocalProjects((prev) => prev.map((project: any) => ({
+        ...project,
+        project_groups: project.project_groups?.map((group: any) => group.id === editingGroup.id
+          ? {
+              ...group,
+              group_name: editingGroupName.trim(),
+              group_members: editingMemberIds.map((studentId) => ({
+                student_id: studentId,
+                users: { name: students.find((student: any) => student.id === studentId)?.name || "Student" },
+              })),
+            }
+          : group),
+      })))
+      setEditingGroup(null)
+      triggerToast("Team updated successfully", "success")
+    } else {
+      triggerToast(result.error || "Failed to update team", "warning")
+    }
+    setUpdatingGroup(false)
+  }
+
+  async function handleSendGroupUpdate() {
+    if (!updateGroup || !groupUpdateTitle.trim() || !groupUpdateMessage.trim()) {
+      triggerToast("Enter an update title and message", "warning")
+      return
+    }
+
+    setSendingGroupUpdate(true)
+    const result = await sendProjectGroupUpdateAction({
+      groupId: updateGroup.id,
+      title: groupUpdateTitle,
+      message: groupUpdateMessage,
+      subjectId: subject.id,
+    })
+
+    if (result.success) {
+      setUpdateGroup(null)
+      setGroupUpdateTitle("")
+      setGroupUpdateMessage("")
+      triggerToast("Update sent to the team", "success")
+    } else {
+      triggerToast(result.error || "Failed to send update", "warning")
+    }
+    setSendingGroupUpdate(false)
+  }
+
+  function handleAutoGenerateTeams() {
+    if (!selectedSectionId) {
+      triggerToast("Please select a section", "warning")
+      return
+    }
+
+    const sectionStudents = students.filter((student: any) => student.section_id === selectedSectionId)
+    if (sectionStudents.length === 0) {
+      triggerToast("No students found in the selected section", "warning")
+      return
+    }
+
+    const groupSize = Math.max(2, Math.min(autoGroupSize, sectionStudents.length))
+    const enriched = sectionStudents.map((student: any, index: number) => ({
+      ...student,
+      role: POPULAR_ROLES[index % POPULAR_ROLES.length],
+      skill: (index % 3) + 3,
+      gender: index % 2 === 0 ? "Male" : "Female",
+    }))
+    const teams = []
+
+    for (let index = 0; index < enriched.length; index += groupSize) {
+      const members = enriched.slice(index, index + groupSize)
+      teams.push({
+        name: `Team ${teams.length + 1}`,
+        description: `Automatically generated team for Section ${sectionMap.get(selectedSectionId) || "students"}.`,
+        motto: "Learn together, build together.",
+        memberIds: members.map((student: any) => student.id),
+        synergyScore: 85,
+      })
+    }
+
+    setRoster(enriched)
+    setGeneratedTeams(teams)
+    setSelectedStudentIds([])
+    setOverallFeedback(`Created ${teams.length} teams from ${sectionStudents.length} students.`)
+    triggerToast(`${teams.length} teams generated successfully`, "success")
   }
 
   function handleRosterUpdate(id: string, field: "role" | "skill", val: any) {
@@ -1976,133 +2109,414 @@ export function FacultySubjectDetailClient({
                         >
                           New Allocate
                         </button>
+                        <button
+                          onClick={() => setAllocateTab("auto")}
+                          className={`rounded-xl px-3 py-1 text-[10px] font-bold transition ${
+                            allocateTab === "auto"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          Auto Generate
+                        </button>
                       </div>
                     </div>
 
-                    {allocateTab === "allocate" ? (
-                      <div className="space-y-5">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Select Target Section</label>
-                          <select
-                            value={selectedSectionId}
-                            onChange={(e) => handleSectionChange(e.target.value)}
-                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                          >
-                            <option value="">Choose section...</option>
-                            {sections.map((sec) => (
-                              <option key={sec.id} value={sec.id}>
-                                Section {sec.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                    {allocateTab === "auto" ? (
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+                          <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                            <Layers size={16} className="text-indigo-600" />
+                            Generate Teams Automatically
+                          </h4>
+                          <p className="text-xs text-slate-500 mt-1 mb-5">
+                            Select a section and group size. Every student in that section will be placed into a team.
+                          </p>
 
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Project Title</label>
-                          <input
-                            type="text"
-                            value={projectTitle}
-                            onChange={(e) => setProjectTitle(e.target.value)}
-                            placeholder="Enter project name..."
-                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                          />
-                        </div>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                Section
+                              </label>
+                              <select
+                                value={selectedSectionId}
+                                onChange={(e) => handleSectionChange(e.target.value)}
+                                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                              >
+                                <option value="">Choose section...</option>
+                                {sections.map((sec) => (
+                                  <option key={sec.id} value={sec.id}>
+                                    Section {sec.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
 
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Project Description</label>
-                          <textarea
-                            rows={3}
-                            value={projectDesc}
-                            onChange={(e) => setProjectDesc(e.target.value)}
-                            placeholder="Brief description..."
-                            className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                          />
-                        </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                Students per group
+                              </label>
+                              <input
+                                type="number"
+                                min={2}
+                                max={roster.length || 100}
+                                value={autoGroupSize}
+                                onChange={(e) => setAutoGroupSize(Math.max(2, parseInt(e.target.value) || 2))}
+                                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                              />
+                            </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Target Squad Count</label>
-                            <input
-                              type="number"
-                              min={2}
-                              max={12}
-                              value={teamCount}
-                              onChange={(e) => setTeamCount(parseInt(e.target.value) || 2)}
-                              className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Designation Theme</label>
-                            <select
-                              value={themeId}
-                              onChange={(e) => setThemeId(e.target.value)}
-                              className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                            <button
+                              onClick={handleAutoGenerateTeams}
+                              disabled={!selectedSectionId}
+                              className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                             >
-                              {SQUAD_THEMES.map(theme => (
-                                <option key={theme.id} value={theme.id}>
-                                  {theme.name}
-                                </option>
+                              <Layers size={16} />
+                              Generate Teams
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="font-bold text-slate-800 text-sm">Generated Teams</h4>
+                              <p className="text-xs text-slate-500 mt-1">Review the allocation before publishing.</p>
+                            </div>
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                              {generatedTeams.length} teams
+                            </span>
+                          </div>
+                          {generatedTeams.length === 0 ? (
+                            <p className="py-10 text-center text-sm text-slate-400">No teams generated yet.</p>
+                          ) : (
+                            <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                              {generatedTeams.map((team: any, index: number) => (
+                                <div key={`${team.name}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm font-bold text-slate-800">{team.name}</span>
+                                    <span className="text-xs font-semibold text-slate-500">{team.memberIds.length} students</span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {team.memberIds.map((id: string) => roster.find((student: any) => student.id === id)?.name).filter(Boolean).join(", ")}
+                                  </p>
+                                </div>
                               ))}
-                            </select>
+                            </div>
+                          )}
+                          <button
+                            onClick={handlePublish}
+                            disabled={saving || generatedTeams.length === 0 || !projectTitle.trim()}
+                            className="mt-5 w-full rounded-2xl bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 text-sm font-bold transition-all shadow-sm"
+                          >
+                            Publish Generated Teams
+                          </button>
+                        </div>
+                      </div>
+                    ) : allocateTab === "allocate" ? (
+                      <div className="grid gap-6 lg:grid-cols-2">
+                        <div className="space-y-5">
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                              <Users size={16} className="text-indigo-600" />
+                              Create New Team
+                            </h4>
+
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                  Select Target Section
+                                </label>
+                                <select
+                                  value={selectedSectionId}
+                                  onChange={(e) => handleSectionChange(e.target.value)}
+                                  className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                                >
+                                  <option value="">Choose section...</option>
+                                  {sections.map((sec) => (
+                                    <option key={sec.id} value={sec.id}>
+                                      Section {sec.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                  Team Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  value={teamName}
+                                  onChange={(e) => setTeamName(e.target.value)}
+                                  placeholder="e.g. Team Alpha, Project Heroes..."
+                                  className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                  Maximum Team Size *
+                                </label>
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="number"
+                                    min={2}
+                                    max={roster.length || 12}
+                                    value={maxTeamSize}
+                                    onChange={(e) => setMaxTeamSize(Math.max(2, parseInt(e.target.value) || 2))}
+                                    className="flex-1 rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                                  />
+                                  <span className="text-xs font-bold text-slate-500 px-3 py-2 bg-white rounded-xl border border-slate-200">
+                                    {selectedStudentIds.length}/{maxTeamSize}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-1">
+                                  Selected students cannot exceed this size
+                                </p>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                  Project Title
+                                </label>
+                                <input
+                                  type="text"
+                                  value={projectTitle}
+                                  onChange={(e) => setProjectTitle(e.target.value)}
+                                  placeholder="Enter project name..."
+                                  className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                                  Project Description / Instructions
+                                </label>
+                                <textarea
+                                  rows={3}
+                                  value={projectDesc}
+                                  onChange={(e) => setProjectDesc(e.target.value)}
+                                  placeholder="Describe the project goals, deliverables, and expectations..."
+                                  className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Balance Focus</label>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setFocus("skill_balance")}
-                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                                focus === "skill_balance"
-                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                                  : "bg-slate-50 border-slate-200 text-slate-600"
-                              }`}
-                            >
-                              Skill Balanced
-                            </button>
-                            <button
-                              onClick={() => setFocus("role_distribution")}
-                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                                focus === "role_distribution"
-                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                                  : "bg-slate-50 border-slate-200 text-slate-600"
-                              }`}
-                            >
-                              Role Distributed
-                            </button>
-                            <button
-                              onClick={() => setFocus("random")}
-                              className={`flex-1 rounded-xl py-2 px-3 text-xs font-semibold transition border ${
-                                focus === "random"
-                                  ? "bg-[#6C63FF] border-[#6C63FF] text-white"
-                                  : "bg-slate-50 border-slate-200 text-slate-600"
-                              }`}
-                            >
-                              Random
-                            </button>
-                          </div>
-                        </div>
+                        <div className="space-y-5">
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                <Users size={16} className="text-indigo-600" />
+                                Select Students
+                              </h4>
+                              <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                                {selectedStudentIds.length} / {maxTeamSize}
+                              </span>
+                            </div>
 
-                        <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
-                          <button
-                            onClick={handleAISplit}
-                            disabled={roster.length === 0 || allocating}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 py-3 text-sm font-bold text-white shadow-md shadow-indigo-100 transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-                          >
-                            <Sparkles size={16} />
-                            {allocating ? "Allocating..." : "Allocate via Gemini AI"}
-                          </button>
-                          <button
-                            onClick={handleOfflineSplit}
-                            disabled={roster.length === 0}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-100 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                          >
-                            Manual Offline Split
-                          </button>
+                            {loadingRoster ? (
+                              <div className="py-8 text-center text-sm text-slate-400">
+                                Loading students...
+                              </div>
+                            ) : roster.length === 0 ? (
+                              <div className="py-8 text-center text-sm text-slate-400">
+                                Select a section on the left to see student list
+                              </div>
+                            ) : (
+                              <div className="space-y-2 max-h-[450px] overflow-y-auto">
+                                {roster.map((student) => {
+                                  const isSelected = selectedStudentIds.includes(student.id)
+                                  const canSelect = !isSelected || selectedStudentIds.length < maxTeamSize
+
+                                  return (
+                                    <label
+                                      key={student.id}
+                                      className={`flex items-center gap-3 p-3 rounded-2xl border transition cursor-pointer ${
+                                        isSelected
+                                          ? "border-indigo-200 bg-indigo-50"
+                                          : "border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30"
+                                      } ${!canSelect && !isSelected ? "opacity-50 cursor-not-allowed" : ""}`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          if (isSelected) {
+                                            setSelectedStudentIds(prev => prev.filter(id => id !== student.id))
+                                          } else if (selectedStudentIds.length < maxTeamSize) {
+                                            setSelectedStudentIds(prev => [...prev, student.id])
+                                          }
+                                        }}
+                                        disabled={!canSelect && !isSelected}
+                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-semibold text-slate-800 truncate">{student.name}</p>
+                                        <p className="text-xs text-slate-400 truncate">{student.email}</p>
+                                      </div>
+                                      {isSelected && (
+                                        <span className="text-xs font-bold bg-indigo-600 text-white px-2 py-1 rounded-lg flex-shrink-0">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            )}
+
+                            {selectedStudentIds.length >= maxTeamSize && (
+                              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-semibold">
+                                ⚠ Team is full. Max size ({maxTeamSize}) reached.
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex flex-col gap-2">
+                            <button
+                              onClick={async () => {
+                                if (!teamName.trim() || selectedStudentIds.length === 0 || !projectTitle.trim()) {
+                                  triggerToast("Please fill in team name, select students, and enter project title", "warning")
+                                  return
+                                }
+                                if (!selectedSectionId) {
+                                  triggerToast("Please select a section", "warning")
+                                  return
+                                }
+
+                                setSaving(true)
+                                const newTeam = {
+                                  name: teamName.trim(),
+                                  description: projectDesc.trim() || "Group project work",
+                                  motto: `Team: ${teamName}`,
+                                  memberIds: selectedStudentIds,
+                                  synergyScore: 85
+                                }
+
+                                setGeneratedTeams(prev => [...prev, newTeam])
+                                triggerToast(`Team "${teamName}" created with ${selectedStudentIds.length} member(s)!`, "success")
+
+                                setTeamName("")
+                                setSelectedStudentIds([])
+                                setMaxTeamSize(4)
+                                setSaving(false)
+                              }}
+                              disabled={saving || !selectedSectionId || selectedStudentIds.length === 0 || !teamName.trim()}
+                              className="w-full rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                            >
+                              <Plus size={16} />
+                              Add This Team
+                            </button>
+
+                            {generatedTeams.length > 0 && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    if (!projectTitle.trim()) {
+                                      triggerToast("Please enter a project title", "warning")
+                                      return
+                                    }
+                                    handlePublish()
+                                  }}
+                                  disabled={saving || generatedTeams.length === 0 || !projectTitle.trim()}
+                                  className="w-full rounded-2xl bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                                >
+                                  <Sparkles size={16} />
+                                  Publish All Teams ({generatedTeams.length})
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    setGeneratedTeams([])
+                                    setSelectedStudentIds([])
+                                    setTeamName("")
+                                    triggerToast("All teams cleared. Start fresh.", "info")
+                                  }}
+                                  className="w-full rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 text-xs font-bold transition-all"
+                                >
+                                  Clear All Teams
+                                </button>
+                              </>
+                            )}
+
+                            {generatedTeams.length > 0 && (
+                              <div className="mt-6 pt-6 border-t border-slate-200">
+                                <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                  <FolderKanban size={16} className="text-indigo-600" />
+                                  Teams to Publish ({generatedTeams.length})
+                                </h4>
+
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                  {generatedTeams.map((team: any, idx: number) => {
+                                    return (
+                                      <div key={idx} className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
+                                        <div className="flex items-start justify-between gap-2 mb-3">
+                                          <div>
+                                            <h5 className="font-bold text-slate-800 text-sm">{team.name}</h5>
+                                            <p className="text-xs text-slate-500 mt-0.5">{team.memberIds.length} members</p>
+                                          </div>
+                                          <button
+                                            onClick={() => {
+                                              setGeneratedTeams(prev => prev.filter((_, i) => i !== idx))
+                                              triggerToast("Team removed", "info")
+                                            }}
+                                            className="text-slate-300 hover:text-red-500 p-1 transition"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Members</p>
+                                            <div className="mt-1 space-y-1">
+                                              {team.memberIds.slice(0, 3).map((memberId: string, mIdx: number) => {
+                                                const member = roster.find((s: any) => s.id === memberId)
+                                                return (
+                                                  <p key={mIdx} className="text-xs text-slate-600 truncate">
+                                                    • {member?.name}
+                                                  </p>
+                                                )
+                                              })}
+                                              {team.memberIds.length > 3 && (
+                                                <p className="text-xs text-slate-400 italic">
+                                                  +{team.memberIds.length - 3} more
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
+                        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800">Created Teams</h4>
+                            <p className="mt-1 text-xs text-slate-500">Choose a section to view its teams.</p>
+                          </div>
+                          <select
+                            value={projectSectionFilter}
+                            onChange={(e) => setProjectSectionFilter(e.target.value)}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-indigo-500"
+                          >
+                            <option value="all">All sections</option>
+                            {sections.map((section) => (
+                              <option key={section.id} value={section.id}>Section {section.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
                         {localProjects.length === 0 ? (
                           <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
                             <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
@@ -2110,42 +2524,51 @@ export function FacultySubjectDetailClient({
                             <p className="mt-2 text-sm text-slate-500">Switch to the "New Allocate" tab to split project teams for a section.</p>
                           </div>
                         ) : (
-                          localProjects.map((proj) => (
-                            <div key={proj.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                              <div className="flex items-start justify-between">
-                                <div>
+                          localProjects.map((proj) => {
+                            const visibleGroups = (proj.project_groups || []).filter((group: any) =>
+                              projectSectionFilter === "all" || getGroupSectionId(group) === projectSectionFilter
+                            )
+
+                            if (visibleGroups.length === 0) return null
+
+                            return (
+                              <div key={proj.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                                <div className="mb-4">
                                   <h3 className="text-lg font-bold text-slate-900">{proj.title}</h3>
                                   <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
-                                  <p className="mt-2 text-xs text-slate-400">Created: {new Date(proj.created_at).toLocaleDateString()}</p>
                                 </div>
-                                <button
-                                  onClick={() => setExpandedProjId(expandedProjId === proj.id ? null : proj.id)}
-                                  className="rounded-xl border border-slate-100 px-4 py-2 text-xs font-semibold hover:bg-slate-50"
-                                >
-                                  {expandedProjId === proj.id ? "Hide details" : "View groups"}
-                                </button>
-                              </div>
-
-                              {expandedProjId === proj.id && (
-                                <div className="mt-6 border-t border-slate-100 pt-6">
-                                  <div className="grid gap-6 sm:grid-cols-2">
-                                    {proj.project_groups?.map((group: any) => (
-                                      <div key={group.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
-                                        <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">{group.group_name}</h4>
-                                        <div className="space-y-2">
-                                          {group.group_members?.map((member: any, mIdx: number) => (
-                                            <div key={mIdx} className="flex flex-col rounded-xl bg-white p-2 text-xs border border-slate-100">
-                                              <span className="font-semibold text-slate-700">{member.users?.name}</span>
-                                            </div>
-                                          ))}
+                                <div className="divide-y divide-slate-100 border-t border-slate-100">
+                                  {visibleGroups.map((group: any, groupIndex: number) => (
+                                    <div key={group.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                      <div className="flex min-w-0 items-start gap-3">
+                                        <span className="w-6 shrink-0 pt-0.5 text-xs font-bold text-slate-400">{groupIndex + 1}.</span>
+                                        <div className="min-w-0">
+                                          <p className="font-bold text-slate-800">{group.group_name}</p>
+                                          <p className="mt-1 truncate text-xs font-medium text-slate-400">
+                                            {(group.group_members || []).map((member: any) => member.users?.name || "Student").join(", ") || "No members"}
+                                          </p>
                                         </div>
                                       </div>
-                                    ))}
-                                  </div>
+                                      <div className="flex shrink-0 items-center gap-2 pl-9 sm:pl-0">
+                                        <button
+                                          onClick={() => openGroupEditor(group)}
+                                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                                        >
+                                          <Pencil size={13} /> Edit team
+                                        </button>
+                                        <button
+                                          onClick={() => setUpdateGroup(group)}
+                                          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700"
+                                        >
+                                          <Send size={13} /> Send update
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              )}
-                            </div>
-                          ))
+                              </div>
+                            )
+                          })
                         )}
                       </div>
                     )}
@@ -2155,8 +2578,6 @@ export function FacultySubjectDetailClient({
             </div>
           </div>
         )}
-
-        {/* Tab 5: Video Classroom */}
         {activeTab === "meetings" && (
           <div className="space-y-6 text-left">
             {/* Top meeting launch bar */}
@@ -2536,6 +2957,92 @@ export function FacultySubjectDetailClient({
               >
                 {isStartingMeeting && <Loader2 size={12} className="animate-spin" />}
                 Schedule Slot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Edit team</h3>
+                <p className="mt-1 text-xs text-slate-500">Update the team name or its members.</p>
+              </div>
+              <button onClick={() => setEditingGroup(null)} className="text-slate-400 hover:text-slate-700" title="Close edit team">
+                <X size={18} />
+              </button>
+            </div>
+            <input
+              value={editingGroupName}
+              onChange={(e) => setEditingGroupName(e.target.value)}
+              className="mt-5 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-indigo-500"
+              placeholder="Team name"
+            />
+            <div className="mt-4 max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-100 p-3">
+              {students.map((student: any) => (
+                <label key={student.id} className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={editingMemberIds.includes(student.id)}
+                    onChange={() => setEditingMemberIds((prev) => prev.includes(student.id)
+                      ? prev.filter((id) => id !== student.id)
+                      : [...prev, student.id])}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-medium text-slate-700">{student.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setEditingGroup(null)} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">Cancel</button>
+              <button
+                onClick={handleUpdateGroup}
+                disabled={updatingGroup}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {updatingGroup ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {updateGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Send team update</h3>
+                <p className="mt-1 text-xs text-slate-500">Send a notification to {updateGroup.group_name}.</p>
+              </div>
+              <button onClick={() => setUpdateGroup(null)} className="text-slate-400 hover:text-slate-700" title="Close team update">
+                <X size={18} />
+              </button>
+            </div>
+            <input
+              value={groupUpdateTitle}
+              onChange={(e) => setGroupUpdateTitle(e.target.value)}
+              className="mt-5 w-full rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none focus:border-indigo-500"
+              placeholder="Update title"
+            />
+            <textarea
+              rows={5}
+              value={groupUpdateMessage}
+              onChange={(e) => setGroupUpdateMessage(e.target.value)}
+              className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-indigo-500"
+              placeholder="Write your update..."
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setUpdateGroup(null)} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100">Cancel</button>
+              <button
+                onClick={handleSendGroupUpdate}
+                disabled={sendingGroupUpdate}
+                className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {sendingGroupUpdate ? "Sending..." : "Send update"}
               </button>
             </div>
           </div>

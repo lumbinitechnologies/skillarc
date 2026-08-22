@@ -79,8 +79,20 @@ export function StudentList({
 
   if (isLoading) {
     return (
-      <div className="flex h-56 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-violet-600" />
+      <div className="space-y-4 p-6 bg-white rounded-2xl">
+        {[1, 2, 3, 4].map((n) => (
+          <div key={n} className="flex items-center gap-4 animate-pulse py-3 border-b border-slate-100/50 last:border-0">
+            <div className="h-4 w-4 rounded bg-slate-100 shrink-0" />
+            <div className="h-10 w-10 rounded-full bg-slate-100 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-1/3 rounded bg-slate-100" />
+              <div className="h-3 w-1/4 rounded bg-slate-100" />
+            </div>
+            <div className="h-4 w-24 rounded bg-slate-100" />
+            <div className="h-4 w-16 rounded bg-slate-100" />
+            <div className="h-8 w-16 rounded bg-slate-100 shrink-0" />
+          </div>
+        ))}
       </div>
     )
   }
@@ -107,7 +119,7 @@ export function StudentList({
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
-                  className="h-4 w-4 rounded border-gray-300 accent-violet-600 cursor-pointer"
+                  className="h-4 w-4 rounded border-gray-300 accent-[#6C63FF] cursor-pointer"
                 />
               </TableHead>
               <TableHead>USN</TableHead>
@@ -131,8 +143,8 @@ export function StudentList({
                   className={`
                     !border-0 cursor-pointer transition-colors
                     ${isChecked
-                      ? "bg-violet-50"
-                      : index % 2 === 0 ? "bg-white" : "bg-muted/20"
+                      ? "bg-indigo-50/70"
+                      : index % 2 === 0 ? "bg-white" : "bg-muted/10"
                     }
                     hover:bg-muted/50
                   `}
@@ -147,7 +159,7 @@ export function StudentList({
                         toggleOne(student.id)
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 rounded border-gray-300 accent-violet-600 cursor-pointer"
+                      className="h-4 w-4 rounded border-gray-300 accent-[#6C63FF] cursor-pointer"
                     />
                   </TableCell>
 
@@ -157,7 +169,7 @@ export function StudentList({
 
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white font-semibold shrink-0">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] text-white font-semibold shrink-0 shadow-sm shadow-indigo-100">
                         {student.name?.charAt(0)}
                       </div>
                       <div>
@@ -199,13 +211,13 @@ export function StudentList({
                       <Button
                         variant="outline"
                         size="icon"
-                        className="text-violet-600 hover:bg-violet-50 h-8 w-8"
+                        className="text-[#6C63FF] hover:bg-indigo-50 border-indigo-100/50 h-8 w-8"
                         onClick={(e) => {
                           e.stopPropagation()
                           onEdit?.(student)
                         }}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         variant="outline"

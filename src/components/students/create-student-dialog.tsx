@@ -3,11 +3,25 @@
 import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { X, GraduationCap, User, Phone, BookOpen, KeyRound, ChevronDown } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  X,
+  GraduationCap,
+  User,
+  Phone,
+  BookOpen,
+  KeyRound,
+  ChevronDown,
+  Check,
+  ArrowRight,
+  ArrowLeft,
+  Mail,
+  Search,
+  Users
+} from "lucide-react"
 import type { StudentWithSection, CreateStudentInput, UpdateStudentInput } from "@/modules/students"
-
-const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
 
 interface CreateStudentDialogProps {
   open: boolean
@@ -19,82 +33,30 @@ interface CreateStudentDialogProps {
   isLoading?: boolean
 }
 
-function SectionDivider({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0 2px" }}>
-      <div style={{
-        width: 24, height: 24, borderRadius: 7,
-        background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        boxShadow: "0 2px 6px rgba(99,102,241,0.35)",
-      }}>
-        {icon}
-      </div>
-      <span style={{ fontSize: 11, fontWeight: 700, color: "#6366f1", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-        {label}
-      </span>
-      <div style={{ flex: 1, height: 1, background: "linear-gradient(to right, #ede9fe, transparent)" }} />
-    </div>
-  )
-}
-
-function FieldLabel({ children, required, hint }: { children: React.ReactNode; required?: boolean; hint?: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 5 }}>
-      <p style={{ fontSize: 11, fontWeight: 700, color: "#374151", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-        {children}{required && <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>}
-      </p>
-      {hint && <span style={{ fontSize: 10.5, fontWeight: 500, color: "#9ca3af", textTransform: "none" }}>{hint}</span>}
-    </div>
-  )
-}
-
-function StyledSelect({ value, onChange, children, disabled }: {
-  value: string | number
-  onChange: (v: string) => void
-  children: React.ReactNode
-  disabled?: boolean
-}) {
-  return (
-    <div style={{ position: "relative" }}>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        style={{
-          width: "100%", padding: "9px 32px 9px 12px", fontSize: 13, fontWeight: 500,
-          border: "1.5px solid #e5e7eb", borderRadius: 10,
-          backgroundColor: disabled ? "#f9fafb" : "#fff",
-          color: disabled ? "#9ca3af" : "#111827",
-          outline: "none", fontFamily: font, cursor: disabled ? "not-allowed" : "pointer",
-          appearance: "none",
-          transition: "border-color 0.15s, box-shadow 0.15s",
-        }}
-        onFocus={e => { if (!disabled) { e.currentTarget.style.borderColor = "#6366f1"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)" } }}
-        onBlur={e => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.boxShadow = "none" }}
-      >
-        {children}
-      </select>
-      <ChevronDown size={14} color={disabled ? "#cbd5e1" : "#6b7280"} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-    </div>
-  )
-}
-
-function StyledInput(props: React.ComponentProps<typeof Input> & { style?: React.CSSProperties }) {
-  return (
-    <Input
-      {...props}
-      style={{
-        fontSize: 13, fontWeight: 500, fontFamily: font,
-        border: "1.5px solid #e5e7eb", borderRadius: 10,
-        backgroundColor: "#fff", height: 38,
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        ...props.style,
-      }}
-      onFocus={e => { e.currentTarget.style.borderColor = "#6366f1"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)" }}
-      onBlur={e => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.boxShadow = "none" }}
-    />
-  )
+const slideVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 160 : -160,
+    opacity: 0,
+    filter: "blur(4px)",
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    filter: "blur(0px)",
+    transition: {
+      x: { type: "spring" as const, stiffness: 260, damping: 25 },
+      opacity: { duration: 0.15 },
+    },
+  },
+  exit: (direction: number) => ({
+    x: direction < 0 ? 160 : -160,
+    opacity: 0,
+    filter: "blur(4px)",
+    transition: {
+      x: { type: "spring" as const, stiffness: 260, damping: 25 },
+      opacity: { duration: 0.15 },
+    },
+  }),
 }
 
 export function CreateStudentDialog({
@@ -133,8 +95,19 @@ export function CreateStudentDialog({
     admission_year: student?.admission_year || currentYear,
   })
 
+  const [step, setStep] = useState(1)
+  const [direction, setDirection] = useState(0)
   const [formData, setFormData] = useState<CreateStudentInput | UpdateStudentInput>(fromStudent())
   const { toast } = useToast()
+
+  // Reset steps and form state when modal toggles
+  useEffect(() => {
+    if (open) {
+      setStep(1)
+      setDirection(0)
+      setFormData(fromStudent())
+    }
+  }, [open, student])
 
   useEffect(() => {
     async function fetchGuardian() {
@@ -159,8 +132,6 @@ export function CreateStudentDialog({
         }
       }
     }
-
-    setFormData(fromStudent())
     fetchGuardian()
   }, [student])
 
@@ -197,6 +168,41 @@ export function CreateStudentDialog({
     setFormData(prev => ({ ...prev, semester: parseInt(v), section_id: "" }))
   }
 
+  const handleNextStep = () => {
+    if (step === 1) {
+      if (!(formData.name || "").trim()) {
+        toast({ title: "Validation Error", description: "Full Name is required.", variant: "destructive" })
+        return
+      }
+      if (!student && !((formData as any).email || "").trim()) {
+        toast({ title: "Validation Error", description: "Email address is required.", variant: "destructive" })
+        return
+      }
+      setDirection(1)
+      setStep(2)
+    } else if (step === 2) {
+      if (!formData.program_id) {
+        toast({ title: "Validation Error", description: "Please select a Program.", variant: "destructive" })
+        return
+      }
+      if (!formData.semester) {
+        toast({ title: "Validation Error", description: "Please select a Semester.", variant: "destructive" })
+        return
+      }
+      if (!formData.section_id) {
+        toast({ title: "Validation Error", description: "Please select a Section.", variant: "destructive" })
+        return
+      }
+      setDirection(1)
+      setStep(3)
+    }
+  }
+
+  const handlePrevStep = () => {
+    setDirection(-1)
+    setStep(prev => Math.max(1, prev - 1))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.name || (!student && !(formData as any).email) || !formData.section_id) {
@@ -206,7 +212,6 @@ export function CreateStudentDialog({
     try {
       await onSubmit(formData, !!student)
       onOpenChange(false)
-      setFormData(emptyForm)
     } catch (error) {
       toast({ title: "Error", description: error instanceof Error ? error.message : "Something went wrong", variant: "destructive" })
     }
@@ -214,313 +219,379 @@ export function CreateStudentDialog({
 
   const isEdit = !!student
 
+  const stepsList = [
+    { label: "Identity", icon: User },
+    { label: "Academics", icon: BookOpen },
+    { label: "Guardian", icon: Users }
+  ]
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 overflow-hidden" style={{ maxWidth: 520, borderRadius: 20, fontFamily: font, border: "none" }}>
+      <DialogContent className="p-0 overflow-hidden bg-white/95 backdrop-blur-xl border border-slate-200/80 shadow-2xl rounded-[28px] sm:max-w-[540px] w-[95%] font-['Plus_Jakarta_Sans',sans-serif]">
+        
+        {/* Glow Spheres */}
+        <div className="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-gradient-to-tr from-slate-100 to-slate-200/50 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-16 -right-16 w-52 h-52 rounded-full bg-gradient-to-tr from-slate-100 to-slate-200/30 blur-3xl pointer-events-none" />
 
-        {/* Header */}
-        <div style={{
-          background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-          padding: "20px 24px 18px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          position: "relative", overflow: "hidden",
-        }}>
-          <div style={{
-            position: "absolute", top: -30, right: -30, width: 120, height: 120,
-            borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.08)",
-          }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 12, position: "relative" }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 12,
-              backgroundColor: "rgba(255,255,255,0.15)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <GraduationCap size={20} color="#fff" />
+        {/* Header (Clean, Editorial white layout) */}
+        <div className="bg-white px-6 py-5 flex items-center justify-between border-b border-slate-100 relative z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-200/60 shadow-sm text-slate-800">
+              <GraduationCap size={20} />
             </div>
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
-                {isEdit ? "Edit Student" : "Register Student"}
+              <h2 className="text-lg font-black text-slate-900 tracking-tight leading-none">
+                {isEdit ? "Edit Student Profile" : "Register Student"}
               </h2>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 1 }}>
-                {isEdit ? "Update student details" : "Fill in the details below to create an account"}
+              <p className="text-xs text-slate-400 mt-1 font-medium">
+                {isEdit ? "Modify student catalog parameters" : "Configure new student catalog metadata"}
               </p>
             </div>
           </div>
           <button
             onClick={() => onOpenChange(false)}
-            style={{
-              width: 32, height: 32, borderRadius: 8, border: "none",
-              backgroundColor: "rgba(255,255,255,0.15)", display: "flex",
-              alignItems: "center", justifyContent: "center", cursor: "pointer",
-              position: "relative", transition: "background-color 0.15s",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.25)")}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.15)")}
+            className="w-8 h-8 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/50 flex items-center justify-center cursor-pointer transition-all duration-200"
           >
-            <X size={15} color="#fff" />
+            <X size={15} className="text-slate-500" />
           </button>
         </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit}>
-          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14, maxHeight: "62vh", overflowY: "auto" }}>
-
-            {/* ── Student Identity ── */}
-            <SectionDivider icon={<User size={13} color="#fff" />} label="Student Identity" />
-
-            {/* Name */}
-            <div>
-              <FieldLabel required>Full Name</FieldLabel>
-              <StyledInput
-                placeholder="e.g. Arjun Reddy"
-                value={formData.name}
-                onChange={e => set("name", e.target.value)}
-              />
-            </div>
-
-            {/* Email — create only */}
-            {!isEdit && (
-              <div>
-                <FieldLabel required>Email</FieldLabel>
-                <StyledInput
-                  type="email"
-                  placeholder="student@college.edu"
-                  value={(formData as any).email || ""}
-                  onChange={e => set("email", e.target.value)}
-                />
-              </div>
-            )}
-
-            {/* Phone */}
-            <div>
-              <FieldLabel>Phone Number</FieldLabel>
-              <StyledInput
-                type="tel"
-                placeholder="e.g. 9876543210"
-                value={(formData as any).phone || ""}
-                onChange={e => set("phone", e.target.value)}
-              />
-            </div>
-
-            {/* Reg No + Admission Year */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <FieldLabel>Reg. Number</FieldLabel>
-                <StyledInput
-                  placeholder="e.g. 22CSE001"
-                  value={(formData as any).registration_number || ""}
-                  onChange={e => set("registration_number", e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Admission Year</FieldLabel>
-                <StyledSelect
-                  value={(formData as any).admission_year || currentYear}
-                  onChange={v => set("admission_year", parseInt(v))}
-                >
-                  {admissionYearOptions.map(y => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </StyledSelect>
-              </div>
-            </div>
-
-            {/* ── Academic Details ── */}
-            <SectionDivider icon={<BookOpen size={13} color="#fff" />} label="Academic Details" />
-
-            {/* Program */}
-            <div>
-              <FieldLabel required>Program</FieldLabel>
-              <StyledSelect value={formData.program_id || ""} onChange={handleProgramChange}>
-                <option value="">Select program</option>
-                {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </StyledSelect>
-            </div>
-
-            {/* Semester + Section */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <FieldLabel required>Semester</FieldLabel>
-                <StyledSelect
-                  value={formData.semester || ""}
-                  onChange={handleSemesterChange}
-                  disabled={!formData.program_id}
-                >
-                  {!formData.program_id
-                    ? <option value="">Select program first</option>
-                    : availableSemesters.length === 0
-                      ? <option value="">No semesters</option>
-                      : availableSemesters.map(s => <option key={s} value={s}>Semester {s}</option>)
-                  }
-                </StyledSelect>
-              </div>
-              <div>
-                <FieldLabel required>Section</FieldLabel>
-                <StyledSelect
-                  value={formData.section_id || ""}
-                  onChange={v => set("section_id", v)}
-                  disabled={!formData.program_id}
-                >
-                  <option value="">
-                    {!formData.program_id
-                      ? "Select program first"
-                      : filteredSections.length === 0
-                        ? "No sections available"
-                        : "Select section"}
-                  </option>
-                  {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </StyledSelect>
-              </div>
-            </div>
-
-            {/* ── Parent / Guardian Details ── */}
-            <SectionDivider icon={<User size={13} color="#fff" />} label="Parent / Guardian Details" />
-
-            <div>
-              <FieldLabel>Search Existing Parent</FieldLabel>
-              <div style={{ position: "relative" }}>
-                <Input
-                  placeholder="Type name or email to search existing..."
-                  onChange={async (e) => {
-                    const term = e.target.value;
-                    if (term.length > 2) {
-                      try {
-                        const res = await fetch(`/api/parents?institution_id=${(formData as any).institution_id || student?.institution_id || ""}`);
-                        if (res.ok) {
-                          const parents = await res.json();
-                          const matched = parents.find((p: any) =>
-                            p.name?.toLowerCase().includes(term.toLowerCase()) ||
-                            p.email?.toLowerCase().includes(term.toLowerCase())
-                          );
-                          if (matched) {
-                            set("parentName", matched.name || "");
-                            set("parentEmail", matched.email || "");
-                            set("parentPhone", matched.phone || "");
-                          }
-                        }
-                      } catch (err) {
-                        console.error(err);
-                      }
-                    }
-                  }}
-                  style={{
-                    fontSize: 13, fontWeight: 500, fontFamily: font,
-                    border: "1.5px solid #e5e7eb", borderRadius: 10,
-                    backgroundColor: "#fff", height: 38,
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <FieldLabel>Parent/Guardian Name</FieldLabel>
-                <StyledInput
-                  placeholder="Name"
-                  value={(formData as any).parentName || ""}
-                  onChange={e => set("parentName", e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Parent/Guardian Email</FieldLabel>
-                <StyledInput
-                  type="email"
-                  placeholder="parent@example.com"
-                  value={(formData as any).parentEmail || ""}
-                  onChange={e => set("parentEmail", e.target.value)}
-                  disabled={isEdit}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <FieldLabel>Parent Phone</FieldLabel>
-                <StyledInput
-                  placeholder="Phone"
-                  value={(formData as any).parentPhone || ""}
-                  onChange={e => set("parentPhone", e.target.value)}
-                />
-              </div>
-              <div>
-                <FieldLabel>Relationship</FieldLabel>
-                <StyledSelect
-                  value={(formData as any).parentRelationship || "Guardian"}
-                  onChange={v => set("parentRelationship", v)}
-                >
-                  <option value="Father">Father</option>
-                  <option value="Mother">Mother</option>
-                  <option value="Guardian">Guardian</option>
-                  <option value="Other">Other</option>
-                </StyledSelect>
-              </div>
-            </div>
-
-            {/* ── Account Setup (create only) ── */}
-            {!isEdit && (
-              <>
-                <SectionDivider icon={<KeyRound size={13} color="#fff" />} label="Account Setup" />
-                <div style={{
-                  display: "flex", gap: 10, alignItems: "flex-start",
-                  padding: "12px 14px", borderRadius: 12,
-                  backgroundColor: "#f5f3ff", border: "1px solid #ede9fe",
-                }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                    backgroundColor: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                    border: "1px solid #ddd6fe",
-                  }}>
-                    <KeyRound size={14} color="#7c3aed" />
-                  </div>
-                  <p style={{ fontSize: 12, color: "#5b21b6", lineHeight: 1.5, fontWeight: 500 }}>
-                    A secure temporary password will be generated automatically and sent to the
-                    student's email. They'll be asked to set their own password on first login.
-                  </p>
+        {/* Step Progress Line */}
+        <div className="relative flex items-center justify-between px-10 py-5 border-b border-slate-100 bg-slate-50/10">
+          <div className="absolute left-[52px] right-[52px] top-1/2 h-[2px] bg-slate-100 -translate-y-1/2 z-0" />
+          <div
+            className="absolute left-[52px] top-1/2 h-[2px] bg-slate-900 -translate-y-1/2 transition-all duration-300 z-0"
+            style={{ width: `${(step - 1) * 50}%` }}
+          />
+          {stepsList.map((s, idx) => {
+            const StepIcon = s.icon
+            const isCompleted = step > idx + 1
+            const isActive = step === idx + 1
+            return (
+              <div key={idx} className="relative z-10 flex flex-col items-center gap-1.5">
+                <div className={`h-9 w-9 rounded-2xl flex items-center justify-center transition-all duration-300 border ${
+                  isCompleted || isActive
+                    ? "bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-200"
+                    : "bg-white border-slate-200 text-slate-400"
+                }`}>
+                  {isCompleted ? <Check className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
                 </div>
-              </>
-            )}
+                <span className={`text-[10px] font-black uppercase tracking-[0.15em] transition-all ${
+                  isActive || isCompleted ? "text-slate-900" : "text-slate-400"
+                }`}>
+                  {s.label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
 
-          </div>
+        {/* Sliding Body */}
+        <div className="overflow-hidden">
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={step}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              className="px-6 py-5 flex flex-col gap-4 max-h-[52vh] overflow-y-auto"
+            >
+              {step === 1 && (
+                <>
+                  {/* Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Full Name <span className="text-red-500">*</span></label>
+                    <Input
+                      placeholder="e.g. Arjun Reddy"
+                      value={formData.name}
+                      onChange={e => set("name", e.target.value)}
+                      className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                    />
+                  </div>
 
-          {/* Footer */}
-          <div style={{
-            padding: "14px 24px", borderTop: "1px solid #f3f4f6",
-            display: "flex", gap: 10, backgroundColor: "#fafafa",
-          }}>
-            <button
+                  {/* Email — create only */}
+                  {!isEdit && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Email Address <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <Input
+                          type="email"
+                          placeholder="student@college.edu"
+                          value={(formData as any).email || ""}
+                          onChange={e => set("email", e.target.value)}
+                          className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                        />
+                        <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Phone */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Phone Number</label>
+                    <div className="relative">
+                      <Input
+                        type="tel"
+                        placeholder="e.g. 9876543210"
+                        value={(formData as any).phone || ""}
+                        onChange={e => set("phone", e.target.value)}
+                        className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                      />
+                      <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    </div>
+                  </div>
+
+                  {/* Reg No & Admission Year */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Reg. Number</label>
+                      <Input
+                        placeholder="e.g. 22CSE001"
+                        value={(formData as any).registration_number || ""}
+                        onChange={e => set("registration_number", e.target.value)}
+                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Admission Year</label>
+                      <div className="relative">
+                        <select
+                          value={(formData as any).admission_year || currentYear}
+                          onChange={e => set("admission_year", parseInt(e.target.value))}
+                          className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer"
+                        >
+                          {admissionYearOptions.map(y => (
+                            <option key={y} value={y}>{y}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 2 && (
+                <>
+                  {/* Program */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Academic Program <span className="text-red-500">*</span></label>
+                    <div className="relative">
+                      <select
+                        value={formData.program_id || ""}
+                        onChange={e => handleProgramChange(e.target.value)}
+                        className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer"
+                      >
+                        <option value="">Select program...</option>
+                        {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  {/* Semester & Section */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Semester <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <select
+                          value={formData.semester || ""}
+                          onChange={e => handleSemesterChange(e.target.value)}
+                          disabled={!formData.program_id}
+                          className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        >
+                          {!formData.program_id ? (
+                            <option value="">Select program first</option>
+                          ) : availableSemesters.length === 0 ? (
+                            <option value="">No semesters</option>
+                          ) : (
+                            availableSemesters.map(s => <option key={s} value={s}>Semester {s}</option>)
+                          )}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Section <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <select
+                          value={formData.section_id || ""}
+                          onChange={e => set("section_id", e.target.value)}
+                          disabled={!formData.program_id}
+                          className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                        >
+                          <option value="">
+                            {!formData.program_id
+                              ? "Select program first"
+                              : filteredSections.length === 0
+                                ? "No sections available"
+                                : "Select section"}
+                          </option>
+                          {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 3 && (
+                <>
+                  {/* Search Existing Parent */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Search Existing Parent</label>
+                    <div className="relative">
+                      <Input
+                        placeholder="Type name or email to auto-fill..."
+                        onChange={async (e) => {
+                          const term = e.target.value;
+                          if (term.length > 2) {
+                            try {
+                              const res = await fetch(`/api/parents?institution_id=${(formData as any).institution_id || student?.institution_id || ""}`);
+                              if (res.ok) {
+                                const parentList = await res.json();
+                                const matched = parentList.find((p: any) =>
+                                  p.name?.toLowerCase().includes(term.toLowerCase()) ||
+                                  p.email?.toLowerCase().includes(term.toLowerCase())
+                                );
+                                if (matched) {
+                                  set("parentName", matched.name || "");
+                                  set("parentEmail", matched.email || "");
+                                  set("parentPhone", matched.phone || "");
+                                }
+                              }
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }
+                        }}
+                        className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                      />
+                      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    </div>
+                  </div>
+
+                  {/* Parent Name & Email */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent/Guardian Name</label>
+                      <Input
+                        placeholder="Name"
+                        value={(formData as any).parentName || ""}
+                        onChange={e => set("parentName", e.target.value)}
+                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent/Guardian Email</label>
+                      <Input
+                        type="email"
+                        placeholder="parent@example.com"
+                        value={(formData as any).parentEmail || ""}
+                        onChange={e => set("parentEmail", e.target.value)}
+                        disabled={isEdit}
+                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Parent Phone & Relationship */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent Phone</label>
+                      <Input
+                        placeholder="Phone"
+                        value={(formData as any).parentPhone || ""}
+                        onChange={e => set("parentPhone", e.target.value)}
+                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Relationship</label>
+                      <div className="relative">
+                        <select
+                          value={(formData as any).parentRelationship || "Guardian"}
+                          onChange={e => set("parentRelationship", e.target.value)}
+                          className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer"
+                        >
+                          <option value="Father">Father</option>
+                          <option value="Mother">Mother</option>
+                          <option value="Guardian">Guardian</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Account setup warning */}
+                  {!isEdit && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex gap-3 items-start p-3.5 rounded-2xl bg-slate-50 border border-slate-200 mt-2"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex-shrink-0 bg-white flex items-center justify-center border border-slate-200 shadow-sm text-slate-700">
+                        <KeyRound size={13} />
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                        A temporary credentials password will be generated automatically and dispatched to the student's email.
+                      </p>
+                    </motion.div>
+                  )}
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-slate-50/30 z-10 relative">
+          {step > 1 ? (
+            <Button
               type="button"
+              variant="outline"
+              onClick={handlePrevStep}
+              className="flex-1 h-11 text-xs font-bold text-slate-600 rounded-2xl bg-white border border-slate-200/80 hover:bg-slate-50 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 flex items-center justify-center gap-1.5 outline-none"
+            >
+              <ArrowLeft size={14} />
+              Back
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => onOpenChange(false)}
-              style={{
-                flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 600,
-                color: "#374151", backgroundColor: "#fff",
-                border: "1.5px solid #e5e7eb", borderRadius: 10,
-                cursor: "pointer", fontFamily: font,
-                transition: "background-color 0.15s, border-color 0.15s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#f9fafb"; e.currentTarget.style.borderColor = "#d1d5db" }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "#fff"; e.currentTarget.style.borderColor = "#e5e7eb" }}
+              className="flex-1 h-11 text-xs font-bold text-slate-600 rounded-2xl bg-white border border-slate-200/80 hover:bg-slate-50 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
             >
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              style={{
-                flex: 2, padding: "10px 0", fontSize: 13, fontWeight: 700, color: "#fff",
-                background: isLoading ? "#c4b5fd" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                border: "none", borderRadius: 10,
-                cursor: isLoading ? "not-allowed" : "pointer",
-                fontFamily: font,
-                boxShadow: isLoading ? "none" : "0 4px 12px rgba(99,102,241,0.35)",
-                transition: "box-shadow 0.15s, transform 0.1s",
-              }}
-              onMouseDown={e => { if (!isLoading) e.currentTarget.style.transform = "scale(0.98)" }}
-              onMouseUp={e => { e.currentTarget.style.transform = "scale(1)" }}
+            </Button>
+          )}
+
+          {step < 3 ? (
+            <Button
+              type="button"
+              onClick={handleNextStep}
+              className="flex-[2] h-11 text-xs font-bold text-white rounded-2xl bg-slate-900 hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 flex items-center justify-center gap-1.5 shadow-md shadow-slate-200 border-none outline-none"
             >
-              {isLoading ? "Saving…" : isEdit ? "Save Changes" : "Register Student"}
-            </button>
-          </div>
-        </form>
+              Continue
+              <ArrowRight size={14} />
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="flex-[2] h-11 text-xs font-bold text-white rounded-2xl bg-slate-900 hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 flex items-center justify-center gap-1.5 shadow-md shadow-slate-200 border-none outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Saving..." : isEdit ? "Save Changes" : "Register Student"}
+            </Button>
+          )}
+        </div>
 
       </DialogContent>
     </Dialog>

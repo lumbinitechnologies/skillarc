@@ -26,7 +26,6 @@ export default async function ProjectGroupsPage() {
   let studentGroups: any[] = []
 
   if (profile.role === ROLES.FACULTY) {
-    // Fetch sections and subjects from timetable slots where faculty is assigned
     const { data: slots } = await supabase
       .from("timetable_slots")
       .select(`
@@ -59,7 +58,6 @@ export default async function ProjectGroupsPage() {
   } else if (profile.role === ROLES.STUDENT) {
     studentGroups = await getStudentProjectGroupsAction(user.id)
   } else {
-    // HOD or Admins see all projects
     const { data } = await supabase
       .from("projects")
       .select(`

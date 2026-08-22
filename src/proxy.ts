@@ -39,6 +39,11 @@ export async function proxy(request: NextRequest) {
   // Support both legacy `/login` and new `/auth/login` routes, plus public landing page `/`
   const isAuthRoute =
     pathname === "/" ||
+    pathname === "/platform" ||
+    pathname === "/solutions" ||
+    pathname === "/features" ||
+    pathname === "/about" ||
+    pathname === "/resources" ||
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/auth/login" ||

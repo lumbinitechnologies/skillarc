@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { Pencil, Trash2, X, Check, Plus, Building2 } from "lucide-react"
 import { createInstitution, deleteInstitution, updateInstitution } from "@/modules/org-admin/create-institution"
 
 const STATUS_STYLES: Record<string, string> = {
-  idle: "bg-slate-50 text-slate-600",
-  loading: "bg-slate-100 text-slate-600",
+  idle: "bg-editorial-blue bg-opacity-10 text-editorial-sky",
+  loading: "bg-editorial-blue bg-opacity-10 text-editorial-sky",
   success: "bg-emerald-50 text-emerald-700",
   error: "bg-rose-50 text-rose-700",
 }
@@ -89,39 +90,59 @@ export default function OrgAdminDashboardClient({
   ]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 lg:px-8"
+    >
       <div className="space-y-6">
-        <div className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+          className="rounded-[28px] border border-editorial-blue border-opacity-30 bg-editorial-navy bg-opacity-40 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Organization dashboard</p>
-              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-slate-950">Manage institutions with ease</h1>
-              <p className="mt-2 text-sm text-slate-500">Track organization growth, faculty oversight, and student expansion in one place.</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-editorial-orange">Organization dashboard</p>
+              <h1 className="mt-3 text-3xl font-black tracking-[-0.04em] text-editorial-cream">Manage institutions with ease</h1>
+              <p className="mt-2 text-sm text-editorial-sky text-opacity-60">Track organization growth, faculty oversight, and student expansion in one place.</p>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         <div className="grid gap-4 md:grid-cols-3">
-          {statCards.map((card) => (
-            <div key={card.label} className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-sm">
+          {statCards.map((card, idx) => (
+            <motion.div
+              key={card.label}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.12 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={{ y: -6 }}
+              className="rounded-[24px] border border-[#3A6DAF]/20 bg-[#FFFFFF] shadow-[0_8px_24px_rgba(20,35,75,0.08)] p-5 transition duration-300"
+            >
               <div className={`inline-flex h-12 w-12 items-center justify-center rounded-3xl ${card.accent}`}>
                 <span className="text-lg">{card.icon}</span>
               </div>
-              <p className="mt-4 text-2xl font-bold text-slate-950">{card.value}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{card.label}</p>
-            </div>
+              <p className="mt-4 text-2xl font-bold text-[#14234B]">{card.value}</p>
+              <p className="mt-1 text-sm font-semibold text-[#94BAC4]">{card.label}</p>
+            </motion.div>
           ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
-          <aside className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <motion.aside
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="rounded-[28px] border border-[#3A6DAF]/20 bg-[#FFFFFF] p-6 shadow-[0_12px_28px_rgba(20,35,75,0.08)]">
             <div className="flex items-center gap-4 pb-4">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)]">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl bg-[#E57D37]/10 text-[#E57D37]">
                 <Plus size={18} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-900">New institution</p>
-                <p className="text-sm text-slate-500">Launch an institution and invite an admin.</p>
+                <p className="text-sm font-semibold text-[#14234B]">New institution</p>
+                <p className="text-sm text-[#94BAC4]">Launch an institution and invite an admin.</p>
               </div>
             </div>
 
@@ -135,66 +156,70 @@ export default function OrgAdminDashboardClient({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-slate-700">Institution name</label>
+                <label className="block text-sm font-semibold text-[#14234B]">Institution name</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                   placeholder="e.g. RVCE, MIT Manipal"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
+                  className="mt-3 w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#3A6DAF] focus:ring-4 focus:ring-[#3A6DAF]/10 placeholder:text-[#94BAC4]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700">Domain (optional)</label>
+                <label className="block text-sm font-semibold text-[#14234B]">Domain (optional)</label>
                 <input
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
                   placeholder="e.g. rvce.edu.in"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
+                  className="mt-3 w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#3A6DAF] focus:ring-4 focus:ring-[#3A6DAF]/10 placeholder:text-[#94BAC4]"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-slate-700">Admin email</label>
+                <label className="block text-sm font-semibold text-[#14234B]">Admin email</label>
                 <input
                   value={adminEmail}
                   type="email"
                   onChange={(e) => setAdminEmail(e.target.value)}
                   placeholder="admin@college.edu"
-                  className="mt-3 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
+                  className="mt-3 w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#3A6DAF] focus:ring-4 focus:ring-[#3A6DAF]/10 placeholder:text-[#94BAC4]"
                 />
               </div>
               <button
                 onClick={handleCreate}
                 disabled={!isValid || createStatus === "loading"}
-                className="mt-2 w-full rounded-3xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-slate-400 bg-[var(--primary)] hover:bg-[var(--accent)] active:scale-97 hover-button-scale"
+                className="mt-2 w-full rounded-3xl px-4 py-3 text-sm font-semibold text-editorial-navy transition disabled:cursor-not-allowed disabled:bg-editorial-sky disabled:bg-opacity-40 bg-gradient-to-r from-editorial-orange to-editorial-amber hover:shadow-lg hover:shadow-editorial-orange/20 active:scale-97 hover-button-scale"
               >
                 {createStatus === "loading" ? "Creating institution..." : "Create Institution"}
               </button>
             </div>
-          </aside>
+          </motion.aside>
 
-          <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
+            className="rounded-[28px] border border-[#3A6DAF]/20 bg-[#FFFFFF] p-6 shadow-[0_12px_28px_rgba(20,35,75,0.08)]">
             <div className="flex items-center justify-between gap-4 pb-4">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Institution roster</p>
-                <h2 className="mt-3 text-xl font-semibold text-slate-950">Active institutions</h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#E57D37]">Institution roster</p>
+                <h2 className="mt-3 text-xl font-semibold text-[#14234B]">Active institutions</h2>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
+              <span className="rounded-full bg-[#3A6DAF]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#94BAC4] border border-[#3A6DAF]/20">
                 {initialInstitutions.length} total
               </span>
             </div>
             <div className="space-y-4">
               {initialInstitutions.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#3A6DAF]/20 bg-[#F8F9FB] p-8 text-center text-sm text-[#94BAC4]">
                   No institutions yet.
                 </div>
               ) : (
                 initialInstitutions.map((inst) => (
-                  <div key={inst.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 transition hover:border-[var(--primary)]/20 hover-card-lift">
+                  <div key={inst.id} className="rounded-3xl border border-[#3A6DAF]/20 bg-[#F9FAFB] p-4 transition hover:border-[#E57D37]/30 hover:bg-[#E57D37]/5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-950 truncate">{inst.name}</p>
-                        <p className="mt-1 text-sm text-slate-500 truncate">{inst.domain ?? "No domain set"}</p>
+                        <p className="text-sm font-semibold text-[#14234B] truncate">{inst.name}</p>
+                        <p className="mt-1 text-sm text-[#94BAC4] truncate">{inst.domain ?? "No domain set"}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {editingId === inst.id ? (
@@ -207,7 +232,7 @@ export default function OrgAdminDashboardClient({
                             </button>
                             <button
                               onClick={() => setEditingId(null)}
-                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 text-sm font-semibold text-[#14234B] transition hover:bg-[#E8EFF7]"
                             >
                               <X size={16} />
                             </button>
@@ -216,7 +241,7 @@ export default function OrgAdminDashboardClient({
                           <>
                             <button
                               onClick={() => startEdit(inst)}
-                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                              className="inline-flex h-10 items-center justify-center rounded-2xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 text-sm font-semibold text-[#14234B] transition hover:bg-[#E8EFF7]"
                             >
                               <Pencil size={16} />
                             </button>
@@ -235,12 +260,12 @@ export default function OrgAdminDashboardClient({
                         <input
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
+                          className="w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#3A6DAF] focus:ring-4 focus:ring-[#3A6DAF]/10"
                         />
                         <input
                           value={editDomain}
                           onChange={(e) => setEditDomain(e.target.value)}
-                          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[var(--primary)]/40 focus:ring-4 focus:ring-[var(--primary)]/10"
+                          className="w-full rounded-3xl border border-[#3A6DAF]/20 bg-[#F8F9FB] px-4 py-3 text-sm text-[#14234B] outline-none transition focus:border-[#3A6DAF] focus:ring-4 focus:ring-[#3A6DAF]/10"
                         />
                       </div>
                     )}
@@ -248,9 +273,9 @@ export default function OrgAdminDashboardClient({
                 ))
               )}
             </div>
-          </section>
+          </motion.section>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

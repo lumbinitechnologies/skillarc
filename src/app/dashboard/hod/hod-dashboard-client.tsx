@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { Users, BookOpen, Clock, UserCheck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
@@ -70,14 +71,23 @@ export default function HodDashboardClient({
   }
 
   return (
-    <div style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}>
+    <motion.div 
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}
+    >
       
       {/* Header */}
-      <div style={{
-        backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
-        border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
+          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 44, height: 44, borderRadius: 12,
@@ -106,20 +116,26 @@ export default function HodDashboardClient({
         >
           <RefreshCw size={12} /> Sync Data
         </button>
-      </div>
+      </motion.div>
 
       {/* Stats Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         {[
-              { label: "Department Faculty", value: stats.facultyCount, accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
+          { label: "Department Faculty", value: stats.facultyCount, accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
           { label: "Active Subjects", value: stats.subjectsCount, accent: "#dbeafe", text: "#1d4ed8", icon: <BookOpen size={17} color="#1d4ed8" /> },
           { label: "Unallocated Subjects", value: unassignedCount, accent: unassignedCount > 0 ? "#fee2e2" : "#fef3c7", text: unassignedCount > 0 ? "#991b1b" : "#b45309", icon: <Clock size={17} color={unassignedCount > 0 ? "#991b1b" : "#b45309"} /> },
-        ].map(s => (
-          <div key={s.label} style={{
-            backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
-            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-            display: "flex", alignItems: "center", gap: 14,
-          }}>
+        ].map((s, idx) => (
+          <motion.div 
+            key={s.label}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.12 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -6 }}
+            style={{
+              backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
+              border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(20,35,75,0.08)",
+              display: "flex", alignItems: "center", gap: 14,
+            }}>
             <div style={{
               width: 40, height: 40, borderRadius: 10, backgroundColor: s.accent,
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -130,7 +146,7 @@ export default function HodDashboardClient({
               <p style={{ fontSize: 22, fontWeight: 800, color: s.text, lineHeight: 1 }}>{s.value}</p>
               <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.label}</p>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
@@ -138,11 +154,15 @@ export default function HodDashboardClient({
       <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 16 }}>
         
         {/* Left Side: Subject Assignment Tool */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          display: "flex", flexDirection: "column", gap: 16,
-        }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            display: "flex", flexDirection: "column", gap: 16,
+          }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Assign Faculty</h2>
             <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Bind faculty to curricular syllabus subjects</p>
@@ -238,14 +258,18 @@ export default function HodDashboardClient({
               <div style={{ height: "100%", borderRadius: 999, backgroundColor: "#10b981", width: `${assignedPercentage}%`, transition: "width 0.4s" }} />
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right Side: Subjects Listing */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-          display: "flex", flexDirection: "column", gap: 14,
-        }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
           <div>
             <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Curriculum Overview</h2>
             <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Manage department workloads and syllabus allocation</p>
@@ -301,9 +325,9 @@ export default function HodDashboardClient({
               })
             )}
           </div>
-        </div>
+        </motion.div>
 
       </div>
-    </div>
+    </motion.div>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
   Building2,
@@ -132,14 +133,14 @@ const roleLabels: Record<Role, string> = {
 }
 
 const roleAccents: Record<Role, { bg: string; color: string }> = {
-  [ROLES.SUPER_ADMIN]: { bg: "#fef3c7", color: "#92400e" },
-  [ROLES.ORG_ADMIN]: { bg: "#ede9fe", color: "#5b21b6" },
-  [ROLES.INSTITUTION_ADMIN]: { bg: "#dbeafe", color: "#1e40af" },
-  [ROLES.HOD]: { bg: "#d1fae5", color: "#065f46" },
-  [ROLES.PROGRAM_HEAD]: { bg: "#fce7f3", color: "#9d174d" },
-  [ROLES.FACULTY]: { bg: "#e0f2fe", color: "#0c4a6e" },
-  [ROLES.STUDENT]: { bg: "#f0fdf4", color: "#166534" },
-  [ROLES.PARENT]: { bg: "#fdf4ff", color: "#701a75" },
+  [ROLES.SUPER_ADMIN]: { bg: "rgba(234,173,98,0.15)", color: "#EAAD62" },
+  [ROLES.ORG_ADMIN]: { bg: "rgba(139,92,246,0.15)", color: "#A78BFA" },
+  [ROLES.INSTITUTION_ADMIN]: { bg: "rgba(56,189,248,0.15)", color: "#38BDF8" },
+  [ROLES.HOD]: { bg: "rgba(16,185,129,0.15)", color: "#34D399" },
+  [ROLES.PROGRAM_HEAD]: { bg: "rgba(236,72,153,0.15)", color: "#F472B6" },
+  [ROLES.FACULTY]: { bg: "rgba(14,165,233,0.15)", color: "#38BDF8" },
+  [ROLES.STUDENT]: { bg: "rgba(229,125,55,0.15)", color: "#E57D37" },
+  [ROLES.PARENT]: { bg: "rgba(168,85,247,0.15)", color: "#C084FC" },
 }
 
 export default function Sidebar({ profile: initialProfile }: { profile: UserContext | null }) {
@@ -170,7 +171,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    router.push("/auth/login")
+    window.location.replace("/auth/login")
   }
 
   let baseItems = profile ? [...(roleMenus[profile.role] ?? [])] : []
@@ -232,93 +233,226 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
   return (
     <>
       <div className="sidebar-backdrop" onClick={() => document.body.classList.remove("sidebar-open")} />
-      <aside className="sidebar-mobile sticky top-0 h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200/70 bg-white/90 px-6 py-8 shadow-[0_32px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-      <div className="mb-10 mt-2 flex items-center justify-center px-2">
-        <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-28 w-28 object-contain transition-transform duration-200 hover:scale-[1.03]" />
-      </div>
-
-      {profile && (
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em]"
-          style={{ background: accent.bg, color: accent.color }}
-        >
-          <ShieldCheck size={10} />
-          {roleLabel}
+      <aside className="sidebar-mobile sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white px-6 py-8 shadow-[0_4px_12px_rgba(0,0,0,0.05)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden self-start">
+        <div className="mb-7 mt-1 flex items-center justify-center px-2">
+          <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-28 w-28 object-contain drop-shadow-[0_0_18px_rgba(229,125,55,0.28)] transition-transform duration-200 hover:scale-[1.03]" />
         </div>
-      )}
 
-      <div className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Navigation</div>
-
-      <nav className="flex flex-col gap-2">
-        {!profile ? (
-          [1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-11 rounded-2xl bg-slate-100/80" />
-          ))
-        ) : menu.length === 0 ? (
-          <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-500">No menu for role: {profile.role}</div>
-        ) : (
-          menu.map((item) => {
-            const Icon = item.icon
-            const isActive = pathname === item.path || (item.path === "/dashboard" && pathname === "/dashboard")
-
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={() => document.body.classList.remove("sidebar-open")}
-                className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold transition-all duration-150 ${
-                  isActive
-                    ? "border-l-4 border-l-[var(--primary)] rounded-r-2xl bg-[var(--primary)]/[0.06] text-slate-900 shadow-sm pl-3.5"
-                    : "text-slate-600 rounded-2xl hover:bg-slate-100/80 hover:text-slate-950 hover:pl-5"
-                }`}
-              >
-                <Icon className={`h-4 w-4 ${isActive ? "text-[var(--primary)]" : "text-slate-400 group-hover:text-[var(--primary)]"}`} />
-                <span>{item.name}</span>
-                {!isActive && <ChevronRight className="ml-auto h-4 w-4 text-slate-300 transition group-hover:text-[var(--primary)] group-hover:translate-x-1" />}
-              </Link>
-            )
-          })
+        {profile && (
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#3A6DAF]/40 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.2em]"
+            style={{ background: accent.bg, color: accent.color }}
+          >
+            <ShieldCheck size={10} />
+            {roleLabel}
+          </div>
         )}
-      </nav>
 
-      <div className="mt-6 h-px bg-slate-200/80" />
+        <div className="mb-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-500">Navigation</div>
 
-      <Link
-        href="/dashboard/account/profile"
-        onClick={() => document.body.classList.remove("sidebar-open")}
-        className={`mt-5 flex items-center gap-3 py-3 px-4 text-sm font-semibold transition-all duration-150 ${
-          pathname.startsWith("/dashboard/account")
-            ? "border-l-4 border-l-[var(--primary)] rounded-r-2xl bg-[var(--primary)]/[0.06] text-slate-900 shadow-sm pl-3.5"
-            : "text-slate-600 rounded-2xl hover:bg-slate-100/80 hover:text-slate-950 hover:pl-5"
-        }`}
-      >
-        <UserCircle2 className="h-4 w-4 text-slate-400 group-hover:text-[var(--primary)]" />
-        Account
-      </Link>
+        <nav className="flex flex-col gap-2 pb-2">
+          <AnimatePresence>
+            {!profile ? (
+              [1, 2, 3, 4].map((item) => (
+                <motion.div
+                  key={item}
+                  initial={{ opacity: 0, x: -30, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, x: -30 }}
+                  transition={{ duration: 0.5, delay: item * 0.08, ease: [0.34, 1.56, 0.64, 1] }}
+                  className="h-11 rounded-2xl bg-gray-100"
+                />
+              ))
+            ) : menu.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="rounded-3xl bg-gray-100 p-4 text-sm text-gray-600"
+              >
+                No menu for role: {profile.role}
+              </motion.div>
+            ) : (
+              <motion.div
+                className="flex flex-col gap-2"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: { opacity: 0 },
+                  visible: {
+                    opacity: 1,
+                    transition: {
+                      staggerChildren: 0.09,
+                      delayChildren: 0.15,
+                    },
+                  },
+                }}
+              >
+                {menu.map((item, idx) => {
+                  const Icon = item.icon
+                  const isActive = pathname === item.path || (item.path === "/dashboard" && pathname === "/dashboard")
 
-      <button
-        type="button"
-        onClick={async () => {
-          document.body.classList.remove("sidebar-open")
-          await handleLogout()
-        }}
-        className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition-all duration-150 hover:bg-slate-100 active:scale-97"
-      >
-        <LogOut className="h-4 w-4 text-slate-400" />
-        Log out
-      </button>
+                  return (
+                    <motion.div
+                      key={item.path}
+                      variants={{
+                        hidden: { opacity: 0, x: -35, y: 8, filter: "blur(6px)" },
+                        visible: {
+                          opacity: 1,
+                          x: 0,
+                          y: 0,
+                          filter: "blur(0px)",
+                          transition: {
+                            duration: 0.6,
+                            type: "spring",
+                            stiffness: 80,
+                            damping: 12,
+                          },
+                        },
+                      }}
+                    >
+                      <motion.div
+                        whileHover={{ x: 3 }}
+                        transition={{ type: "spring", stiffness: 250, damping: 15 }}
+                      >
+                        <Link
+                          href={item.path}
+                          onClick={() => document.body.classList.remove("sidebar-open")}
+                          className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
+                            isActive
+                              ? "border-l-4 border-l-[#E57D37] rounded-r-2xl bg-gray-100 text-gray-900 shadow-[0_4px_12px_rgba(229,125,55,0.12)] pl-3.5"
+                              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:pl-5"
+                          }`}
+                        >
+                          <motion.div
+                            whileHover={{ scale: 1.15, rotate: 5 }}
+                            whileTap={{ scale: 0.9 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 12 }}
+                          >
+                            <Icon className={`h-4 w-4 ${isActive ? "text-[#E57D37]" : "text-gray-600 group-hover:text-gray-900"}`} />
+                          </motion.div>
+                          <motion.span
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.1 }}
+                          >
+                            {item.name}
+                          </motion.span>
+                          {!isActive && (
+                            <motion.div
+                              className="ml-auto"
+                              whileHover={{ x: 6, opacity: 1 }}
+                              initial={{ opacity: 0.5 }}
+                              transition={{ type: "spring", stiffness: 250, damping: 15 }}
+                            >
+                              <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
+                            </motion.div>
+                          )}
+                        </Link>
+                      </motion.div>
+                    </motion.div>
+                  )
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </nav>
 
-      <div className="mt-6 h-px bg-slate-200/80" />
+        <motion.div
+          className="mt-6 h-px bg-[#3A6DAF]/30"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+        />
 
-      <div className="mt-6 flex items-center gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--primary)] to-[var(--accent)] text-white shadow-md">
-          {initials}
-        </div>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-900">{profile ? profile.name : "Loading..."}</p>
-          <p className="text-xs text-slate-500">{roleLabel}</p>
-        </div>
-      </div>
-    </aside>
-      </>
+        <motion.div
+          initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.5, delay: 0.45, type: "spring", stiffness: 80, damping: 12 }}
+        >
+          <motion.div
+            whileHover={{ scale: 1.02, x: 3 }}
+            transition={{ type: "spring", stiffness: 250, damping: 15 }}
+          >
+            <Link
+              href="/dashboard/account/profile"
+              onClick={() => document.body.classList.remove("sidebar-open")}
+              className={`mt-5 flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
+                pathname.startsWith("/dashboard/account")
+                  ? "border-l-4 border-l-[#E57D37] rounded-r-2xl bg-gray-100 text-gray-900 shadow-[0_4px_12px_rgba(229,125,55,0.12)] pl-3.5"
+                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:pl-5"
+              }`}
+            >
+              <motion.div whileHover={{ scale: 1.15, rotate: 5 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 300, damping: 12 }}>
+                <UserCircle2 className="h-4 w-4 text-gray-600" />
+              </motion.div>
+              Account
+            </Link>
+          </motion.div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.5, delay: 0.5, type: "spring", stiffness: 80, damping: 12 }}
+        >
+          <motion.button
+            type="button"
+            onClick={async () => {
+              document.body.classList.remove("sidebar-open")
+              await handleLogout()
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 transition-all duration-200 hover:bg-gray-50 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+          >
+            <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 300, damping: 12 }}>
+              <LogOut className="h-4 w-4 text-gray-600" />
+            </motion.div>
+            Log out
+          </motion.button>
+        </motion.div>
+
+        <motion.div
+          className="mt-6 h-px bg-[#3A6DAF]/30"
+          initial={{ scaleX: 0, opacity: 0 }}
+          animate={{ scaleX: 1, opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.55, ease: [0.34, 1.56, 0.64, 1] }}
+        />
+
+        <motion.div
+          className="mt-6 flex items-center gap-3 rounded-[24px] border border-gray-200 bg-gray-50 p-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
+          initial={{ opacity: 0, scale: 0.85, y: 20, filter: "blur(6px)" }}
+          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.6, delay: 0.6, type: "spring", stiffness: 70, damping: 12 }}
+          whileHover={{ scale: 1.03, y: -2 }}
+        >
+          <motion.div
+            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md font-semibold"
+            whileHover={{ rotateZ: 8, scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 250, damping: 12 }}
+          >
+            {initials}
+          </motion.div>
+          <div className="min-w-0">
+            <motion.p
+              className="truncate text-sm font-semibold text-gray-900"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.65 }}
+            >
+              {profile ? profile.name : "Loading..."}
+            </motion.p>
+            <motion.p
+              className="text-xs text-gray-600"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
+              {roleLabel}
+            </motion.p>
+          </div>
+        </motion.div>
+      </aside>
+    </>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import {
   Building2, Users, GraduationCap, BookOpen,
   LayoutGrid, Clock, ChevronRight, Mail, Plus
@@ -57,25 +58,25 @@ export default function AdminDashboardClient({
   }
 
   const statCards = [
-    { label: "Teachers",  value: stats.faculty,  accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
-    { label: "Students",  value: stats.students, accent: "#dbeafe", text: "#1d4ed8", icon: <GraduationCap size={17} color="#1d4ed8" /> },
-    { label: "Courses",   value: stats.courses,  accent: "#fef3c7", text: "#b45309", icon: <BookOpen size={17} color="#b45309" /> },
+    { label: "Teachers", value: stats.faculty, accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
+    { label: "Students", value: stats.students, accent: "#dbeafe", text: "#1d4ed8", icon: <GraduationCap size={17} color="#1d4ed8" /> },
+    { label: "Courses", value: stats.courses, accent: "#fef3c7", text: "#b45309", icon: <BookOpen size={17} color="#b45309" /> },
   ]
 
   const quickActions = [
-    { label: "Departments",  desc: "Manage all departments",   icon: "🏢", href: "/dashboard/institution-admin/departments" },
-    { label: "Programs",     desc: "Manage programs",          icon: "🎓", href: "/dashboard/institution-admin/programs" },
-    { label: "Teachers",     desc: "View & invite faculty",    icon: "👨‍🏫", href: "/dashboard/institution-admin/faculty" },
-    { label: "Students",     desc: "View & invite students",   icon: "👩‍🎓", href: "/dashboard/institution-admin/students" },
-    { label: "Subjects",     desc: "Manage subjects",          icon: "📘", href: "/dashboard/institution-admin/subjects" },
-    { label: "Timetable",    desc: "View & manage timetable",  icon: "📅", href: "/dashboard/institution-admin/timetable" },
+    { label: "Departments", desc: "Manage all departments", icon: "🏢", href: "/dashboard/institution-admin/departments" },
+    { label: "Programs", desc: "Manage programs", icon: "🎓", href: "/dashboard/institution-admin/programs" },
+    { label: "Teachers", desc: "View & invite faculty", icon: "👨‍🏫", href: "/dashboard/institution-admin/faculty" },
+    { label: "Students", desc: "View & invite students", icon: "👩‍🎓", href: "/dashboard/institution-admin/students" },
+    { label: "Subjects", desc: "Manage subjects", icon: "📘", href: "/dashboard/institution-admin/subjects" },
+    { label: "Timetable", desc: "View & manage timetable", icon: "📅", href: "/dashboard/institution-admin/timetable" },
   ]
 
   const roleBadgeColor: Record<string, { bg: string; text: string }> = {
-    teacher:           { bg: "#d1fae5", text: "#065f46" },
-    student:           { bg: "#dbeafe", text: "#1d4ed8" },
-    hod:               { bg: "#ede9fe", text: "#6d28d9" },
-    program_head:      { bg: "#fef3c7", text: "#b45309" },
+    teacher: { bg: "#d1fae5", text: "#065f46" },
+    student: { bg: "#dbeafe", text: "#1d4ed8" },
+    hod: { bg: "#ede9fe", text: "#6d28d9" },
+    program_head: { bg: "#fef3c7", text: "#b45309" },
     institution_admin: { bg: "#fee2e2", text: "#991b1b" },
   }
 
@@ -83,14 +84,22 @@ export default function AdminDashboardClient({
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
   return (
-    <div style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}>
-
-      {/* Header */}
-      <div style={{
-        backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
-        border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      style={{ fontFamily: font, maxWidth: 960, margin: "0 auto" }}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: "#fff", borderRadius: 16, padding: "20px 24px",
+          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 44, height: 44, borderRadius: 12,
@@ -119,16 +128,22 @@ export default function AdminDashboardClient({
         >
           <Plus size={14} /> Invite Member
         </button>
-      </div>
+      </motion.div>
 
-      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-        {statCards.map(s => (
-          <div key={s.label} style={{
-            backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
-            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-            display: "flex", alignItems: "center", gap: 14,
-          }}>
+        {statCards.map((s, idx) => (
+          <motion.div
+            key={s.label}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.12 + idx * 0.08, ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -6 }}
+            style={{
+              backgroundColor: "#fff", borderRadius: 14, padding: "16px 20px",
+              border: "1px solid #e5e7eb", boxShadow: "0 8px 24px rgba(20,35,75,0.08)",
+              display: "flex", alignItems: "center", gap: 14,
+            }}
+          >
             <div style={{
               width: 40, height: 40, borderRadius: 10, backgroundColor: s.accent,
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
@@ -139,16 +154,20 @@ export default function AdminDashboardClient({
               <p style={{ fontSize: 22, fontWeight: 800, color: s.text, lineHeight: 1 }}>{s.value}</p>
               <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>{s.label}</p>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div style={{
-        backgroundColor: "#fff", borderRadius: 16, padding: 24,
-        border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        marginBottom: 16,
-      }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        style={{
+          backgroundColor: "#fff", borderRadius: 16, padding: 24,
+          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          marginBottom: 16,
+        }}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <LayoutGrid size={15} color="#6b7280" />
           <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Quick Actions</p>
@@ -183,15 +202,18 @@ export default function AdminDashboardClient({
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
-
-        {/* Invite card */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        }}>
+        <motion.aside
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
             <Mail size={15} color="#6b7280" />
             <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Invite Member</p>
@@ -265,13 +287,17 @@ export default function AdminDashboardClient({
           >
             {inviteStatus === "loading" ? "Sending…" : "Send Invite"}
           </button>
-        </div>
+        </motion.aside>
 
-        {/* Recent members */}
-        <div style={{
-          backgroundColor: "#fff", borderRadius: 16, padding: 24,
-          border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-        }}>
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.36, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            backgroundColor: "#fff", borderRadius: 16, padding: 24,
+            border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
             <Clock size={15} color="#6b7280" />
             <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>Recent Members</p>
@@ -323,8 +349,8 @@ export default function AdminDashboardClient({
               })}
             </div>
           )}
-        </div>
+        </motion.section>
       </div>
-    </div>
+    </motion.div>
   )
 }

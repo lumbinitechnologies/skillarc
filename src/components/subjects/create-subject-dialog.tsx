@@ -33,7 +33,7 @@ function StyledSelect({ value, onChange, children, disabled }: {
         className={`w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl outline-none appearance-none cursor-pointer transition-all duration-200 ${
           disabled 
             ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
-            : "bg-slate-50/50 text-slate-800 hover:border-slate-200 focus:border-[#6C63FF] focus:bg-white focus:ring-1 focus:ring-[#6C63FF]/20"
+            : "bg-slate-50/50 text-slate-800 hover:border-slate-200 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-100"
         }`}
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
@@ -59,7 +59,7 @@ function StyledInput({ value, onChange, placeholder }: {
       value={value}
       placeholder={placeholder}
       onChange={e => onChange(e.target.value)}
-      className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-50/50 text-slate-800 placeholder-slate-400 outline-none hover:border-slate-200 focus:border-[#6C63FF] focus:bg-white focus:ring-1 focus:ring-[#6C63FF]/20 transition-all duration-200"
+      className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-200/80 rounded-2xl bg-white/50 text-slate-800 placeholder-slate-400 outline-none hover:border-slate-300 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-100 transition-all duration-200"
     />
   )
 }
@@ -242,7 +242,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
                     onClick={() => set("subject_type", t.value)}
                     className={`flex-1 py-3 px-2 rounded-2xl border flex flex-col items-center gap-1.5 transition-all duration-200 active:scale-95 ${
                       active
-                        ? `border-[#6C63FF] ${t.bgClass} ${t.textClass} scale-[1.02] shadow-sm font-bold`
+                        ? `border-slate-900 ${t.bgClass} ${t.textClass} scale-[1.02] shadow-sm font-bold`
                         : "border-slate-100 bg-slate-50/20 text-slate-500 hover:border-slate-200 font-semibold"
                     }`}
                   >
@@ -256,11 +256,11 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
         </div>
 
         {/* Footer */}
-        <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/30">
+        <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/45 rounded-b-[24px]">
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="flex-1 py-2.5 text-xs font-semibold text-slate-600 bg-white hover:bg-slate-50 border border-slate-100 rounded-xl transition-all duration-200"
+            className="flex-1 h-11 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
           >
             Cancel
           </button>
@@ -268,7 +268,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit || loading}
-            className="flex-[2] py-2.5 text-xs font-bold text-white bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] hover:from-[#5C53EF] hover:to-[#7B4CE6] rounded-xl shadow-sm hover:shadow-md hover:shadow-indigo-100/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.98]"
+            className="flex-[2] h-11 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-2xl shadow-md shadow-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
           >
             {loading ? "Creating…" : "Create Subject"}
           </button>

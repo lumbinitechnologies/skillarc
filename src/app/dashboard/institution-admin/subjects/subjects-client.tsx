@@ -2,6 +2,31 @@
 
 import { useState } from "react"
 import { Plus, BookMarked, Search } from "lucide-react"
+import { motion } from "framer-motion"
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.05,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 15 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 100,
+      damping: 15,
+    },
+  },
+}
 import { SubjectsList } from "@/components/subjects/subjects-list"
 import { CreateSubjectDialog } from "@/components/subjects/create-subject-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
@@ -98,9 +123,16 @@ export function SubjectsClientPage({
   })
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      {/* Header section identical to Attendance Center design */}
-      <div className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8"
+    >
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between"
+      >
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-[#6C63FF] flex-shrink-0">
             <BookMarked className="w-6 h-6" />
@@ -132,10 +164,13 @@ export function SubjectsClientPage({
             New Subject
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Search Filter Bar */}
-      <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.01)] max-w-md">
+      <motion.div
+        variants={itemVariants}
+        className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.01)] max-w-md"
+      >
         <Search className="w-4 h-4 text-slate-400" />
         <input
           type="text"
@@ -144,15 +179,15 @@ export function SubjectsClientPage({
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full text-sm text-slate-800 placeholder-slate-400 outline-none bg-transparent"
         />
-      </div>
+      </motion.div>
 
       {/* Main Subjects Display list */}
-      <div className="pt-2">
+      <motion.div variants={itemVariants} className="pt-2">
         <SubjectsList
           subjects={filteredSubjects}
           onDelete={handleDelete}
         />
-      </div>
+      </motion.div>
 
       <CreateSubjectDialog
         open={open}
@@ -169,6 +204,6 @@ export function SubjectsClientPage({
         institutionId={institutionId}
         onImported={() => window.location.reload()}
       />
-    </div>
+    </motion.div>
   )
 }
