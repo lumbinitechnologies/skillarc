@@ -108,11 +108,14 @@ def _save_message(
     sources: list = None,
     client_turn_id: str | None = None,
 ) -> ChatMessage:
+    # The production schema requires sources to be a JSON array, including
+    # for user messages that do not have citations. Keep the ORM write
+    # contract aligned with that constraint instead of inserting SQL NULL.
     message = ChatMessage(
         session_id=session_id,
         role=role,
         content=content,
-        sources=json.dumps(sources) if sources else None,
+        sources=json.dumps(sources or []),
         client_turn_id=client_turn_id,
     )
     db.add(message)

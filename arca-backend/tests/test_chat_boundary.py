@@ -67,6 +67,19 @@ class TestChatRequestSchema:
         assert req.user_context is None
 
 
+class TestChatMessagePersistence:
+    def test_user_messages_store_empty_sources_array(self, test_db):
+        message = chat_service._save_message(
+            test_db,
+            session_id="session-1",
+            role="user",
+            content="list sections assigned to my schedule",
+        )
+
+        assert message.sources == "[]"
+
+
+
 class TestVectorSearchIsolation:
     @patch("services.chat_service.similarity_search")
     @patch("services.chat_service.generate_answer")
