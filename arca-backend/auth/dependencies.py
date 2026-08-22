@@ -68,6 +68,31 @@ def _secret() -> str:
     return os.getenv("ARCA_BACKEND_SECRET", "")
 
 
+def require_gateway_request(request: Request) -> None:
+    """Verify an internal gateway request without creating a user principal.
+
+    This is intentionally narrower than ``require_principal`` and is used
+    only by the public product-help endpoint. It authenticates the Next.js
+    gateway, not the browser visitor.
+    """
+
+    supplied_secret = request.headers.get("X-Arca-Gateway-Secret")
+    configured_secret = _secret()
+    if supplied_secret is None:
+        _fail("AUTH_GATEWAY_SECRET_MISSING")
+    if not configured_secret or not hmac.compare_digest(
+        supplied_secret, configured_secret
+    ):
+        _fail("AUTH_GATEWAY_SECRET_INVALID")
+
+    request_id = request.headers.get("X-Arca-Request-Id")
+    try:
+        request.state.request_id = str(UUID(request_id or ""))
+    except (ValueError, AttributeError):
+        _fail("INVALID_REQUEST_ID", 400)
+
+
+
 def require_principal(request: Request) -> Principal:
     """Verify the gateway trust boundary and return the effective principal."""
 

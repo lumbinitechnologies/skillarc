@@ -69,6 +69,22 @@ class ChatRequest(BaseModel):
         return value
 
 
+class PublicChatRequest(BaseModel):
+    """Request contract for the unauthenticated product-help assistant."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(..., min_length=1, max_length=4000)
+
+    @field_validator("question")
+    @classmethod
+    def normalize_question(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("question must not be empty")
+        return value
+
+
 
 class SourceCitation(BaseModel):
     document_id: str

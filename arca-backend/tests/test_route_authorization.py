@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from pydantic import ValidationError
 
-from auth.dependencies import Principal, require_principal
+from auth.dependencies import Principal, require_gateway_request, require_principal
 from main import app
 from models.schemas import ChatRequest, RagConfig
 from routes import settings as settings_routes
@@ -32,12 +32,29 @@ def _contains_principal_dependency(route: APIRoute) -> bool:
 
 
 def test_every_non_public_route_requires_principal():
-    public = {("GET", "/"), ("GET", "/api/health")}
+    public = {
+        ("GET", "/"),
+        ("GET", "/api/health"),
+        ("POST", "/api/public-chat/ask/stream"),
+    }
     for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
         if any((method, route.path) not in public for method in route.methods):
             assert _contains_principal_dependency(route), route.path
+
+
+def test_public_chat_requires_gateway_authentication_without_user_principal():
+    route = next(
+        route for route in app.routes
+        if isinstance(route, APIRoute)
+        and route.path == "/api/public-chat/ask/stream"
+    )
+    assert any(
+        dependency.call is require_gateway_request
+        for dependency in route.dependant.dependencies
+    )
+    assert not _contains_principal_dependency(route)
 
 
 def test_chat_body_cannot_inject_identity_fields():

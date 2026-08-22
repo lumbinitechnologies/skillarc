@@ -2,14 +2,15 @@ import os
 import json
 import pytest
 from unittest.mock import patch, MagicMock
+from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database.db import Base
-from models.schemas import ChatRequest, UserContextPayload, ChatResponse
+from models.schemas import ChatRequest, PublicChatRequest, UserContextPayload, ChatResponse
 from models.chat import ChatSession, ChatMessage
 from models.query_log import QueryLog
-from rag.llm_client import build_prompt
+from rag.llm_client import build_prompt, build_public_prompt
 import services.chat_service as chat_service
 from services.settings_service import SETTINGS_FILE, get_settings
 from main import app
@@ -77,6 +78,17 @@ class TestChatMessagePersistence:
         )
 
         assert message.sources == "[]"
+
+
+class TestPublicChatBoundary:
+    def test_public_request_rejects_extra_identity_fields(self):
+        with pytest.raises(ValidationError):
+            PublicChatRequest(question="hello", institution_id="private")
+
+    def test_public_prompt_has_no_authenticated_database_context_contract(self):
+        prompt = build_public_prompt("What is SkillArc?", "[What SkillArc is]\nA platform")
+        assert "DATABASE_CONTEXT" not in prompt
+        assert "personal or campus-specific" in prompt
 
 
 

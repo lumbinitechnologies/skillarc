@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.db import settings
 from database.init_db import init_db
-from routes import documents, chat, analytics, settings as settings_routes
+from routes import documents, chat, public_chat, analytics, settings as settings_routes
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -47,5 +47,6 @@ def health_check():
 
 app.include_router(documents.router)
 app.include_router(chat.router)
+app.include_router(public_chat.router)
 app.include_router(analytics.router)
 app.include_router(settings_routes.router)
