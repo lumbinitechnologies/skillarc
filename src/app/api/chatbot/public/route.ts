@@ -1,4 +1,5 @@
 import { createArcaPublicBackendHeaders } from "@/lib/arca-backend"
+import { arcaGatewayErrorResponse } from "@/lib/arca-gateway-errors"
 import { NextRequest, NextResponse } from "next/server"
 
 const BACKEND_URL = process.env.EDURAG_BACKEND_URL || "http://localhost:8000"
@@ -63,11 +64,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "")
-      return NextResponse.json(
-        { error: errorText || "The public assistant could not answer this request." },
-        { status: response.status },
-      )
+      return arcaGatewayErrorResponse(response, "The public assistant is temporarily unavailable. Please try again shortly.")
     }
     if (!response.body) {
       return NextResponse.json({ error: "The assistant returned an empty stream." }, { status: 502 })

@@ -45,7 +45,7 @@ function messageFromStored(value: unknown): Message | null {
   }
 }
 
-function parseStreamPayload(raw: string): { text?: string; sessionId?: string; sources?: SourceCitation[]; done?: boolean; error?: string } {
+function parseStreamPayload(raw: string, eventType?: string): { text?: string; sessionId?: string; sources?: SourceCitation[]; done?: boolean; error?: string; code?: string } {
   let value: unknown = raw
   try { value = JSON.parse(raw) } catch { /* Some backends send plain text SSE data. */ }
   if (typeof value === "string") return { text: value }
@@ -56,8 +56,9 @@ function parseStreamPayload(raw: string): { text?: string; sessionId?: string; s
     text,
     sessionId: typeof event.session_id === "string" ? event.session_id : typeof event.sessionId === "string" ? event.sessionId : undefined,
     sources: Array.isArray(event.sources) ? event.sources as SourceCitation[] : undefined,
-    done: event.done === true || event.type === "done" || event.event === "done",
-    error: typeof event.error === "string" ? event.error : undefined,
+    done: event.done === true || event.type === "done" || event.event === "done" || eventType === "done",
+    error: typeof event.error === "string" ? event.error : eventType === "error" && typeof event.message === "string" ? event.message : undefined,
+    code: typeof event.code === "string" ? event.code : undefined,
   }
 }
 
@@ -291,10 +292,18 @@ export function ChatbotWidget() {
       let buffer = ""
       let answer = ""
       let sources: SourceCitation[] | undefined
+      let streamError: string | null = null
+      let streamCompleted = false
       const consume = (rawEvent: string) => {
+        const eventType = rawEvent.split(/\r?\n/).find((line) => line.startsWith("event:"))?.slice(6).trim()
         const dataLines = rawEvent.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart())
         if (!dataLines.length) return
-        const parsed = parseStreamPayload(dataLines.join("\n"))
+        const parsed = parseStreamPayload(dataLines.join("\n"), eventType)
+        if (parsed.done) streamCompleted = true
+        if (parsed.error) {
+          streamError = parsed.error
+          return
+        }
         if (parsed.sessionId) {
           setSessionId(parsed.sessionId)
           if (storageKey) window.localStorage.setItem(storageKey, parsed.sessionId)
@@ -303,7 +312,6 @@ export function ChatbotWidget() {
           sources = parsed.sources
           setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, sources } : message))
         }
-        if (parsed.error) throw new Error(parsed.error)
         if (parsed.text) {
           answer += parsed.text
           setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: answer, sources } : message))
@@ -318,7 +326,13 @@ export function ChatbotWidget() {
         if (done) break
       }
       if (buffer.trim()) consume(buffer)
-      if (!answer) setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: "The assistant returned an empty response." } : message))
+      if (streamError) {
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: streamError as string } : message))
+      } else if (!answer) {
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: "Arca couldn't complete that response. Please try again." } : message))
+      } else if (!streamCompleted) {
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: `${message.text}\n\n_Response ended unexpectedly. Please try again._` } : message))
+      }
     } catch (err: unknown) {
       if (timedOut) {
         setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: message.text ? `${message.text}\n\n_Response timed out. Please try again._` : "The assistant timed out. Please try again." } : message))

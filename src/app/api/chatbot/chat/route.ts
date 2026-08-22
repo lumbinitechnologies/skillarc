@@ -3,6 +3,7 @@ import { getCurrentUserContext } from "@/lib/user-context"
 import { createArcaBackendHeaders } from "@/lib/arca-backend"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { fetchAcademicContext } from "@/lib/academic-context"
+import { arcaGatewayErrorResponse } from "@/lib/arca-gateway-errors"
 
 const BACKEND_URL = process.env.EDURAG_BACKEND_URL || "http://localhost:8000"
 
@@ -50,12 +51,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const errText = await response.text().catch(() => "")
       console.error("FastAPI streaming backend error", response.status)
-      return NextResponse.json(
-        { error: errText || "The assistant service could not answer this request." },
-        { status: response.status },
-      )
+      return arcaGatewayErrorResponse(response, "Arca is temporarily unavailable. Please try again shortly.")
     }
 
     if (!response.body) {
