@@ -37,6 +37,7 @@ Pillow==10.4.0
 
 # Database (SQLite via SQLAlchemy)
 sqlalchemy==2.0.31
+psycopg[binary]==3.2.9
 
 # Utilities
 aiofiles==23.2.1

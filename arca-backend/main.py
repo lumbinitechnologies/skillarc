@@ -5,7 +5,6 @@ from database.db import settings
 from database.init_db import init_db
 from routes import documents, chat, analytics, settings as settings_routes
 from utils.logger import get_logger
-from rag.embeddings import get_embedding_function
 
 logger = get_logger(__name__)
 
@@ -27,9 +26,6 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     init_db()
-    logger.info("Pre-loading embedding model...")
-    get_embedding_function()
-    logger.info("Embedding model loaded successfully.")
     logger.info("EduRAG backend started.")
     logger.info(f"Upload directory: {settings.UPLOAD_DIR}")
     logger.info(f"Chroma directory: {settings.CHROMA_DIR}")

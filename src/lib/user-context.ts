@@ -8,6 +8,7 @@ export type UserContext = {
   role: string
   institution_id: string | null
   organization_id: string | null
+  department_id: string | null
   name: string
   email: string
   is_timetable_builder: boolean
@@ -19,6 +20,7 @@ export type UserContext = {
     email: string
     organization_id: string | null
     institution_id: string | null
+    department_id: string | null
   }
   isSuperAdmin: boolean
 }
@@ -38,7 +40,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
 
   const { data: actualProfile, error: profileError } = await supabase
     .from("users")
-    .select("id, role, name, email, organization_id, institution_id")
+    .select("id, role, name, email, organization_id, institution_id, department_id")
     .eq("id", userId)
     .single()
 
@@ -76,7 +78,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     const targetProfileData = impUserId
       ? await supabase
           .from("users")
-          .select("id, role, name, email, organization_id, institution_id")
+          .select("id, role, name, email, organization_id, institution_id, department_id")
           .eq("id", impUserId)
           .single()
       : { data: null, error: null }
@@ -88,6 +90,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       role: impRole,
       institution_id: targetProfile?.institution_id ?? impInstId ?? null,
       organization_id: targetProfile?.organization_id ?? impOrgId ?? null,
+      department_id: targetProfile?.department_id ?? actualProfile.department_id ?? null,
       name: targetProfile?.name ?? actualProfile.name ?? "",
       email: targetProfile?.email ?? actualProfile.email ?? "",
       is_timetable_builder: isTimetableBuilder,
@@ -99,6 +102,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
         email: actualProfile.email ?? "",
         organization_id: actualProfile.organization_id,
         institution_id: actualProfile.institution_id,
+        department_id: actualProfile.department_id,
       },
       isSuperAdmin: true,
     }
@@ -109,6 +113,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     role: actualProfile.role,
     institution_id: actualProfile.institution_id,
     organization_id: actualProfile.organization_id,
+    department_id: actualProfile.department_id,
     name: actualProfile.name ?? "",
     email: actualProfile.email ?? "",
     is_timetable_builder: isTimetableBuilder,
@@ -120,6 +125,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       email: actualProfile.email ?? "",
       organization_id: actualProfile.organization_id,
       institution_id: actualProfile.institution_id,
+      department_id: actualProfile.department_id,
     },
     isSuperAdmin: actualProfile.role === ROLES.SUPER_ADMIN,
   }

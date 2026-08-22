@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useRef, useState, useMemo } from "react"
-import { Sparkles, Send, X, Bot, User, FileText, Trash2 } from "lucide-react"
+import { Sparkles, Send, X, Bot, User, FileText, Trash2, Square } from "lucide-react"
 
 interface SourceCitation {
   document_id: string
@@ -19,6 +19,88 @@ interface Message {
   timestamp: Date
 }
 
+interface ChatProfile {
+  id: string
+  name: string
+  role: string
+  institution_id?: string | null
+  organization_id?: string | null
+}
+
+type StreamEvent = Record<string, unknown>
+
+function messageFromStored(value: unknown): Message | null {
+  if (!value || typeof value !== "object") return null
+  const item = value as Record<string, unknown>
+  const text = typeof item.text === "string" ? item.text : typeof item.content === "string" ? item.content : ""
+  const from = item.from === "user" || item.role === "user" ? "user" : "bot"
+  if (!text) return null
+  return {
+    id: typeof item.id === "string" ? item.id : `${from}-${crypto.randomUUID()}`,
+    from,
+    text,
+    sources: Array.isArray(item.sources) ? item.sources as SourceCitation[] : undefined,
+    timestamp: new Date(typeof item.timestamp === "string" || typeof item.timestamp === "number" ? item.timestamp : Date.now()),
+  }
+}
+
+function parseStreamPayload(raw: string): { text?: string; sessionId?: string; sources?: SourceCitation[]; done?: boolean; error?: string } {
+  let value: unknown = raw
+  try { value = JSON.parse(raw) } catch { /* Some backends send plain text SSE data. */ }
+  if (typeof value === "string") return { text: value }
+  if (!value || typeof value !== "object") return {}
+  const event = value as StreamEvent
+  const text = [event.delta, event.token, event.text, event.content, event.answer].find((item) => typeof item === "string") as string | undefined
+  return {
+    text,
+    sessionId: typeof event.session_id === "string" ? event.session_id : typeof event.sessionId === "string" ? event.sessionId : undefined,
+    sources: Array.isArray(event.sources) ? event.sources as SourceCitation[] : undefined,
+    done: event.done === true || event.type === "done" || event.event === "done",
+    error: typeof event.error === "string" ? event.error : undefined,
+  }
+}
+
+function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+  const tokens = text.split(/(`[^`]*`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]*\))/g)
+  return tokens.map((token, index) => {
+    if (token.startsWith("**") && token.endsWith("**")) return <strong key={`${keyPrefix}-b-${index}`}>{token.slice(2, -2)}</strong>
+    if (token.startsWith("`") && token.endsWith("`")) return <code key={`${keyPrefix}-c-${index}`} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.9em]">{token.slice(1, -1)}</code>
+    const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/)
+    if (link) return <a key={`${keyPrefix}-a-${index}`} href={link[2]} target="_blank" rel="noreferrer" className="text-[var(--primary)] underline">{link[1]}</a>
+    return <React.Fragment key={`${keyPrefix}-t-${index}`}>{token}</React.Fragment>
+  })
+}
+
+function renderMarkdown(text: string) {
+  const lines = text.split(/\r?\n/)
+  const blocks: React.ReactNode[] = []
+  let list: string[] = []
+  const flushList = () => {
+    if (!list.length) return
+    blocks.push(<ul key={`list-${blocks.length}`} className="ml-4 list-disc space-y-1 text-slate-700">{list.map((item, index) => <li key={index}>{renderInline(item, `li-${blocks.length}-${index}`)}</li>)}</ul>)
+    list = []
+  }
+  let inCode = false
+  let code = ""
+  let language = ""
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith("```")) {
+      if (inCode) blocks.push(<pre key={`code-${index}`} className="overflow-x-auto rounded-lg bg-slate-900 p-2 text-[10px] text-slate-100"><code>{code.replace(/\n$/, "")}</code></pre>)
+      else { flushList(); language = line.trim().slice(3); void language; }
+      inCode = !inCode; code = ""; return
+    }
+    if (inCode) { code += `${line}\n`; return }
+    const bullet = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)$/)
+    if (bullet) { list.push(bullet[1]); return }
+    flushList()
+    if (!line.trim()) return
+    blocks.push(<p key={`p-${index}`} className="leading-relaxed text-slate-700">{renderInline(line, `p-${index}`)}</p>)
+  })
+  if (inCode) blocks.push(<pre key="code-final" className="overflow-x-auto rounded-lg bg-slate-900 p-2 text-[10px] text-slate-100"><code>{code}</code></pre>)
+  flushList()
+  return <div className="space-y-1.5">{blocks}</div>
+}
+
 export function ChatbotWidget() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
@@ -27,9 +109,11 @@ export function ChatbotWidget() {
   const [sessionId, setSessionId] = useState<string | null>(null)
 
   // User profile context state
-  const [profile, setProfile] = useState<{ name: string; role: string } | null>(null)
+  const [profile, setProfile] = useState<ChatProfile | null>(null)
 
   const listRef = useRef<HTMLDivElement | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const storageKey = profile ? `arca-chat-session:${profile.id}:${profile.institution_id || profile.organization_id || "unscoped"}` : null
 
   // Fetch active user profile context on load
   useEffect(() => {
@@ -50,8 +134,11 @@ export function ChatbotWidget() {
 
         const data = await res.json()
         setProfile({
+          id: data.id,
           name: data.name || data.email?.split("@")[0] || "User",
-          role: data.role || "STUDENT"
+          role: data.role || "STUDENT",
+          institution_id: data.institution_id,
+          organization_id: data.organization_id,
         })
       } catch (err) {
         console.error("Failed to load profile for chatbot widget:", err)
@@ -59,6 +146,25 @@ export function ChatbotWidget() {
     }
     loadProfile()
   }, [])
+
+  // Restore the scoped session only after the authenticated profile is known.
+  useEffect(() => {
+    if (!storageKey || !profile) return
+    let cancelled = false
+    const saved = window.localStorage.getItem(storageKey)
+    if (!saved) return
+    queueMicrotask(() => setSessionId(saved))
+    fetch(`/api/chatbot/chat?session_id=${encodeURIComponent(saved)}`, { cache: "no-store" })
+      .then(async (res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled || !data) return
+        const rawMessages = Array.isArray(data) ? data : data.messages
+        const restored = Array.isArray(rawMessages) ? rawMessages.map(messageFromStored).filter(Boolean) as Message[] : []
+        if (restored.length) setMessages(restored)
+      })
+      .catch(() => { /* A stale/expired session is harmless; start a fresh one. */ })
+    return () => { cancelled = true }
+  }, [storageKey, profile])
 
   // Welcome message based on active role
   const welcomeMessage = useMemo(() => {
@@ -101,7 +207,7 @@ export function ChatbotWidget() {
 
   const handleSend = async () => {
     if (!input.trim() || loading) return
-    const userMsgText = input
+    const userMsgText = input.trim()
     setInput("")
 
     const userMessage: Message = {
@@ -113,11 +219,21 @@ export function ChatbotWidget() {
 
     setMessages((prev) => [...prev, userMessage])
     setLoading(true)
+    const assistantId = `bot-${Date.now()}`
+    const controller = new AbortController()
+    let timedOut = false
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 90_000)
+    abortRef.current = controller
+    setMessages((prev) => [...prev, { id: assistantId, from: "bot", text: "", timestamp: new Date() }])
 
     try {
       const res = await fetch("/api/chatbot/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           question: userMsgText,
           session_id: sessionId
@@ -142,7 +258,7 @@ export function ChatbotWidget() {
           } else {
             friendlyErrText = await res.text()
           }
-        } catch (e) {
+      } catch {
           friendlyErrText = `Failed to connect (Status ${res.status})`
         }
 
@@ -150,49 +266,62 @@ export function ChatbotWidget() {
           friendlyErrText = "An unexpected error occurred while communicating with the AI service. Please try again."
         }
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `bot-err-${Date.now()}`,
-            from: "bot",
-            text: friendlyErrText,
-            timestamp: new Date()
-          }
-        ])
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: friendlyErrText } : message))
 
         return
       }
 
-      const data = await res.json()
-
-      if (data.session_id) {
-        setSessionId(data.session_id)
-      }
-
-      const botMessage: Message = {
-        id: `bot-${Date.now()}`,
-        from: "bot",
-        text: data.answer || "I parsed the database but couldn't find a response.",
-        sources: data.sources || [],
-        timestamp: new Date()
-      }
-
-      setMessages((prev) => [...prev, botMessage])
-    } catch (err: any) {
-      console.error(err)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `bot-err-${Date.now()}`,
-          from: "bot",
-          text: "Unable to connect to assistant: FastAPI database service is offline.",
-          timestamp: new Date()
+      if (!res.body) throw new Error("The assistant returned no stream")
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let answer = ""
+      let sources: SourceCitation[] | undefined
+      const consume = (rawEvent: string) => {
+        const dataLines = rawEvent.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart())
+        if (!dataLines.length) return
+        const parsed = parseStreamPayload(dataLines.join("\n"))
+        if (parsed.sessionId) {
+          setSessionId(parsed.sessionId)
+          if (storageKey) window.localStorage.setItem(storageKey, parsed.sessionId)
         }
-      ])
+        if (parsed.sources) {
+          sources = parsed.sources
+          setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, sources } : message))
+        }
+        if (parsed.error) throw new Error(parsed.error)
+        if (parsed.text) {
+          answer += parsed.text
+          setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: answer, sources } : message))
+        }
+      }
+      while (true) {
+        const { value, done } = await reader.read()
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+        const events = buffer.split(/\r?\n\r?\n/)
+        buffer = events.pop() || ""
+        events.forEach(consume)
+        if (done) break
+      }
+      if (buffer.trim()) consume(buffer)
+      if (!answer) setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: "The assistant returned an empty response." } : message))
+    } catch (err: unknown) {
+      if (timedOut) {
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: message.text ? `${message.text}\n\n_Response timed out. Please try again._` : "The assistant timed out. Please try again." } : message))
+      } else if (controller.signal.aborted) {
+        setMessages((prev) => prev.map((message) => message.id === assistantId && message.text ? { ...message, text: `${message.text}\n\n_Response stopped._` } : message))
+      } else {
+        console.error("Chat stream error", err instanceof Error ? err.message : err)
+        setMessages((prev) => prev.map((message) => message.id === assistantId ? { ...message, text: "Unable to connect to the assistant. Please try again." } : message))
+      }
     } finally {
+      window.clearTimeout(timeoutId)
+      abortRef.current = null
       setLoading(false)
     }
   }
+
+  const handleCancel = () => abortRef.current?.abort()
 
   const handleClear = () => {
     setMessages([
@@ -204,42 +333,7 @@ export function ChatbotWidget() {
       }
     ])
     setSessionId(null)
-  }
-
-  // Format simple markdown lists and bold text
-  const formatText = (text: string) => {
-    if (!text) return ""
-    return text.split("\n").map((line, i) => {
-      let content = line
-
-      // Handle bold tags (**text**)
-      const boldRegex = /\*\*(.*?)\*\*/g
-      const parts = []
-      let lastIndex = 0
-      let match
-
-      while ((match = boldRegex.exec(content)) !== null) {
-        if (match.index > lastIndex) {
-          parts.push(content.substring(lastIndex, match.index))
-        }
-        parts.push(<strong key={match.index} className="font-extrabold text-slate-900">{match[1]}</strong>)
-        lastIndex = boldRegex.lastIndex
-      }
-      if (lastIndex < content.length) {
-        parts.push(content.substring(lastIndex))
-      }
-
-      const parsedLine = parts.length > 0 ? parts : content
-
-      if (line.startsWith("- ") || line.startsWith("* ")) {
-        return (
-          <li key={i} className="ml-4 list-disc text-slate-700 mt-1 pl-1">
-            {parsedLine}
-          </li>
-        )
-      }
-      return <p key={i} className="mt-1.5 leading-relaxed text-slate-700">{parsedLine}</p>
-    })
+    if (storageKey) window.localStorage.removeItem(storageKey)
   }
 
   return (
@@ -306,7 +400,7 @@ export function ChatbotWidget() {
                           : "bg-white border border-slate-100 text-slate-800 rounded-tl-none"
                       }`}
                     >
-                      {m.from === "user" ? m.text : formatText(m.text)}
+                      {m.from === "user" ? m.text : renderMarkdown(m.text)}
 
                       {/* Cited Sources */}
                       {m.from === "bot" && m.sources && m.sources.length > 0 && (
@@ -344,7 +438,7 @@ export function ChatbotWidget() {
               ))}
 
               {/* Loader Skeleton (Glass 2.0 feel) */}
-              {loading && (
+              {loading && messages[messages.length - 1]?.text === "" && (
                 <div className="flex items-start gap-2.5 animate-pulse">
                   <div className="w-7 h-7 rounded-lg bg-[var(--primary)]/[0.04] border border-[var(--primary)]/10 flex items-center justify-center shrink-0 shadow-sm mt-1">
                     <Bot size={14} className="text-slate-400" />
@@ -368,11 +462,12 @@ export function ChatbotWidget() {
                 className="flex-1 bg-slate-50 border border-slate-100 text-xs text-slate-800 rounded-2xl px-4 py-2.5 outline-none hover:border-slate-200 focus:border-[var(--primary)] focus:bg-white transition"
               />
               <button
-                onClick={handleSend}
-                disabled={loading || !input.trim()}
+                onClick={loading ? handleCancel : handleSend}
+                disabled={!loading && !input.trim()}
+                aria-label={loading ? "Stop response" : "Send message"}
                 className="w-9 h-9 rounded-2xl bg-[var(--primary)] hover:bg-[var(--accent)] text-white flex items-center justify-center shadow-md transition active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
               >
-                <Send size={14} />
+                {loading ? <Square size={12} fill="currentColor" /> : <Send size={14} />}
               </button>
             </div>
 

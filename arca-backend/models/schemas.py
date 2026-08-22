@@ -1,19 +1,32 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------- Documents ----------
 
 class DocumentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
+    organization_id: str
+    institution_id: str
+    department_id: Optional[str] = None
+    subject_id: Optional[str] = None
+    section_id: Optional[str] = None
+    owner_id: str
+    visibility: str
+    allowed_roles: List[str] = Field(default_factory=list)
     filename: str
     file_type: str
     file_size: int
     chunk_count: int
-    processed: bool
+    processed: bool = False
+    status: Optional[str] = None
+    storage_path: Optional[str] = None
     processing_error: Optional[str] = None
     uploaded_at: Optional[str] = None
     processed_at: Optional[str] = None
+    job_id: Optional[str] = None
 
 
 class DocumentStats(BaseModel):
@@ -25,10 +38,36 @@ class DocumentStats(BaseModel):
 
 # ---------- Chat ----------
 
+class UserContextPayload(BaseModel):
+    """Legacy service-test type; never accepted by the HTTP ChatRequest."""
+
+    user_id: Optional[str] = None
+    name: Optional[str] = "User"
+    email: Optional[str] = None
+    role: Optional[str] = "Student"
+    institution_id: Optional[str] = None
+
 class ChatRequest(BaseModel):
-    question: str = Field(..., min_length=1)
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(..., min_length=1, max_length=4000)
     session_id: Optional[str] = None
     top_k: Optional[int] = None
+    database_context: Optional[str] = None
+    client_turn_id: Optional[str] = None
+    # Accepted only for legacy callers during the transition. Route handlers
+    # never use it for identity or authorization and the Next.js gateway does
+    # not send it.
+    user_context: Optional[UserContextPayload] = None
+
+    @field_validator("question")
+    @classmethod
+    def normalize_question(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("question must not be empty")
+        return value
+
 
 
 class SourceCitation(BaseModel):
@@ -52,6 +91,7 @@ class ChatMessageOut(BaseModel):
     role: str
     content: str
     sources: List[SourceCitation]
+    client_turn_id: Optional[str] = None
     created_at: Optional[str] = None
 
 
