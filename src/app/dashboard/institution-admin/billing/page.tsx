@@ -5,6 +5,7 @@ import { Search, Plus, X, Loader2, Printer } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import InvoicePrintModal from "@/modules/billing/components/InvoicePrintModal"
+import { useDashboardSession } from "@/components/dashboard-session-provider"
 
 type Invoice = {
   id: string
@@ -36,6 +37,7 @@ type StudentOption = {
 }
 
 export default function BillingPage() {
+  const session = useDashboardSession()
   const [plans, setPlans] = useState<BillingPlan[]>([])
   const [search, setSearch] = useState("")
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
@@ -56,57 +58,45 @@ export default function BillingPage() {
   const loadBillingData = useCallback(async () => {
     try {
       setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userProfile } = await supabase
-        .from("users")
-        .select("institution_id")
-        .eq("id", user.id)
-        .single()
-
-      if (!userProfile?.institution_id) return
+      if (!session?.institution_id) return
 
       const { data, error } = await supabase
         .from("payment_plans")
         .select("id, total_amount, student_id")
-        .eq("institution_id", userProfile.institution_id)
+        .eq("institution_id", session.institution_id)
         .order("created_at", { ascending: false })
 
       if (error) throw error
 
       if (data && data.length > 0) {
         const studentIds = data.map(p => p.student_id)
-        const { data: students = [] } = studentIds.length
-          ? await supabase
-              .from("students")
-              .select("id, program_id")
-              .in("id", studentIds)
-          : { data: [] }
-
-        const { data: users = [] } = studentIds.length
-          ? await supabase
-              .from("users")
-              .select("id, name")
-              .in("id", studentIds)
-          : { data: [] }
+        const [studentsResult, usersResult] = await Promise.all([
+          studentIds.length
+            ? supabase.from("students").select("id, program_id").in("id", studentIds)
+            : Promise.resolve({ data: [] }),
+          studentIds.length
+            ? supabase.from("users").select("id, name").in("id", studentIds)
+            : Promise.resolve({ data: [] }),
+        ])
+        const students = studentsResult.data ?? []
+        const users = usersResult.data ?? []
 
         const programIds = Array.from(new Set((students || []).map(s => s.program_id).filter(Boolean))) as string[]
-        const { data: programs = [] } = programIds.length
-          ? await supabase
-              .from("programs")
-              .select("id, name")
-              .in("id", programIds)
-          : { data: [] }
-
         const planIds = data.map(p => p.id)
-        const { data: invoices = [] } = planIds.length
-          ? await supabase
-              .from("invoices")
-              .select("id, payment_plan_id, amount_due, due_date, status")
-              .in("payment_plan_id", planIds)
-              .order("due_date", { ascending: true })
-          : { data: [] }
+        const [programsResult, invoicesResult] = await Promise.all([
+          programIds.length
+            ? supabase.from("programs").select("id, name").in("id", programIds)
+            : Promise.resolve({ data: [] }),
+          planIds.length
+            ? supabase
+                .from("invoices")
+                .select("id, payment_plan_id, amount_due, due_date, status")
+                .in("payment_plan_id", planIds)
+                .order("due_date", { ascending: true })
+            : Promise.resolve({ data: [] }),
+        ])
+        const programs = programsResult.data ?? []
+        const invoices = invoicesResult.data ?? []
 
         const formatted = data.map((d: any) => {
           const student = (students || []).find(s => s.id === d.student_id)
@@ -149,7 +139,7 @@ export default function BillingPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -160,21 +150,12 @@ export default function BillingPage() {
   const openCreateModal = async () => {
     setShowCreateModal(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userProfile } = await supabase
-        .from("users")
-        .select("institution_id")
-        .eq("id", user.id)
-        .single()
-
-      if (!userProfile?.institution_id) return
+      if (!session?.institution_id) return
 
       const { data: studentsRes } = await supabase
         .from("students")
         .select("id")
-        .eq("institution_id", userProfile.institution_id)
+        .eq("institution_id", session.institution_id)
 
       const sIds = (studentsRes || []).map(s => s.id)
       if (sIds.length > 0) {
@@ -203,23 +184,14 @@ export default function BillingPage() {
 
     setIsCreatingPlan(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userProfile } = await supabase
-        .from("users")
-        .select("institution_id")
-        .eq("id", user.id)
-        .single()
-
-      if (!userProfile?.institution_id) return
+      if (!session?.institution_id) return
 
       // Insert payment plan
       const { data: newPlan, error: planErr } = await supabase
         .from("payment_plans")
         .insert({
           student_id: selectedStudentId,
-          institution_id: userProfile.institution_id,
+          institution_id: session.institution_id,
           total_amount: totalFee,
         })
         .select()

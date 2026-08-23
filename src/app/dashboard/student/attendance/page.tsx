@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 import AttendanceClient from "./attendance-client"
 
 export const dynamic = "force-dynamic"
@@ -27,31 +28,18 @@ interface SubjectSummary {
 }
 
 export default async function StudentAttendancePage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
+
   const supabase = await createSupabaseServerClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  // Get user profile first (common fields)
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, role, institution_id, name, email, phone")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
-
-  // Get student-specific fields from students table
   const { data: studentProfile } = await supabase
     .from("students")
     .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentProfile }
+  const profile = { ...context, ...studentProfile }
 
   const { data: institution } = await supabase
     .from("institutions")
@@ -77,35 +65,24 @@ export default async function StudentAttendancePage() {
       sectionId = section.id
       sectionName = section.name ?? "Not assigned"
       sectionSemester = section.semester ?? profile.semester ?? null
-      if (section.program_id) {
-        const { data: program } = await supabase
-          .from("programs")
-          .select("id, name")
-          .eq("id", section.program_id)
-          .single()
-
-        if (program) {
-          programName = program.name ?? "Not assigned"
-        }
-      }
-
-      if (section.faculty_advisor_id) {
-        advisorId = section.faculty_advisor_id
-        const { data: advisor } = await supabase
-          .from("users")
-          .select("id, name")
-          .eq("id", section.faculty_advisor_id)
-          .single()
-
-        advisorName = advisor?.name ?? advisorName
-      }
+      const [programResult, advisorResult] = await Promise.all([
+        section.program_id
+          ? supabase.from("programs").select("id, name").eq("id", section.program_id).single()
+          : Promise.resolve({ data: null }),
+        section.faculty_advisor_id
+          ? supabase.from("users").select("id, name").eq("id", section.faculty_advisor_id).single()
+          : Promise.resolve({ data: null }),
+      ])
+      if (programResult.data) programName = programResult.data.name ?? "Not assigned"
+      if (section.faculty_advisor_id) advisorId = section.faculty_advisor_id
+      advisorName = advisorResult.data?.name ?? advisorName
     }
   } else if (profile.program_id) {
     const { data: program } = await supabase
       .from("programs")
       .select("id, name")
-      .eq("id", profile.program_id)
-      .single()
+        .eq("id", profile.program_id)
+        .single()
 
     if (program) {
       programName = program.name ?? "Not assigned"
@@ -136,7 +113,7 @@ export default async function StudentAttendancePage() {
       ? await supabase
           .from("attendance_records")
           .select("session_id, status")
-          .eq("student_id", user.id)
+          .eq("student_id", context.id)
           .in("session_id", sessionIds)
       : { data: [] }
 
@@ -145,29 +122,24 @@ export default async function StudentAttendancePage() {
     const subjectIds = Array.from(new Set((sessions as Array<{ subject_id: string | null }>).map((session) => session.subject_id).filter(Boolean))) as string[]
     const facultyIds = Array.from(new Set((sessions as Array<{ faculty_id: string | null }>).map((session) => session.faculty_id).filter(Boolean))) as string[]
 
-    let subjectMap = new Map<string, { id: string; name: string; code: string }>()
-    if (subjectIds.length) {
-      const { data: subjects = [] } = await supabase
-        .from("subjects")
-        .select("id, name, code")
-        .in("id", subjectIds)
+    const [subjectsResult, facultiesResult] = await Promise.all([
+      subjectIds.length
+        ? supabase.from("subjects").select("id, name, code").in("id", subjectIds)
+        : Promise.resolve({ data: [] }),
+      facultyIds.length
+        ? supabase.from("users").select("id, name").in("id", facultyIds)
+        : Promise.resolve({ data: [] }),
+    ])
 
-      ;(subjects as Array<{ id: string; name: string; code: string }>).forEach((subject) => {
-        subjectMap.set(subject.id, subject)
-      })
-    }
+    const subjectMap = new Map<string, { id: string; name: string; code: string }>()
+    ;(subjectsResult.data as Array<{ id: string; name: string; code: string }>).forEach((subject) => {
+      subjectMap.set(subject.id, subject)
+    })
 
-    let facultyMap = new Map<string, { id: string; name: string }>()
-    if (facultyIds.length) {
-      const { data: faculties = [] } = await supabase
-        .from("users")
-        .select("id, name")
-        .in("id", facultyIds)
-
-      ;(faculties as Array<{ id: string; name: string }>).forEach((faculty) => {
-        facultyMap.set(faculty.id, faculty)
-      })
-    }
+    const facultyMap = new Map<string, { id: string; name: string }>()
+    ;(facultiesResult.data as Array<{ id: string; name: string }>).forEach((faculty) => {
+      facultyMap.set(faculty.id, faculty)
+    })
 
     attendanceEntries = (sessions as Array<{ id: string; attendance_date: string; period: number; subject_id: string | null; faculty_id: string | null }>).map((session) => {
       const record = recordMap.get(session.id)
@@ -230,8 +202,8 @@ export default async function StudentAttendancePage() {
   return (
     <AttendanceClient
       student={{
-        name: profile.name ?? user.email ?? "Student",
-        email: profile.email ?? user.email ?? "",
+        name: profile.name ?? context.email ?? "Student",
+        email: profile.email ?? context.email ?? "",
         institution: institution?.name ?? "Institution",
         sectionName,
         programName,
