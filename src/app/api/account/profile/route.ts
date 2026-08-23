@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { revalidateTag } from "next/cache"
 
 export const dynamic = "force-dynamic"
 
@@ -86,6 +87,8 @@ export async function PUT(request: NextRequest) {
     console.error("Failed to update profile details:", detailsError.message)
     return NextResponse.json({ error: detailsError.message }, { status: 500 })
   }
+
+  revalidateTag(`dashboard:user-profile:${user.id}`, "max")
 
   return NextResponse.json({ success: true })
 }

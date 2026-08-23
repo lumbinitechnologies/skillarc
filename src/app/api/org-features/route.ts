@@ -2,18 +2,29 @@ import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { getCurrentUserContext } from "@/lib/user-context"
 
+function featureResponse(features: string[], status = 200) {
+  return NextResponse.json(
+    { features },
+    {
+      status,
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=30",
+      },
+    },
+  )
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createSupabaseServerClient()
     const profile = await getCurrentUserContext()
     if (!profile) {
-      return NextResponse.json({ features: [] }, { status: 401 })
+      return featureResponse([], 401)
     }
 
     if (!profile.organization_id) {
       // Super admins or users without org ID get all features
-      return NextResponse.json({
-        features: [
+      return featureResponse([
           "plagiarism",
           "billing",
           "placements",
@@ -22,8 +33,7 @@ export async function GET(req: NextRequest) {
           "report_cards",
           "intake_cohorts",
           "interventions"
-        ]
-      })
+        ])
     }
 
     const { data: org, error } = await supabase
@@ -34,12 +44,12 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error("Failed to query org features:", error.message)
-      return NextResponse.json({ features: [] })
+      return featureResponse([])
     }
 
-    return NextResponse.json({ features: org?.features || [] })
+    return featureResponse(org?.features || [])
   } catch (err: any) {
     console.error("Org features API error:", err)
-    return NextResponse.json({ features: [] })
+    return featureResponse([])
   }
 }
