@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 import pytest
 from unittest.mock import patch, MagicMock
 from pydantic import ValidationError
@@ -365,6 +366,45 @@ class TestFastAPIRoutes:
         assert "event: token" in body
         assert "event: sources" in body
         assert "event: done" in body
+
+    @patch("services.chat_service._log_query")
+    @patch("services.chat_service._save_message")
+    @patch("services.chat_service.get_or_create_session")
+    @patch("services.chat_service.generate_answer_stream")
+    @patch("services.chat_service.similarity_search")
+    def test_stream_serializes_uuid_session_id(
+        self,
+        mock_search,
+        mock_stream,
+        mock_get_session,
+        mock_save_message,
+        mock_log_query,
+        test_db,
+    ):
+        session_id = uuid.uuid4()
+        mock_get_session.return_value = type(
+            "Session", (), {"id": session_id, "title": "Existing Conversation"}
+        )()
+        mock_search.return_value = []
+        mock_stream.return_value = iter(["Hello"])
+
+        body = "".join(
+            chat_service.ask_question_stream(
+                db=test_db,
+                question="What section am I in?",
+            )
+        )
+
+        session_event = next(
+            event for event in body.split("\n\n") if event.startswith("event: session")
+        )
+        session_payload = json.loads(session_event.split("data: ", 1)[1])
+
+        assert session_payload == {"session_id": str(session_id)}
+        assert "event: token" in body
+        assert "event: sources" in body
+        assert "event: done" in body
+        assert "CHAT_STREAM_FAILED" not in body
 
     def test_public_chat_stream_wraps_text_as_sse(self):
         with patch.object(

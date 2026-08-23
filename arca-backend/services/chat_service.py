@@ -230,7 +230,7 @@ def ask_question_stream(
         _save_message(db, session.id, "user", question)
 
         full_answer = ""
-        yield _sse_event("session", {"session_id": session.id})
+        yield _sse_event("session", {"session_id": str(session.id)})
 
         for text_piece in generate_answer_stream(
             question,
