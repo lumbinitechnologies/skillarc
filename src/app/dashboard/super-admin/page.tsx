@@ -2,21 +2,15 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
 import SuperAdminDashboardClient from "./super-admin-dashboard-client"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export default async function SuperAdminDashboardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (!context.isSuperAdmin) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, name, email")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.SUPER_ADMIN) redirect("/auth/login")
+  const profile = context
 
   // Stat counts
   const [
@@ -66,8 +60,8 @@ export default async function SuperAdminDashboardPage() {
   return (
     <SuperAdminDashboardClient
       admin={{
-        name: profile.name ?? user.email ?? "Super Admin",
-        email: user.email ?? "",
+        name: profile.name ?? context.email ?? "Super Admin",
+        email: context.email ?? "",
       }}
       stats={{
         organizations: orgCount ?? 0,

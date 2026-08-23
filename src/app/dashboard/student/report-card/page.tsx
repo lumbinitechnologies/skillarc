@@ -1,33 +1,29 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 import { StudentReportCardClient } from "./student-report-card-client"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudentReportCardPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, name, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
-
   const { data: studentData } = await supabase
     .from("students")
     .select("id, section_id, program_id, semester")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = {
+    id: context.id,
+    name: context.name,
+    institution_id: context.institution_id,
+    ...studentData,
+  }
 
   // 1. Fetch Enrolled Subjects for student section
   const { data: timetableRows = [] } = profile.section_id
@@ -67,17 +63,20 @@ export default async function StudentReportCardPage() {
     )
   }
 
-  // Fetch subjects details
-  const { data: subjects = [] } = await supabase
-    .from("subjects")
-    .select("id, name, code")
-    .in("id", subjectIds)
+  const [subjectsResult, assignmentsResult, submissionsResult, gradeColumns] = await Promise.all([
+    supabase.from("subjects").select("id, name, code").in("id", subjectIds),
+    supabase.from("assignments").select("id, subject_id, type, section_ids").in("subject_id", subjectIds),
+    supabase.from("submissions").select("*").eq("student_id", context.id),
+    supabase
+      .from("grade_columns")
+      .select("*")
+      .in("subject_id", subjectIds)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+  ])
 
-  // 2. Fetch Assignments for these subjects
-  const { data: allAssignments = [] } = await supabase
-    .from("assignments")
-    .select("*")
-    .in("subject_id", subjectIds)
+  const subjects = subjectsResult.data ?? []
+  const allAssignments = assignmentsResult.data ?? []
 
   // Filter assignments targeted at the student's section (excluding Materials)
   const sectionId = profile.section_id
@@ -88,27 +87,12 @@ export default async function StudentReportCardPage() {
   })
 
   // 3. Fetch Student Submissions
-  const { data: submissions = [] } = await supabase
-    .from("submissions")
-    .select("*")
-    .eq("student_id", user.id)
-
-  // 4. Fetch custom gradebook columns and values for the student's subjects
-  const gradeColumns = subjectIds.length
-    ? await supabase
-        .from("grade_columns")
-        .select("*")
-        .in("subject_id", subjectIds)
-        .eq("is_active", true)
-        .order("display_order", { ascending: true })
-    : { data: [] }
-
   const columnIds = (gradeColumns.data ?? []).map((column: any) => column.id)
   const gradeEntries = columnIds.length
     ? await supabase
         .from("grade_entries")
         .select("*")
-        .eq("student_id", user.id)
+        .eq("student_id", context.id)
         .in("column_id", columnIds)
     : { data: [] }
 
@@ -117,7 +101,7 @@ export default async function StudentReportCardPage() {
       studentName={profile.name}
       subjects={subjects ?? []}
       assignments={sectionAssignments}
-      submissions={submissions ?? []}
+      submissions={submissionsResult.data ?? []}
       gradeColumns={gradeColumns.data ?? []}
       gradeEntries={gradeEntries.data ?? []}
     />

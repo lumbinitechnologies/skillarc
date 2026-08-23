@@ -12,14 +12,7 @@ export default async function Page() {
 
   const supabase = await createSupabaseServerClient()
 
-  // Get user profile (common fields)
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, role, institution_id, name, email, phone")
-    .eq("id", context.id)
-    .single()
-
-  if (!userProfile || context.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   // Get student-specific fields from students table
   const { data: studentData } = await supabase
@@ -28,7 +21,7 @@ export default async function Page() {
     .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = { ...context, ...studentData }
 
   // 1. Fetch institution, section, timetable slots, and attendance records in parallel
   const [institutionRes, sectionRes, timetableRes, attendanceRes] = await Promise.all([

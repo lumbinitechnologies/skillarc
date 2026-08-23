@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, CreditCard, ShieldCheck, Zap, Building2, Dow
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import InvoicePrintModal from "@/modules/billing/components/InvoicePrintModal"
+import { useDashboardSession } from "@/components/dashboard-session-provider"
 
 type LedgerInstallment = {
   id: string
@@ -21,6 +22,7 @@ type LedgerState = {
 }
 
 export default function StudentBillingPage() {
+  const session = useDashboardSession()
   const [ledger, setLedger] = useState<LedgerState>({ total: 0, paid: 0, installments: [] })
   const [loading, setLoading] = useState(true)
   const [selectedInvoice, setSelectedInvoice] = useState<LedgerInstallment | null>(null)
@@ -43,30 +45,22 @@ export default function StudentBillingPage() {
   const loadFeesSchedule = useCallback(async () => {
     try {
       setLoading(true)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      if (!session) {
         setLedger({ total: 0, paid: 0, installments: [] })
         return
       }
 
-      // 1. Fetch user & student profile for institution_id
-      const { data: userProfile } = await supabase
-        .from("users")
-        .select("institution_id, name")
-        .eq("id", user.id)
-        .single()
-
       setStudentInfo({
-        name: userProfile?.name || "Student Account",
-        email: user.email || "",
-        id: user.id,
+        name: session.name || "Student Account",
+        email: session.email || "",
+        id: session.id,
       })
 
       // 2. Fetch payment plans for this student
       const { data: plansRes, error: plansErr } = await supabase
         .from("payment_plans")
         .select("id, total_amount, institution_id")
-        .eq("student_id", user.id)
+        .eq("student_id", session.id)
         .order("created_at", { ascending: false })
 
       if (plansErr) {
@@ -76,12 +70,12 @@ export default function StudentBillingPage() {
       let activePlan = plansRes && plansRes.length > 0 ? plansRes[0] : null
 
       // If no plan exists yet for student, auto-provision one dynamically for their institution
-      if (!activePlan && userProfile?.institution_id) {
+      if (!activePlan && session.institution_id) {
         // Check if student has an offer letter with course_fees
         const { data: appData } = await supabase
           .from("admissions_applications")
           .select("offer_letters(course_fees)")
-          .eq("email", user.email || "")
+          .eq("email", session.email || "")
           .maybeSingle()
 
         const offerFee = appData?.offer_letters?.[0]?.course_fees ? Number(appData.offer_letters[0].course_fees) : 12500
@@ -89,8 +83,8 @@ export default function StudentBillingPage() {
         const { data: newPlan } = await supabase
           .from("payment_plans")
           .insert({
-            student_id: user.id,
-            institution_id: userProfile.institution_id,
+            student_id: session.id,
+            institution_id: session.institution_id,
             total_amount: offerFee,
           })
           .select()
@@ -149,7 +143,7 @@ export default function StudentBillingPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

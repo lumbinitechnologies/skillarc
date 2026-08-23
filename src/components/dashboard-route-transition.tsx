@@ -1,48 +1,49 @@
 "use client"
 
-import { AnimatePresence, motion } from "framer-motion"
+import { motion } from "framer-motion"
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 
 export default function DashboardRouteTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [isRouteLoading, setIsRouteLoading] = useState(false)
 
   useEffect(() => {
-    setIsRouteLoading(true)
+    if (process.env.NEXT_PUBLIC_PERF_DIAGNOSTICS !== "true") return
 
-    const progressTimer = window.setTimeout(() => {
-      setIsRouteLoading(false)
-    }, 240)
-
-    return () => window.clearTimeout(progressTimer)
+    const navigationStart = "dashboard-navigation:start"
+    const markName = `dashboard-navigation:${pathname}`
+    if (!performance.getEntriesByName(navigationStart).length) {
+      performance.mark(navigationStart)
+    }
+    performance.mark(`${markName}:ready`)
+    performance.measure(markName, navigationStart, `${markName}:ready`)
   }, [pathname])
+
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_PERF_DIAGNOSTICS !== "true") return
+
+    const handleNavigationStart = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null
+      if (!target) return
+      performance.clearMarks("dashboard-navigation:start")
+      performance.clearMeasures("dashboard-navigation")
+      performance.mark("dashboard-navigation:start")
+    }
+
+    document.addEventListener("click", handleNavigationStart)
+    return () => document.removeEventListener("click", handleNavigationStart)
+  }, [])
 
   return (
     <>
-      <motion.div
-        className="fixed inset-x-0 top-0 z-[80] h-[3px] origin-left rounded-b-full bg-gradient-to-r from-[#FF5500] via-[#FFB38A] to-[#7DD3FC] shadow-[0_0_18px_rgba(255,85,0,0.45)]"
-        initial={false}
-        animate={
-          isRouteLoading
-            ? { opacity: 1, scaleX: 1 }
-            : { opacity: 0, scaleX: 0.2 }
-        }
-        transition={{ duration: 0.22, ease: "easeOut" }}
-      />
-
-      <AnimatePresence mode="wait">
-        <motion.main
-          key={pathname}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="p-6 md:p-8 lg:p-10 flex-1 min-w-0"
-        >
-          {children}
-        </motion.main>
-      </AnimatePresence>
+      <motion.main
+        initial={{ opacity: 0.94, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.12, ease: "easeOut" }}
+        className="p-6 md:p-8 lg:p-10 flex-1 min-w-0"
+      >
+        {children}
+      </motion.main>
     </>
   )
 }

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { measureServer } from "@/lib/perf"
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -25,7 +26,7 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await measureServer("proxy.auth.get-user", () => supabase.auth.getUser())
 
   const { pathname } = request.nextUrl
 

@@ -8,6 +8,7 @@ import {
   getGradeColumnsBySubjectAction,
   getGradeEntriesBySubjectAction,
 } from "@/app/actions/gradebook"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export const dynamic = "force-dynamic"
 
@@ -19,38 +20,27 @@ interface PageProps {
 
 export default async function FacultySubjectDetailPage({ params }: PageProps) {
   const { subjectId } = await params
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  if (![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(context.role as any)) redirect("/dashboard")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const profile = context
 
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
-
-  // 1. Fetch Subject Info
-  const { data: subject } = await supabase
-    .from("subjects")
-    .select("id, name, code")
-    .eq("id", subjectId)
-    .single()
+  const [subjectResult, slotsResult, assignmentsResult, announcementItems] = await Promise.all([
+    supabase.from("subjects").select("id, name, code").eq("id", subjectId).single(),
+    supabase.from("timetable_slots").select("section_id, semester").eq("faculty_id", context.id).eq("subject_id", subjectId),
+    supabase.from("assignments").select("*").eq("subject_id", subjectId).order("created_at", { ascending: false }),
+    getSubjectAnnouncementsAction(subjectId),
+  ])
+  const subject = subjectResult.data
 
   if (!subject) {
     redirect("/dashboard/faculty/subjects")
   }
 
   // 2. Fetch Sections taught by this faculty for this subject
-  const { data: slots } = await supabase
-    .from("timetable_slots")
-    .select("section_id, semester")
-    .eq("faculty_id", user.id)
-    .eq("subject_id", subjectId)
+  const slots = slotsResult.data
 
   const sectionIds = Array.from(new Set((slots ?? []).map((s: any) => s.section_id).filter(Boolean))) as string[]
 
@@ -62,15 +52,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
         .in("id", sectionIds)
     : { data: [] }
 
-  // 3. Fetch Assignments for this subject
-  const { data: assignments = [] } = await supabase
-    .from("assignments")
-    .select("*")
-    .eq("subject_id", subjectId)
-    .order("created_at", { ascending: false })
-
-  // 3b. Fetch announcement posts for this subject
-  const announcementItems = await getSubjectAnnouncementsAction(subjectId)
+  const assignments = assignmentsResult.data ?? []
 
   const assignmentIds = (assignments ?? []).map((a: any) => a.id)
 
@@ -146,9 +128,9 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
 
   return (
     <FacultySubjectDetailClient
-      facultyId={user.id}
+      facultyId={context.id}
       facultyName={profile.name}
-      institutionId={profile.institution_id}
+      institutionId={profile.institution_id ?? ""}
       subject={subject}
       announcements={announcementItems ?? []}
       sections={sections ?? []}

@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useDashboardSession } from "@/components/dashboard-session-provider"
 
 export default function StudentAdmissionsPage() {
+  const session = useDashboardSession()
   const [status, setStatus] = useState("OFFER_GENERATED") // 'OFFER_GENERATED' | 'OFFER_ACCEPTED' | 'ENROLLED'
   const [signature, setSignature] = useState("")
   const [appId, setAppId] = useState<string | null>(null)
@@ -13,8 +15,7 @@ export default function StudentAdmissionsPage() {
   // Fetch active student applicant status from DB
   const loadStudentAdmissions = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
+      if (session?.email) {
         const { data: appData } = await supabase
           .from("admissions_applications")
           .select(`
@@ -26,7 +27,7 @@ export default function StudentAdmissionsPage() {
               status
             )
           `)
-          .eq("email", user.email)
+          .eq("email", session.email)
           .single()
 
         if (appData) {
@@ -40,7 +41,7 @@ export default function StudentAdmissionsPage() {
     } catch (err) {
       console.error(err)
     }
-  }, [])
+  }, [session])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
