@@ -1,8 +1,9 @@
 "use client"
 
-import React, { useEffect, useRef, useState, useMemo } from "react"
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { Sparkles, Send, X, User, FileText, Trash2, Square, Terminal } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { supabase } from "@/lib/supabase"
 
 interface SourceCitation {
   document_id: string
@@ -116,46 +117,76 @@ export function ChatbotWidget() {
 
   const listRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const profileRequestRef = useRef(0)
   const storageKey = profile ? `arca-chat-session:${profile.id}:${profile.institution_id || profile.organization_id || "unscoped"}` : null
 
-  // Fetch active user profile context on load
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const res = await fetch("/api/auth/profile")
+  const loadProfile = useCallback(async () => {
+    const requestId = ++profileRequestRef.current
+    try {
+      const res = await fetch("/api/auth/profile", { cache: "no-store" })
 
-        if (!res.ok) {
-          if (res.status === 401) {
-            setProfileStatus("guest")
-            return
-          }
-          throw new Error(`Profile fetch failed: ${res.status}`)
-        }
-
-        const contentType = res.headers.get("content-type") || ""
-        if (!contentType.includes("application/json")) {
-          console.warn("Expected JSON from /api/auth/profile but got:", contentType)
+      if (!res.ok) {
+        if (res.status === 401) {
+          if (requestId !== profileRequestRef.current) return
+          setProfile(null)
+          setProfileStatus("guest")
           return
         }
-
-        const data = await res.json()
-        setProfile({
-          id: data.id,
-          name: data.name || data.email?.split("@")[0] || "User",
-          role: data.role || "STUDENT",
-          institution_id: data.institution_id,
-          organization_id: data.organization_id,
-        })
-        setProfileStatus("authenticated")
-      } catch (err) {
-        console.error("Failed to load profile for chatbot widget:", err)
-        // A failed profile lookup must never grant private access. Fall back
-        // to the restricted product-help experience.
-        setProfileStatus("guest")
+        throw new Error(`Profile fetch failed: ${res.status}`)
       }
+
+      const contentType = res.headers.get("content-type") || ""
+      if (!contentType.includes("application/json")) {
+        console.warn("Expected JSON from /api/auth/profile but got:", contentType)
+        return
+      }
+
+      const data = await res.json()
+      if (requestId !== profileRequestRef.current) return
+      setProfile({
+        id: data.id,
+        name: data.name || data.email?.split("@")[0] || "User",
+        role: data.role || "STUDENT",
+        institution_id: data.institution_id,
+        organization_id: data.organization_id,
+      })
+      setProfileStatus("authenticated")
+    } catch (err) {
+      if (requestId !== profileRequestRef.current) return
+      console.error("Failed to load profile for chatbot widget:", err)
+      // A failed profile lookup must never grant private access. Fall back
+      // to the restricted product-help experience.
+      setProfile(null)
+      setProfileStatus("guest")
     }
-    loadProfile()
   }, [])
+
+  // Fetch active user profile context on load and whenever auth changes. The
+  // widget stays mounted while the login page navigates to the dashboard.
+  useEffect(() => {
+    queueMicrotask(() => void loadProfile())
+  }, [loadProfile])
+
+  useEffect(() => {
+    const resetForAuthChange = () => {
+      abortRef.current?.abort()
+      setLoading(false)
+      setMessages([])
+      setSessionId(null)
+      setProfileStatus("loading")
+      void loadProfile()
+    }
+
+    window.addEventListener("skillarc-auth-changed", resetForAuthChange)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      resetForAuthChange()
+    })
+
+    return () => {
+      window.removeEventListener("skillarc-auth-changed", resetForAuthChange)
+      subscription.unsubscribe()
+    }
+  }, [loadProfile])
 
   // Restore the scoped session only after the authenticated profile is known.
   useEffect(() => {
