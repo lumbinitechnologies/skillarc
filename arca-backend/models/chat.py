@@ -26,7 +26,7 @@ class ChatSession(Base):
 
     def to_dict(self):
         return {
-            "id": self.id,
+            "id": str(self.id),
             "owner_user_id": self.owner_user_id,
             "institution_id": self.institution_id,
             "title": self.title,
@@ -51,8 +51,8 @@ class ChatMessage(Base):
         import json
 
         return {
-            "id": self.id,
-            "session_id": self.session_id,
+            "id": str(self.id),
+            "session_id": str(self.session_id),
             "role": self.role,
             "content": self.content,
             "client_turn_id": self.client_turn_id,

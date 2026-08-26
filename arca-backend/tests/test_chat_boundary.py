@@ -72,6 +72,22 @@ class TestChatRequestSchema:
 
 
 class TestChatMessagePersistence:
+    def test_to_dict_serializes_uuid_values_for_api_response(self):
+        session_id = uuid.uuid4()
+        message_id = uuid.uuid4()
+        message = ChatMessage(
+            id=message_id,
+            session_id=session_id,
+            role="assistant",
+            content="Answer",
+            sources="[]",
+        )
+
+        serialized = message.to_dict()
+
+        assert serialized["id"] == str(message_id)
+        assert serialized["session_id"] == str(session_id)
+
     def test_user_messages_store_empty_sources_array(self, test_db):
         message = chat_service._save_message(
             test_db,
