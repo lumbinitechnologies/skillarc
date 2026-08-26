@@ -1,5 +1,5 @@
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { inviteUser, resolveAppOrigin } from "@/lib/invite-user"
@@ -7,17 +7,18 @@ import { getCurrentUserContext } from "@/lib/user-context"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const profile = await getCurrentUserContext()
+    if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const canReadAll = new Set<string>([ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN, ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD, ROLES.FACULTY]).has(profile.role)
+    if (!canReadAll && profile.role !== ROLES.STUDENT) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const adminClient = createSupabaseAdminClient()
 
     const { searchParams } = request.nextUrl
-    const institutionId = searchParams.get("institution_id")
+    const requestedInstitutionId = searchParams.get("institution_id")
+    const isGlobalAdmin = new Set<string>([ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN]).has(profile.role) || profile.isSuperAdmin
+    if (!isGlobalAdmin && requestedInstitutionId && requestedInstitutionId !== profile.institution_id) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    const institutionId = isGlobalAdmin ? requestedInstitutionId : profile.institution_id
     const departmentId = searchParams.get("department_id")
     const search = searchParams.get("search")
     const page   = Math.max(1, Number(searchParams.get("page")  ?? 1))
@@ -28,7 +29,9 @@ export async function GET(request: NextRequest) {
     // Query students table (now separate from users)
     let query = adminClient
       .from("students")
-      .select("*", { count: "exact" })
+      .select("id,institution_id,program_id,section_id,intake_id,semester,registration_number,admission_year,dob,gender", { count: "exact" })
+
+    if (profile.role === ROLES.STUDENT) query = query.eq("id", profile.id)
 
     if (institutionId) {
       query = query.eq("institution_id", institutionId)
@@ -40,7 +43,7 @@ export async function GET(request: NextRequest) {
         .select("id")
         .eq("department_id", departmentId)
       
-      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      const programIds = (deptPrograms ?? []).map((p) => p.id)
       
       if (programIds.length > 0) {
         query = query.in("program_id", programIds)
@@ -231,8 +234,8 @@ export async function POST(request: NextRequest) {
       let parentUserId = existingParent?.id
 
       if (!parentUserId) {
-        let authData: any = null
-        let authError: any = null
+        let authData: { user?: { id: string } | null } | null = null
+        let authError: { message?: string; status?: number } | null = null
         
         try {
           const createRes = await adminClient.auth.admin.createUser({
@@ -242,8 +245,8 @@ export async function POST(request: NextRequest) {
           })
           authData = createRes.data
           authError = createRes.error
-        } catch (err: any) {
-          authError = err
+        } catch (err: unknown) {
+          authError = err instanceof Error ? { message: err.message } : { message: String(err) }
         }
 
         if (authError) {
@@ -298,8 +301,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ...userData, ...student })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Student creation error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
   }
 }
