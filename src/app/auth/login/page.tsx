@@ -29,6 +29,7 @@ export default function LoginPage() {
         return
       }
 
+      window.dispatchEvent(new Event('skillarc-auth-changed'))
       router.push('/dashboard')
     } catch (err) {
       console.error('Login error:', err)
