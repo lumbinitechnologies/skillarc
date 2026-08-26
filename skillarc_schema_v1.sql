@@ -164,6 +164,104 @@ CREATE TABLE public.students (
     UNIQUE (institution_id, registration_number)
 );
 
+-- Profile-level supporting documents. Admissions application documents remain
+-- in admission_documents because they may exist before a student is created.
+CREATE TABLE public.student_documents (
+  id                 uuid NOT NULL DEFAULT gen_random_uuid(),
+  student_id         uuid NOT NULL,
+  institution_id     uuid NOT NULL,
+  application_id     uuid,
+  application_document_id uuid,
+  category           text NOT NULL CHECK (category = ANY (ARRAY[
+                       'PASSPORT','VISA','ENGLISH_EVIDENCE','ACADEMIC_DOCUMENT',
+                       'SIGNED_APPLICATION','STUDENT_REQUEST_FORM',
+                       'OTHER_SUPPORTING_EVIDENCE'
+                     ])),
+  title              text NOT NULL,
+  storage_bucket     text NOT NULL,
+  storage_path       text NOT NULL,
+  original_filename  text NOT NULL,
+  mime_type          text NOT NULL,
+  size_bytes         bigint NOT NULL CHECK (size_bytes >= 0),
+  checksum_sha256    text,
+  version            integer NOT NULL DEFAULT 1 CHECK (version > 0),
+  status             text NOT NULL DEFAULT 'PENDING' CHECK (status = ANY (ARRAY[
+                       'PENDING','APPROVED','REJECTED','EXPIRED','ARCHIVED'
+                     ])),
+  review_feedback    text,
+  reviewed_by        uuid,
+  reviewed_at        timestamptz,
+  uploaded_by        uuid NOT NULL,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  updated_at         timestamptz NOT NULL DEFAULT now(),
+  archived_at        timestamptz,
+  superseded_at      timestamptz,
+  superseded_by      uuid,
+  CONSTRAINT student_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT student_documents_student_fkey FOREIGN KEY (student_id)
+    REFERENCES public.students(id) ON DELETE CASCADE,
+  CONSTRAINT student_documents_institution_fkey FOREIGN KEY (institution_id)
+    REFERENCES public.institutions(id) ON DELETE CASCADE,
+  CONSTRAINT student_documents_uploaded_by_fkey FOREIGN KEY (uploaded_by)
+    REFERENCES public.users(id),
+  CONSTRAINT student_documents_reviewed_by_fkey FOREIGN KEY (reviewed_by)
+    REFERENCES public.users(id),
+  CONSTRAINT student_documents_storage_path_scope_check CHECK
+    (storage_path LIKE institution_id::text || '/' || student_id::text || '/%'),
+  CONSTRAINT student_documents_storage_path_relative_check CHECK
+    (storage_path !~ '(^/|^[A-Za-z]:|\\\\)')
+);
+
+CREATE TABLE public.education_agents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  name text NOT NULL, email text, is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE public.student_profile_details (
+  student_id uuid PRIMARY KEY REFERENCES public.students(id) ON DELETE CASCADE,
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  citizenship text, country_of_birth text, passport_number text,
+  passport_country text, passport_expiry date, visa_type text, visa_number text,
+  visa_expiry date, english_evidence_type text, english_evidence_reference text,
+  english_evidence_date date, usi text, other_identifiers jsonb,
+  education_agent_id uuid REFERENCES public.education_agents(id), marketing_staff_id uuid REFERENCES public.users(id),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE public.student_addresses (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  type text NOT NULL CHECK (type IN ('RESIDENTIAL', 'POSTAL')), address_line_1 text NOT NULL,
+  address_line_2 text, locality text NOT NULL, state_province text, postal_code text NOT NULL,
+  country text NOT NULL, is_current boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX student_addresses_one_current ON public.student_addresses(student_id, type) WHERE is_current;
+
+CREATE TABLE public.student_emergency_contacts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  name text NOT NULL, relationship text NOT NULL, email text, phone text, address text,
+  priority integer NOT NULL DEFAULT 1 CHECK (priority > 0), is_primary boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX student_emergency_one_primary ON public.student_emergency_contacts(student_id) WHERE is_primary;
+
+CREATE TABLE public.student_notes (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  actor_id uuid NOT NULL REFERENCES public.users(id), body text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), archived_at timestamptz
+);
+CREATE TABLE public.student_communications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), student_id uuid NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+  institution_id uuid NOT NULL REFERENCES public.institutions(id) ON DELETE CASCADE,
+  actor_id uuid NOT NULL REFERENCES public.users(id), summary text NOT NULL, channel text NOT NULL,
+  occurred_at timestamptz NOT NULL DEFAULT now(), archived_at timestamptz
+);
+
 -- Faculty/staff-only fields, 1:1 with users. institution-scoped
 -- employee_id instead of globally unique.
 CREATE TABLE public.staff (
@@ -781,10 +879,19 @@ CREATE TABLE public.admission_documents (
     FOREIGN KEY (application_id) REFERENCES public.admissions_applications(id)
 );
 
+ALTER TABLE public.student_documents
+  ADD CONSTRAINT student_documents_application_fkey FOREIGN KEY (application_id)
+    REFERENCES public.admissions_applications(id) ON DELETE SET NULL,
+  ADD CONSTRAINT student_documents_application_document_fkey FOREIGN KEY (application_document_id)
+    REFERENCES public.admission_documents(id) ON DELETE SET NULL,
+  ADD CONSTRAINT student_documents_superseded_by_fkey FOREIGN KEY (superseded_by)
+    REFERENCES public.student_documents(id);
+
 CREATE TABLE public.offer_letters (
   id             uuid NOT NULL DEFAULT gen_random_uuid(),
   application_id uuid NOT NULL,
   course_fees    numeric NOT NULL DEFAULT 0.00,
+  currency       text NOT NULL DEFAULT 'AUD',
   term_start     date NOT NULL,
   signature_url  text,
   signed_at      timestamp,
@@ -878,6 +985,15 @@ CREATE INDEX idx_meetings_slot ON public.meetings(timetable_slot_id);
 
 CREATE INDEX idx_participants_meeting ON public.meeting_participants(meeting_id);
 CREATE INDEX idx_participants_user ON public.meeting_participants(user_id);
+
+CREATE INDEX idx_student_documents_student
+  ON public.student_documents(student_id, created_at DESC);
+CREATE INDEX idx_student_documents_institution_category
+  ON public.student_documents(institution_id, category, created_at DESC);
+CREATE INDEX idx_student_documents_status
+  ON public.student_documents(institution_id, status);
+CREATE UNIQUE INDEX idx_student_documents_version
+  ON public.student_documents(student_id, category, title, version);
 
 CREATE INDEX idx_messages_meeting ON public.meeting_messages(meeting_id);
 

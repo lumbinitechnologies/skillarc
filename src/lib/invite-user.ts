@@ -140,5 +140,5 @@ export async function inviteUser(params: {
     }
   }
 
-  return { success: true, message: "Invitation sent successfully" }
+  return { success: true, message: "Invitation sent successfully", userId: data.user.id }
 }

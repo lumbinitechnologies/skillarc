@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { markStudentPortalActive } from "@/lib/portal-access"
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     }
   )
 
-  const finalizeRedirect = async (session: { user?: { email?: string | null } } | null) => {
+  const finalizeRedirect = async (session: { user?: { id?: string; email?: string | null } } | null) => {
     if (!session?.user?.email) {
       return NextResponse.redirect(
         `${origin}/auth/login?error=${encodeURIComponent("Failed to establish invite session.")}`
@@ -49,6 +50,12 @@ export async function GET(request: Request) {
       return NextResponse.redirect(
         `${origin}/auth/login?error=${encodeURIComponent("Signed in account does not match the invited email.")}`
       )
+    }
+
+    // A successful invite callback is the supported activation boundary. The
+    // callback receives no token persistence responsibility; Auth owns it.
+    if (inviteEmail) {
+      if (session.user.id) await markStudentPortalActive(session.user.id)
     }
 
     return NextResponse.redirect(`${origin}${next}${callbackQuery}`)

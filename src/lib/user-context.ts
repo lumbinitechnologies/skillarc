@@ -26,7 +26,7 @@ const getCachedUserProfile = cache((userId: string) =>
       const admin = createSupabaseAdminClient()
       const { data } = await admin
         .from("users")
-        .select("id, role, name, email, phone, organization_id, institution_id, department_id")
+        .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active")
         .eq("id", userId)
         .single()
       return data ?? null
@@ -45,6 +45,7 @@ export type UserContext = {
   name: string
   email: string
   phone: string | null
+  is_active: boolean
   is_timetable_builder: boolean
   isImpersonating: boolean
   originalProfile: {
@@ -111,6 +112,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
         name: targetProfile?.name ?? actualProfile.name ?? "",
         email: targetProfile?.email ?? actualProfile.email ?? "",
         phone: targetProfile?.phone ?? actualProfile.phone ?? null,
+        is_active: targetProfile?.is_active ?? true,
         is_timetable_builder: isTimetableBuilder,
         isImpersonating: true,
         originalProfile: {
@@ -135,6 +137,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       name: actualProfile.name ?? "",
       email: actualProfile.email ?? "",
       phone: actualProfile.phone ?? null,
+      is_active: actualProfile.is_active ?? true,
       is_timetable_builder: isTimetableBuilder,
       isImpersonating: false,
       originalProfile: {
