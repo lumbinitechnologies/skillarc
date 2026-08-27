@@ -18,7 +18,7 @@ const DEFAULT = { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#3b82
 
 export default function TimetableCell({ day, period }: { day: string; period: string }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${day}-${period}` })
-  const { slots, assignSubject } = useTimetable()
+  const { slots, assignSubject, clearSlot } = useTimetable()
   const [hovered, setHovered] = useState(false)
 
   const assigned = slots.find((s: any) => s.day === day && s.period === period)
@@ -27,16 +27,7 @@ export default function TimetableCell({ day, period }: { day: string; period: st
   const isLab = assignedSubject?.subject_type === "LAB"
 
   async function handleClear() {
-    assignSubject(day, period, undefined)
-
-    const { error } = await supabase
-      .from("timetable_slots")
-      .delete()
-      .eq("institution_id", process.env.NEXT_PUBLIC_INSTITUTION_ID)
-      .eq("day", day)
-      .eq("period", Number(period.replace("P", "")))
-
-    if (error) console.error("Failed to clear slot:", error.message)
+    await clearSlot(day, period)
   }
 
   const emptyStyle = isOver

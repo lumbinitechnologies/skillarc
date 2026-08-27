@@ -65,6 +65,7 @@ function Badge({ children, bg, color }: { children: React.ReactNode; bg: string;
 const AVAILABLE_FEATURES = [
   { id: "direct_onboarding", label: "Direct Student Onboarding", desc: "Allows institution admins to directly input and import student accounts manually." },
   { id: "admissions_workflow", label: "Formal Admissions Lifecycle", desc: "Enables admissions registry portal with student applications, verifications, offer letters, and enrollment." },
+  { id: "multi_week_timetable", label: "Multi-Week Timetable Planning", desc: "Enables date-ranged multi-week timetable builder allowing custom schedules per academic week." },
   { id: "plagiarism", label: "Plagiarism Verification", desc: "Checks student submissions against classmates solutions using fuzzy matching ratio engine." },
   { id: "billing", label: "Billing & Online Payments", desc: "Enables dynamic tuition installment plan creation, online UPI/card fee payment modal, and printable invoices." },
   { id: "placements", label: "Placements Portal", desc: "Recruitment drives, student job application flows, and corporate placement analytics desk." },

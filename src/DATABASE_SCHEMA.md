@@ -95,11 +95,27 @@ Students
 
 ### timetable_slots
 - `id` (uuid, PK)
+- `institution_id` (uuid, FK → institutions)
 - `day` (text) - Monday, Tuesday, etc.
 - `period` (integer) - 1, 2, 3, etc.
 - `subject_id` (uuid, FK → subjects) - nullable
-- `section_id` (uuid, FK → sections) - NEW - Phase 1, replaces text-based section
+- `faculty_id` (uuid, FK → users) - nullable
+- `section_id` (uuid, FK → sections) - nullable
+- `semester` (integer)
+- `week_id` (uuid, FK → timetable_weeks) - nullable (null = default static timetable, non-null = specific week)
 - `created_at` (timestamp)
+
+### timetable_weeks (NEW - Multi-Week Timetable Planning)
+- `id` (uuid, PK)
+- `institution_id` (uuid, FK → institutions)
+- `section_id` (uuid, FK → sections)
+- `semester` (integer)
+- `week_number` (integer) - 1, 2, 3...
+- `title` (text) - e.g. "Week 1", "Midterm Prep"
+- `start_date` (date) - YYYY-MM-DD
+- `end_date` (date) - YYYY-MM-DD
+- `created_at` (timestamp)
+- `updated_at` (timestamp)
 
 ### parent_student_relations (NEW - Phase 1)
 - `id` (uuid, PK)

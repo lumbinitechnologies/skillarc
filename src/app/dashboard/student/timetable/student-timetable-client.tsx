@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { CalendarDays, Clock3, MapPin, Grid, List } from "lucide-react"
+import { CalendarDays, Clock3, MapPin, Grid, List, Calendar } from "lucide-react"
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const PERIOD_LABELS: Record<number, string> = {
@@ -13,10 +13,12 @@ const PERIOD_LABELS: Record<number, string> = {
 }
 
 interface TimetableSlot {
+  id?: string
   day: string
   period: number
   subject_id: string
   faculty_id: string
+  week_id?: string | null
 }
 
 interface SubjectInfo {
@@ -24,11 +26,21 @@ interface SubjectInfo {
   code: string
 }
 
+interface WeekInfo {
+  id: string
+  week_number: number
+  title?: string | null
+  start_date: string
+  end_date: string
+}
+
 interface StudentTimetableClientProps {
   timetableRows: TimetableSlot[]
   subjectMap: Record<string, SubjectInfo>
   facultyMap: Record<string, string>
   periodTimings?: Array<{ id: string; label: string; time: string }>
+  weeks?: WeekInfo[]
+  multiWeekEnabled?: boolean
 }
 
 export default function StudentTimetableClient({
@@ -36,8 +48,25 @@ export default function StudentTimetableClient({
   subjectMap,
   facultyMap,
   periodTimings,
+  weeks = [],
+  multiWeekEnabled = false,
 }: StudentTimetableClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+
+  // Auto-select current week or week 1 if multi-week is enabled
+  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(() => {
+    if (!multiWeekEnabled || weeks.length === 0) return null
+    const today = new Date().toISOString().split("T")[0]
+    const matched = weeks.find((w) => w.start_date <= today && today <= w.end_date)
+    return matched ? matched.id : weeks[0]?.id ?? null
+  })
+
+  // Filter timetable rows for current week or static template
+  const activeRows = multiWeekEnabled && weeks.length > 0
+    ? timetableRows.filter((r) => r.week_id === selectedWeekId)
+    : timetableRows.filter((r) => !r.week_id) // Type 1 static timetable
+
+  const activeWeek = weeks.find((w) => w.id === selectedWeekId)
 
   const periodLabelsMap: Record<number, string> = {}
   if (periodTimings) {
@@ -54,7 +83,7 @@ export default function StudentTimetableClient({
   // Prepare list format grouped by day
   const timetableByDay = DAY_ORDER.map((day) => ({
     day,
-    slots: timetableRows
+    slots: activeRows
       .filter((slot) => slot.day === day)
       .map((slot) => {
         const subject = subjectMap[slot.subject_id]
@@ -70,15 +99,36 @@ export default function StudentTimetableClient({
   })).filter((dayEntry) => dayEntry.slots.length > 0)
 
   // Determine periods dynamically (default min 5)
-  const maxPeriod = Math.max(5, ...timetableRows.map((r) => r.period))
+  const maxPeriod = Math.max(5, ...activeRows.map((r) => r.period))
   const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1)
+
+  function formatDate(d: string) {
+    if (!d) return ""
+    try {
+      const parts = d.split("-")
+      if (parts.length === 3) {
+        const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]))
+        return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      }
+      return d
+    } catch {
+      return d
+    }
+  }
 
   return (
     <div className="max-w-6xl w-full mx-auto space-y-6 text-left">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Weekly schedule</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Weekly schedule</p>
+            {multiWeekEnabled && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wide">
+                Live Weekly
+              </span>
+            )}
+          </div>
           <h1 className="text-2xl font-black text-slate-900 mt-1 tracking-tight">Your Timetable</h1>
           <p className="text-xs text-slate-500 font-semibold mt-1">
             Pulling live class slot schedules assigned to your section.
@@ -114,14 +164,55 @@ export default function StudentTimetableClient({
 
           <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-50 border border-cyan-150 text-cyan-750 text-xs font-bold shadow-sm">
             <CalendarDays size={15} />
-            {timetableRows.length} classes
+            {activeRows.length} classes
           </div>
         </div>
       </div>
 
-      {timetableRows.length === 0 ? (
+      {/* Week Selector Carousel if Multi-Week Enabled */}
+      {multiWeekEnabled && weeks.length > 0 && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar size={15} className="text-indigo-600" />
+              <span className="text-xs font-bold text-slate-800">Select Academic Week:</span>
+            </div>
+            {activeWeek && (
+              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                {formatDate(activeWeek.start_date)} – {formatDate(activeWeek.end_date)}
+              </span>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            {weeks.map((w) => {
+              const isSelected = selectedWeekId === w.id
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => setSelectedWeekId(w.id)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-left transition-all border ${
+                    isSelected
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="text-xs font-extrabold">{w.title || `Week ${w.week_number}`}</div>
+                  <div className={`text-[10px] mt-0.5 ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
+                    {formatDate(w.start_date)} – {formatDate(w.end_date)}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeRows.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center text-slate-400 text-xs font-bold">
-          No class schedules have been assigned to your section yet.
+          {multiWeekEnabled && weeks.length > 0
+            ? "No class schedules assigned for this specific week."
+            : "No class schedules have been assigned to your section yet."}
         </div>
       ) : viewMode === "grid" ? (
         /* Grid Format View */
@@ -143,7 +234,7 @@ export default function StudentTimetableClient({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {DAY_ORDER.map((day) => {
-                  const daySlotsCount = timetableRows.filter((r) => r.day === day).length
+                  const daySlotsCount = activeRows.filter((r) => r.day === day).length
                   return (
                     <tr key={day} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-4 align-middle">
@@ -155,7 +246,7 @@ export default function StudentTimetableClient({
                         )}
                       </td>
                       {periods.map((p) => {
-                        const slot = timetableRows.find(
+                        const slot = activeRows.find(
                           (r) => r.day === day && r.period === p
                         )
                         if (!slot) {
