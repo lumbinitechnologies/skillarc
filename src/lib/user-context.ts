@@ -8,6 +8,7 @@ export type UserContext = {
   role: string
   institution_id: string | null
   organization_id: string | null
+  department_id?: string | null
   name: string
   email: string
   is_timetable_builder: boolean
@@ -19,6 +20,7 @@ export type UserContext = {
     email: string
     organization_id: string | null
     institution_id: string | null
+    department_id?: string | null
   }
   isSuperAdmin: boolean
 }
