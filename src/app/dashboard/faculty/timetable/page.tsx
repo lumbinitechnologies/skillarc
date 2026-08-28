@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation"
-import { CalendarDays, Clock3, MapPin } from "lucide-react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
+import FacultyTimetableClient from "./faculty-timetable-client"
 
 export const dynamic = "force-dynamic"
-
-const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 export default async function FacultyTimetablePage() {
   const supabase = await createSupabaseServerClient()
@@ -17,11 +15,41 @@ export default async function FacultyTimetablePage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("role, institution_id")
+    .select("role, institution_id, organization_id")
     .eq("id", user.id)
     .single()
 
   if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
+
+  // Check organization features for multi_week_timetable
+  let multiWeekEnabled = false
+  if (profile.organization_id) {
+    const { data: orgData } = await supabase
+      .from("organizations")
+      .select("features")
+      .eq("id", profile.organization_id)
+      .single()
+    multiWeekEnabled = Boolean(orgData?.features?.includes("multi_week_timetable"))
+  }
+
+  // Fetch weeks if multi-week is enabled
+  let weeks: any[] = []
+  if (multiWeekEnabled && profile.institution_id) {
+    const { data: weeksData } = await supabase
+      .from("timetable_weeks")
+      .select("*")
+      .eq("institution_id", profile.institution_id)
+      .order("week_number", { ascending: true })
+
+    // Deduplicate weeks by week_number + date range across sections if any
+    const seen = new Set<string>()
+    weeks = (weeksData ?? []).filter((w: any) => {
+      const key = `${w.week_number}-${w.start_date}-${w.end_date}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
 
   // Fetch timetable settings
   const { data: settings } = await supabase
@@ -50,10 +78,12 @@ export default async function FacultyTimetablePage() {
   const { data: timetableRows = [] } = await supabase
     .from("timetable_slots")
     .select(`
+      id,
       day,
       period,
       section_id,
       subject_id,
+      week_id,
       subjects!inner(id, name, code),
       sections!inner(name)
     `)
@@ -62,81 +92,22 @@ export default async function FacultyTimetablePage() {
     .order("day")
     .order("period")
 
-  const timetableByDay = DAY_ORDER.map((day) => ({
-    day,
-    slots: (timetableRows as Array<any>)
-      .filter((slot) => slot.day === day)
-      .map((slot) => ({
-        period: slot.period,
-        subject: slot.subjects?.code ?? slot.subjects?.name ?? "Class",
-        section: slot.sections?.name ?? "Section",
-        room: slot.sections?.name ? `Room ${slot.sections.name}` : "Main Hall",
-        time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
-      }))
-      .sort((a, b) => a.period - b.period),
-  })).filter((dayEntry) => dayEntry.slots.length > 0)
+  const slots = (timetableRows as Array<any>).map((slot) => ({
+    id: slot.id,
+    day: slot.day,
+    period: slot.period,
+    subject: slot.subjects?.code ?? slot.subjects?.name ?? "Class",
+    section: slot.sections?.name ?? "Section",
+    room: slot.sections?.name ? `Room ${slot.sections.name}` : "Main Hall",
+    time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
+    week_id: slot.week_id ?? null,
+  }))
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <p style={{ margin: 0, color: "#4f46e5", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: 12 }}>
-            Weekly schedule
-          </p>
-          <h1 style={{ margin: "4px 0 0", fontSize: 28, fontWeight: 700, color: "#111827" }}>
-            Your timetable
-          </h1>
-          <p style={{ margin: "6px 0 0", color: "#6b7280", maxWidth: 640 }}>
-            Review the classes assigned to you for the week and the sections they belong to.
-          </p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 999, background: "#ecfeff", color: "#0f766e", fontWeight: 600 }}>
-          <CalendarDays size={18} />
-          {timetableByDay.reduce((count, day) => count + day.slots.length, 0)} sessions
-        </div>
-      </div>
-
-      {timetableByDay.length === 0 ? (
-        <div style={{ background: "#fff", border: "1px solid #ece7ff", borderRadius: 18, padding: 28, textAlign: "center", color: "#6b7280" }}>
-          No timetable entries have been assigned to you yet.
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {timetableByDay.map((dayEntry) => (
-            <div key={dayEntry.day} style={{ background: "#fff", border: "1px solid #ece7ff", borderRadius: 20, padding: 18, boxShadow: "0 10px 25px rgba(79,70,229,0.05)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>{dayEntry.day}</h2>
-                <span style={{ color: "#6b7280", fontWeight: 600, fontSize: 13 }}>{dayEntry.slots.length} classes</span>
-              </div>
-              <div style={{ display: "grid", gap: 12 }}>
-                {dayEntry.slots.map((slot) => (
-                  <div key={`${dayEntry.day}-${slot.period}`} style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between", border: "1px solid #f3f4f6", borderRadius: 14, padding: "12px 14px", background: "#fafafa" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: "#ede9fe", color: "#5b21b6", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <Clock3 size={16} />
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700, color: "#111827" }}>{slot.subject}</div>
-                        <div style={{ color: "#6b7280", fontSize: 13 }}>{slot.time}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#4b5563" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <MapPin size={15} />
-                        <span>{slot.room}</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <CalendarDays size={15} />
-                        <span>{slot.section}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    <FacultyTimetableClient
+      slots={slots}
+      weeks={weeks}
+      multiWeekEnabled={multiWeekEnabled}
+    />
   )
 }

@@ -11,9 +11,9 @@ interface StudentInfo {
   sectionName: string
   programName: string
   semester: number | null
-  registrationNumber: string
-  phone: string
-  admissionYear: number | null
+  registrationNumber?: string
+  phone?: string
+  admissionYear?: number | null
 }
 
 interface AttendanceEntry {

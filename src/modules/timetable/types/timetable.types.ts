@@ -28,12 +28,27 @@ export interface Section {
   institution_id: string | null
 }
 
+export interface TimetableWeek {
+  id: string
+  institution_id: string
+  section_id: string
+  semester: number
+  week_number: number
+  title?: string | null
+  start_date: string // YYYY-MM-DD
+  end_date: string   // YYYY-MM-DD
+  created_at?: string
+  updated_at?: string
+}
+
 export interface Slot {
+  id?: string
   day: string
   period: string
   faculty_id: string | null
   faculty_name?: string | null
   subject?: Subject
+  week_id?: string | null
 }
 
 export interface TimetableSlot {
@@ -45,6 +60,7 @@ export interface TimetableSlot {
   semester: number
   subject_id: string | null
   faculty_id: string | null
+  week_id?: string | null
   created_at?: string
   updated_at?: string
 }

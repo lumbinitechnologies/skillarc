@@ -1,29 +1,70 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
-import StudentPage from "./student-dashboard-client"
 import { ROLES } from "@/constants/roles"
-import { getCurrentUserContext } from "@/lib/user-context"
+import StudentPage from "./student-dashboard-client"
 
 export const dynamic = "force-dynamic"
 
-export default async function Page() {
-  const context = await getCurrentUserContext()
+export default async function DashboardPage() {
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user: context },
+  } = await supabase.auth.getUser()
+
   if (!context) redirect("/auth/login")
 
-  const supabase = await createSupabaseServerClient()
-
-  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
-
-  // Get student-specific fields from students table
-  const { data: studentData } = await supabase
-    .from("students")
-    .select("id, section_id, program_id, semester, registration_number, admission_year")
+  const { data: userProfile } = await supabase
+    .from("users")
+    .select("id, role, institution_id, organization_id, name, email, phone")
     .eq("id", context.id)
     .single()
 
-  const profile = { ...context, ...studentData }
+  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  // 1. Fetch institution, section, timetable slots, and attendance records in parallel
+  const { data: studentData } = await supabase
+    .from("students")
+    .select("id, section_id, semester, program_id, registration_number, admission_year")
+    .eq("id", context.id)
+    .single()
+
+  const profile = { ...userProfile, ...studentData }
+
+  // 1. Check if organization has multi_week_timetable enabled and find active week for today
+  let activeWeekId: string | null = null
+  if (profile.organization_id && profile.section_id) {
+    const [{ data: orgData }, { data: weeksData }] = await Promise.all([
+      supabase.from("organizations").select("features").eq("id", profile.organization_id).single(),
+      supabase.from("timetable_weeks").select("id, start_date, end_date").eq("section_id", profile.section_id),
+    ])
+
+    if (orgData?.features?.includes("multi_week_timetable") && weeksData && weeksData.length > 0) {
+      const today = new Date().toISOString().split("T")[0]
+      const currentWeek = weeksData.find((w: any) => w.start_date <= today && today <= w.end_date)
+      if (currentWeek) {
+        activeWeekId = currentWeek.id
+      }
+    }
+  }
+
+  // 2. Fetch institution, section, timetable slots, and attendance records in parallel
+  let timetableQuery = profile.section_id
+    ? supabase
+        .from("timetable_slots")
+        .select("day, period, subject_id, faculty_id, week_id")
+        .eq("institution_id", profile.institution_id)
+        .eq("section_id", profile.section_id)
+        .order("day")
+        .order("period")
+    : null
+
+  if (timetableQuery) {
+    if (activeWeekId) {
+      timetableQuery = timetableQuery.eq("week_id", activeWeekId)
+    } else {
+      timetableQuery = timetableQuery.is("week_id", null)
+    }
+  }
+
   const [institutionRes, sectionRes, timetableRes, attendanceRes] = await Promise.all([
     supabase
       .from("institutions")
@@ -37,15 +78,7 @@ export default async function Page() {
           .eq("id", profile.section_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    profile.section_id
-      ? supabase
-          .from("timetable_slots")
-          .select("day, period, subject_id, faculty_id")
-          .eq("institution_id", profile.institution_id)
-          .eq("section_id", profile.section_id)
-          .order("day")
-          .order("period")
-      : Promise.resolve({ data: [] }),
+    timetableQuery ? timetableQuery : Promise.resolve({ data: [] }),
     profile.section_id
       ? supabase
           .from("attendance_records")
@@ -57,8 +90,23 @@ export default async function Page() {
 
   const institution = institutionRes.data
   const section = sectionRes.data
-  const timetableRows = timetableRes.data ?? []
+  let timetableRows = timetableRes.data ?? []
   const attendanceRecords = attendanceRes.data ?? []
+
+  // If active week has no slots assigned yet, fallback to default template slots
+  if (timetableRows.length === 0 && activeWeekId && profile.section_id) {
+    const { data: fallbackRows } = await supabase
+      .from("timetable_slots")
+      .select("day, period, subject_id, faculty_id, week_id")
+      .eq("institution_id", profile.institution_id)
+      .eq("section_id", profile.section_id)
+      .is("week_id", null)
+      .order("day")
+      .order("period")
+    if (fallbackRows && fallbackRows.length > 0) {
+      timetableRows = fallbackRows
+    }
+  }
 
   let sectionName = "Not assigned"
   let programName = "Not assigned"
@@ -87,49 +135,50 @@ export default async function Page() {
     if (currentSem) {
       subQuery = subQuery.eq("semester", currentSem)
     }
-    const { data: programSubjects } = await subQuery
-    if (programSubjects?.length) {
-      subjectIds = programSubjects.map((s: any) => s.id)
-    }
+    const { data: subData } = await subQuery.limit(8)
+    subjectIds = (subData ?? []).map((s: any) => s.id)
   }
 
-  const facultyIds = Array.from(
+  let subjectRows: any[] = []
+  if (subjectIds.length > 0) {
+    const { data } = await supabase
+      .from("subjects")
+      .select("id, name, code")
+      .in("id", subjectIds)
+    subjectRows = data ?? []
+  }
+
+  let facultyIds = Array.from(
     new Set((timetableRows ?? []).map((slot: any) => slot.faculty_id).filter(Boolean))
   ) as string[]
 
-  // 2. Fetch program, subjects, and faculty details in parallel
-  const [programRes, subjectsRes, facultyRes] = await Promise.all([
-    programIdToFetch
-      ? supabase
-          .from("programs")
-          .select("id, name")
-          .eq("id", programIdToFetch)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    subjectIds.length
-      ? supabase
-          .from("subjects")
-          .select("id, name, code")
-          .in("id", subjectIds)
-          .order("name")
-      : Promise.resolve({ data: [] }),
-    facultyIds.length
-      ? supabase
-          .from("users")
-          .select("id, name")
-          .in("id", facultyIds)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const program = programRes.data
-  const subjectRows = subjectsRes.data ?? []
-  const facultyRows = facultyRes.data ?? []
-
-  if (program) {
-    programName = program.name ?? "Not assigned"
+  if (facultyIds.length === 0 && subjectIds.length > 0) {
+    const { data: fsData } = await supabase
+      .from("faculty_subjects")
+      .select("faculty_id")
+      .in("subject_id", subjectIds)
+    facultyIds = Array.from(new Set((fsData ?? []).map((fs: any) => fs.faculty_id).filter(Boolean))) as string[]
   }
 
-  const facultyMap = new Map<string, string>()
+  let facultyRows: any[] = []
+  if (facultyIds.length > 0) {
+    const { data } = await supabase
+      .from("users")
+      .select("id, name")
+      .in("id", facultyIds)
+    facultyRows = data ?? []
+  }
+
+  if (programIdToFetch) {
+    const { data: prog } = await supabase
+      .from("programs")
+      .select("name")
+      .eq("id", programIdToFetch)
+      .maybeSingle()
+    if (prog?.name) programName = prog.name
+  }
+
+  const facultyMap = new Map()
   ;(facultyRows ?? []).forEach((faculty: any) => {
     facultyMap.set(faculty.id, faculty.name)
   })

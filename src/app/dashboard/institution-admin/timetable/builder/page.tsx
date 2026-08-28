@@ -7,11 +7,12 @@ import { TimetableProvider, useTimetable } from "@/modules/timetable/context/tim
 import SubjectPanel from "@/modules/timetable/components/subject-panel"
 import TimetableGrid from "@/modules/timetable/components/timetable-grid"
 import FacultyPanel from "@/modules/timetable/components/faculty-panel"
+import WeekManagerBar from "@/modules/timetable/components/week-manager-bar"
 import { timetableService } from "@/modules/timetable/services/timetableService"
 import { Subject } from "@/modules/timetable/types/timetable.types"
 import { supabase } from "@/lib/supabase"
 
-const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
+const font = "'Plus Jakarta Sans', 'Inter', sans-serif"
 
 const DRAG_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   DAA: { bg: "#dbeafe", border: "#bfdbfe", text: "#1d4ed8" },
@@ -245,7 +246,7 @@ function AssignFacultyDialog({
 }
 
 function Builder() {
-  const { assignSubject } = useTimetable()
+  const { assignSubject, multiWeekEnabled, selectedWeek } = useTimetable()
   const searchParams = useSearchParams()
 
   const semester = searchParams.get("semester")
@@ -275,6 +276,7 @@ function Builder() {
         period: Number(period.replace("P", "")),
         subjectId: subject.id,
         facultyId,
+        weekId: multiWeekEnabled && selectedWeek ? selectedWeek.id : null,
       })
     } catch (err) {
       console.error("Failed to save slot:", err)
@@ -303,6 +305,9 @@ function Builder() {
         }}
         onDragCancel={() => setActiveSubject(null)}
       >
+        {/* Render Week Manager Bar when Multi-Week feature is enabled */}
+        {multiWeekEnabled && <WeekManagerBar />}
+
         <div
           style={{
             display: "grid",

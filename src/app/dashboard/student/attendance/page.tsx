@@ -209,7 +209,7 @@ export default async function StudentAttendancePage() {
         programName,
         semester: sectionSemester ?? profile.semester ?? null,
         registrationNumber: profile.registration_number ?? "",
-        phone: profile.phone ?? "",
+        phone: (profile as any).phone ?? "",
         admissionYear: profile.admission_year ?? null,
       }}
       studentId={profile.id}
