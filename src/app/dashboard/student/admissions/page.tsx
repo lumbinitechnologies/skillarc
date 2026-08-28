@@ -2,44 +2,42 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { useDashboardSession } from "@/components/dashboard-session-provider"
 
 export default function StudentAdmissionsPage() {
   const session = useDashboardSession()
-  const [status, setStatus] = useState("OFFER_GENERATED") // 'OFFER_GENERATED' | 'OFFER_ACCEPTED' | 'ENROLLED'
+  const [status, setStatus] = useState("APPLIED")
   const [signature, setSignature] = useState("")
   const [appId, setAppId] = useState<string | null>(null)
-  const [fees, setFees] = useState(12500)
+  const [fees, setFees] = useState<number | null>(null)
+  const [feeCurrency, setFeeCurrency] = useState("AUD")
+  const [offerHtml, setOfferHtml] = useState<string | null>(null)
+  const [agreementHtml, setAgreementHtml] = useState<string | null>(null)
+  const [confirmedDocuments, setConfirmedDocuments] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [busy, setBusy] = useState(false)
 
   // Fetch active student applicant status from DB
   const loadStudentAdmissions = useCallback(async () => {
     try {
-      if (session?.email) {
-        const { data: appData } = await supabase
-          .from("admissions_applications")
-          .select(`
-            id,
-            status,
-            offer_letters (
-              id,
-              course_fees,
-              status
-            )
-          `)
-          .eq("email", session.email)
-          .single()
-
-        if (appData) {
-          setAppId(appData.id)
-          setStatus(appData.status)
-          if (appData.offer_letters?.[0]) {
-            setFees(Number(appData.offer_letters[0].course_fees))
-          }
-        }
+      if (!session) return
+      const response = await fetch("/api/admissions/my")
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Unable to load admission")
+      const appData = result.application
+      if (!appData) return
+      setAppId(appData.id)
+      setStatus(appData.status)
+      const offer = Array.isArray(appData.offer_letters) ? appData.offer_letters[0] : appData.offer_letters
+      if (offer) {
+        setFees(Number(offer.course_fees))
+        setFeeCurrency(offer.currency ?? "AUD")
+        setOfferHtml(offer.rendered_html ?? null)
       }
+      const agreement = Array.isArray(appData.admission_documents_v2) ? appData.admission_documents_v2.find((document: { document_type?: string }) => document.document_type === "AGREEMENT") : null
+      setAgreementHtml(agreement?.rendered_html ?? null)
     } catch (err) {
-      console.error(err)
+      setErrorMessage(err instanceof Error ? err.message : "Unable to load admission")
     }
   }, [session])
 
@@ -51,28 +49,18 @@ export default function StudentAdmissionsPage() {
   // Sign & accept offer in DB
   const handleAccept = async () => {
     if (!signature.trim()) return
+    setBusy(true)
+    setErrorMessage("")
     try {
-      setStatus("OFFER_ACCEPTED")
-
       if (!appId) return
-
-      // Sign offer letter
-      await supabase
-        .from("offer_letters")
-        .update({
-          status: "ACCEPTED",
-          signed_at: new Date().toISOString(),
-          signature_url: signature.trim(),
-        })
-        .eq("application_id", appId)
-
-      // Update application stage
-      await supabase
-        .from("admissions_applications")
-        .update({ status: "OFFER_ACCEPTED" })
-        .eq("id", appId)
+      const response = await fetch(`/api/admissions/${appId}/accept`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision: "accept", reference: signature.trim() }) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || "Offer acceptance failed")
+      setStatus(result.application.status)
     } catch (err) {
-      console.error(err)
+      setErrorMessage(err instanceof Error ? err.message : "Offer acceptance failed")
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -92,7 +80,7 @@ export default function StudentAdmissionsPage() {
               {[
                 { title: "Application Submitted", desc: "Visa, passport, transcripts uploaded.", active: true, done: true },
                 { title: "Academic Review", desc: "Registrar compliance check completed.", active: true, done: true },
-                { title: "Offer Dispatched", desc: "Review conditions and sign code of conduct contract.", active: status === "OFFER_GENERATED", done: status !== "OFFER_GENERATED" },
+                { title: "Offer Dispatched", desc: "Review conditions and sign code of conduct contract.", active: status === "OFFER_SENT", done: ["OFFER_ACCEPTED", "ENROLLED"].includes(status) },
                 { title: "Confirmation of Enrollment (CoE)", desc: "Enrolled in Graduate Diploma of Management (GDM).", active: status === "ENROLLED", done: status === "ENROLLED" },
               ].map((step, idx) => (
                 <div key={idx} className="flex gap-4 items-start">
@@ -116,7 +104,7 @@ export default function StudentAdmissionsPage() {
 
         {/* Offer Letter Signature Box */}
         <div>
-          {status === "OFFER_GENERATED" || status === "APPLIED" ? (
+          {status === "OFFER_SENT" ? (
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">Offer Letter Pending</h3>
@@ -125,9 +113,11 @@ export default function StudentAdmissionsPage() {
 
               <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100/40 text-indigo-900 space-y-2">
                 <div className="text-[10px] text-indigo-600/80 font-bold uppercase tracking-wider">Tuition Fees</div>
-                <div className="text-lg font-extrabold">₹{fees.toLocaleString()} INR</div>
+                <div className="text-lg font-extrabold">{fees === null ? "Fee pending" : `${fees.toLocaleString()} ${feeCurrency}`}</div>
                 <div className="text-[10px] text-indigo-600/80 font-medium">Installment plans option available</div>
               </div>
+
+              {offerHtml && <details className="rounded-xl border p-3"><summary className="cursor-pointer text-xs font-semibold">View offer document</summary><iframe title="Offer document" sandbox="" srcDoc={offerHtml} className="mt-3 h-96 w-full rounded-lg border" /></details>}
 
               <div className="space-y-4">
                 <div>
@@ -142,12 +132,14 @@ export default function StudentAdmissionsPage() {
                 </div>
                 <button
                   onClick={handleAccept}
-                  disabled={!signature.trim()}
+                  disabled={!signature.trim() || !confirmedDocuments || busy}
                   className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition"
                 >
-                  Accept & Enrol
+                  {busy ? "Saving…" : "Accept offer"}
                 </button>
+                <label className="flex items-start gap-2 text-[10px] text-slate-500"><input type="checkbox" checked={confirmedDocuments} onChange={(event) => setConfirmedDocuments(event.target.checked)} className="mt-0.5" />I have reviewed the offer and agreement documents.</label>
               </div>
+              {agreementHtml && <details className="rounded-xl border p-3"><summary className="cursor-pointer text-xs font-semibold">View enrolment agreement</summary><iframe title="Enrolment agreement" sandbox="" srcDoc={agreementHtml} className="mt-3 h-96 w-full rounded-lg border" /></details>}
             </div>
           ) : (
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4 text-center">
@@ -155,13 +147,14 @@ export default function StudentAdmissionsPage() {
                 <CheckCircle2 size={24} />
               </div>
               <div>
-                <h3 className="font-bold text-slate-800 text-sm">Offer Accepted</h3>
+                <h3 className="font-bold text-slate-800 text-sm">{status === "ENROLLED" ? "Enrolment confirmed" : status === "OFFER_ACCEPTED" ? "Offer accepted" : "Admission status"}</h3>
                 <p className="text-[10px] text-slate-400 mt-1">GDM enrollment contract confirmed on {new Date().toLocaleDateString()}</p>
               </div>
             </div>
           )}
         </div>
       </div>
+      {errorMessage && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{errorMessage}</p>}
     </div>
   )
 }
