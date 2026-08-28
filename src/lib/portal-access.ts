@@ -104,5 +104,50 @@ export async function setStudentPortalDeactivated(studentId: string, actor: { id
 export async function assertActiveStudentPortalAccess(studentId: string, institutionId: string | null) {
   if (!institutionId) return false
   const access = await getStudentPortalAccess(studentId, institutionId)
-  return access?.status === "ACTIVE"
+  
+  if (!access) {
+    const admin = createSupabaseAdminClient()
+    const { data: created, error } = await admin
+      .from("student_portal_access")
+      .upsert({
+        student_id: studentId,
+        institution_id: institutionId,
+        auth_user_id: studentId,
+        status: "ACTIVE",
+        activated_at: new Date().toISOString(),
+        activated_by: studentId
+      }, { onConflict: "student_id" })
+      .select("*")
+      .single()
+      
+    if (error) {
+      console.error(`Failed to auto-create portal access for student ${studentId}:`, error.message)
+      return false
+    }
+    
+    try {
+      const { data: userProfile } = await admin
+        .from("users")
+        .select("name")
+        .eq("id", studentId)
+        .single()
+      await admin.from("audit_logs").insert({
+        user_id: studentId,
+        action: "STUDENT_PORTAL_ACTIVATED_AUTO",
+        entity_type: "STUDENT_PORTAL_ACCESS",
+        entity_id: studentId,
+        metadata: { note: "Auto-created active portal access on dashboard load", name: userProfile?.name }
+      })
+    } catch (auditErr) {
+      console.error("Audit log failed for portal auto-creation:", auditErr)
+    }
+
+    return true
+  }
+  
+  if (access.status === "INVITED") {
+    const activated = await markStudentPortalActive(studentId)
+    return activated?.status === "ACTIVE"
+  }
+  return access.status === "ACTIVE"
 }
