@@ -34,6 +34,7 @@ import { CreateStudentDialog } from "@/components/students/create-student-dialog
 import { CreateParentDialog } from "@/components/parents/create-parent-dialog"
 import { CreateSubjectDialog } from "@/components/subjects/create-subject-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import { FacultySubjectsClientPage } from "@/app/dashboard/institution-admin/faculty-subjects/faculty-subjects-client"
 import { facultySubjectService } from "@/modules/faculty-subjects/services/facultySubjectService"
 import StudentSearch from "@/modules/students/components/StudentSearch"
@@ -116,12 +117,74 @@ export function DepartmentDetailClient({
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
 
   const [isSubjectOpen, setIsSubjectOpen] = useState(false)
+  const [selectedSubject, setSelectedSubject] = useState<any>(null)
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("")
 
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [importEntity, setImportEntity] = useState<"students" | "faculty" | "parents" | "subjects">("students")
 
   const [isLoading, setIsLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: "program" | "section" | "faculty" | "student" | "parent" | "subject" } | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const triggerDelete = (id: string, type: "program" | "section" | "faculty" | "student" | "parent" | "subject") => {
+    setDeleteTarget({ id, type })
+    setDeleteOpen(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    const { id, type } = deleteTarget
+    setDeleteOpen(false)
+    setDeleteTarget(null)
+
+    if (type === "program") await handleDeleteProgram(id)
+    else if (type === "section") await handleDeleteSection(id)
+    else if (type === "faculty") await handleDeleteFaculty(id)
+    else if (type === "student") await handleDeleteStudent(id)
+    else if (type === "parent") await handleDeleteParent(id)
+    else if (type === "subject") await handleDeleteSubject(id)
+  }
+
+  const getDeleteConfig = () => {
+    if (!deleteTarget) return { title: "", desc: "" }
+    const { type } = deleteTarget
+    switch (type) {
+      case "program":
+        return {
+          title: "Delete Program",
+          desc: "Are you sure you want to delete this program? All classes, students, and subjects associated with this program will be affected."
+        }
+      case "section":
+        return {
+          title: "Delete Section",
+          desc: "Are you sure you want to delete this class section? Students assigned to this section will lose their section registration."
+        }
+      case "faculty":
+        return {
+          title: "Delete Faculty Member",
+          desc: "Are you sure you want to remove this faculty member? Their timetable slots and subject assignments will be unassigned."
+        }
+      case "student":
+        return {
+          title: "Delete Student Profile",
+          desc: "Are you sure you want to remove this student? This will permanently delete their portal access and enrollment details."
+        }
+      case "parent":
+        return {
+          title: "Delete Parent Account",
+          desc: "Are you sure you want to delete this parent account? The student link relations will be unlinked."
+        }
+      case "subject":
+        return {
+          title: "Delete Subject/Course",
+          desc: "Are you sure you want to remove this subject? Timetable slots and faculty assignments for this course will be deleted."
+        }
+      default:
+        return { title: "Delete Record", desc: "Are you sure you want to delete this record?" }
+    }
+  }
+  const deleteConfig = getDeleteConfig()
 
   // Wrap department object into array for single selection locking in create dialogs
   const lockedDepartment = [{ id: department.id, name: department.name }]
@@ -309,7 +372,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteProgram = async (programId: string) => {
-    if (!confirm("Are you sure you want to delete this program?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/programs/${programId}`, { method: "DELETE" })
@@ -362,7 +424,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteSection = async (sectionId: string) => {
-    if (!confirm("Are you sure you want to delete this section?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/sections/${sectionId}`, { method: "DELETE" })
@@ -415,7 +476,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteFaculty = async (facultyId: string) => {
-    if (!confirm("Are you sure you want to delete this faculty member?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/faculty/${facultyId}`, { method: "DELETE" })
@@ -465,7 +525,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteStudent = async (studentId: string) => {
-    if (!confirm("Are you sure you want to delete this student?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/students/${studentId}`, { method: "DELETE" })
@@ -517,7 +576,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteParent = async (parentId: string) => {
-    if (!confirm("Are you sure you want to delete this parent?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/parents/${parentId}`, { method: "DELETE" })
@@ -536,29 +594,31 @@ export function DepartmentDetailClient({
   }
 
   // 6. Courses CRUD
-  const handleCreateSubject = async (data: any) => {
+  const handleCreateOrUpdateSubject = async (data: any) => {
     setIsLoading(true)
+    const isEdit = !!selectedSubject
     try {
-      const res = await fetch("/api/subjects", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          institution_id: institutionId,
-        }),
-      })
+      const res = await fetch(
+        isEdit ? `/api/subjects/${selectedSubject.id}` : "/api/subjects",
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            isEdit ? data : { ...data, institution_id: institutionId }
+          ),
+        }
+      )
 
-      if (!res.ok) throw new Error("Failed to create subject")
+      if (!res.ok) throw new Error(isEdit ? "Failed to update subject" : "Failed to create subject")
 
       const result = await res.json()
-      const createdArray = Array.isArray(result) ? result : [result]
-
-      const formattedSubjects = createdArray.map((subject: any) => {
-        const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
-        return {
-          ...subject,
+      
+      if (isEdit) {
+        const selectedProgram = programs.find((p: any) => p.id === result.program_id)
+        const formatted = {
+          ...result,
           program: selectedProgram ? {
             id: selectedProgram.id,
             name: selectedProgram.name,
@@ -568,19 +628,37 @@ export function DepartmentDetailClient({
             } : null
           } : null
         }
-      })
+        setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+        setSelectedSubject(null)
+      } else {
+        const createdArray = Array.isArray(result) ? result : [result]
+        const formattedSubjects = createdArray.map((subject: any) => {
+          const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+          return {
+            ...subject,
+            program: selectedProgram ? {
+              id: selectedProgram.id,
+              name: selectedProgram.name,
+              department: selectedProgram.department ? {
+                id: selectedProgram.department.id,
+                name: selectedProgram.department.name
+              } : null
+            } : null
+          }
+        })
+        setSubjects((prev: any) => [...prev, ...formattedSubjects])
+      }
 
-      setSubjects((prev: any) => [...prev, ...formattedSubjects])
       setIsSubjectOpen(false)
 
       toast({
         title: "Success",
-        description: "Subject created successfully",
+        description: `Subject ${isEdit ? "updated" : "created"} successfully`,
       })
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create subject",
+        description: error instanceof Error ? error.message : `Failed to ${isEdit ? "update" : "create"} subject`,
         variant: "destructive",
       })
     } finally {
@@ -589,7 +667,6 @@ export function DepartmentDetailClient({
   }
 
   const handleDeleteSubject = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this subject?")) return
     setIsLoading(true)
     try {
       const res = await fetch(`/api/subjects/${id}`, {
@@ -784,7 +861,7 @@ export function DepartmentDetailClient({
                   setSelectedProgram(p)
                   setIsProgramOpen(true)
                 }}
-                onDelete={handleDeleteProgram}
+                onDelete={(id) => triggerDelete(id, "program")}
               />
             </Card>
           </div>
@@ -814,7 +891,7 @@ export function DepartmentDetailClient({
                   setSelectedSection(s)
                   setIsSectionOpen(true)
                 }}
-                onDelete={handleDeleteSection}
+                onDelete={(id) => triggerDelete(id, "section")}
               />
             </Card>
           </div>
@@ -861,7 +938,11 @@ export function DepartmentDetailClient({
             <div className="pt-2">
               <SubjectsList
                 subjects={filteredSubjects}
-                onDelete={handleDeleteSubject}
+                onDelete={(id: string) => triggerDelete(id, "subject")}
+                onEdit={(s: any) => {
+                  setSelectedSubject(s)
+                  setIsSubjectOpen(true)
+                }}
               />
             </div>
           </div>
@@ -915,7 +996,7 @@ export function DepartmentDetailClient({
                   setSelectedFaculty(f)
                   setIsFacultyOpen(true)
                 }}
-                onDelete={handleDeleteFaculty}
+                onDelete={(id) => triggerDelete(id, "faculty")}
               />
             </Card>
           </div>
@@ -973,7 +1054,7 @@ export function DepartmentDetailClient({
                   setSelectedStudent(s)
                   setIsStudentDrawerOpen(true)
                 }}
-                onDelete={handleDeleteStudent}
+                onDelete={(id) => triggerDelete(id, "student")}
                 totalCount={studentCount}
                 page={studentPage}
                 limit={studentLimit}
@@ -1023,7 +1104,7 @@ export function DepartmentDetailClient({
                   setSelectedParent(p)
                   setIsParentOpen(true)
                 }}
-                onDelete={handleDeleteParent}
+                onDelete={(id) => triggerDelete(id, "parent")}
               />
             </Card>
           </div>
@@ -1091,10 +1172,14 @@ export function DepartmentDetailClient({
       {/* Dialog: Create Subject */}
       <CreateSubjectDialog
         open={isSubjectOpen}
-        onOpenChange={setIsSubjectOpen}
-        onSubmit={handleCreateSubject}
+        onOpenChange={(open) => {
+          setIsSubjectOpen(open)
+          if (!open) setSelectedSubject(null)
+        }}
+        onSubmit={handleCreateOrUpdateSubject}
         departments={lockedDepartment}
         programs={programsForSubjectDialog}
+        subject={selectedSubject}
       />
 
       {/* Dialog: CSV Import */}
@@ -1111,6 +1196,15 @@ export function DepartmentDetailClient({
         open={isStudentDrawerOpen}
         student={selectedStudent}
         onClose={() => setIsStudentDrawerOpen(false)}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={handleConfirmDelete}
+        title={deleteConfig.title}
+        description={deleteConfig.desc}
+        loading={isLoading}
       />
 
     </div>

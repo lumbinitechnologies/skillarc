@@ -34,6 +34,7 @@ import { FacultyList } from "@/components/faculty/faculty-list"
 import { CreateFacultyDialog } from "@/components/faculty/create-faculty-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
 
 interface FacultyClientPageProps {
@@ -52,6 +53,8 @@ export function FacultyClientPage({
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyWithStats | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const { toast } = useToast()
 
   const loadFaculty = async () => {
@@ -114,16 +117,22 @@ export function FacultyClientPage({
     }
   }
 
-  const handleDelete = async (facultyId: string) => {
-    if (!confirm("Are you sure you want to delete this faculty member?")) return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/faculty/${facultyId}`, {
+      const response = await fetch(`/api/faculty/${deleteId}`, {
         method: "DELETE",
       })
       if (!response.ok) throw new Error("Failed to delete faculty")
       await loadFaculty()
+      setDeleteOpen(false)
+      setDeleteId(null)
       toast({
         title: "Success",
         description: "Faculty removed successfully",
@@ -186,7 +195,7 @@ export function FacultyClientPage({
             setSelectedFaculty(faculty)
             setIsOpen(true)
           }}
-          onDelete={handleDelete}
+          onDelete={triggerDelete}
         />
       </Card>
       </motion.div>
@@ -209,6 +218,15 @@ export function FacultyClientPage({
         entity="faculty"
         institutionId={institutionId}
         onImported={() => loadFaculty()}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Faculty Member"
+        description="Are you sure you want to remove this faculty member? Their timetable slots and subject assignments will be unassigned."
+        loading={isLoading}
       />
     </motion.div>
   )

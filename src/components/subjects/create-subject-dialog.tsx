@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { X, BookMarked } from "lucide-react"
 
@@ -67,12 +67,13 @@ function StyledInput({ value, onChange, placeholder }: {
 interface Department { id: string; name: string }
 interface Program    { id: string; name: string; department_id: string }
 
-export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments, programs }: {
+export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments, programs, subject }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSubmit: (data: any) => Promise<void>
   departments: Department[]
   programs: Program[]
+  subject?: any
 }) {
   const defaultForm = {
     department_id: "",
@@ -86,6 +87,27 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
   }
   const [formData, setFormData] = useState(defaultForm)
   const [loading, setLoading] = useState(false)
+
+  const isEdit = !!subject
+
+  useEffect(() => {
+    if (open) {
+      if (subject) {
+        setFormData({
+          department_id: subject.program?.department_id || subject.program?.department?.id || "",
+          program_id: subject.program_id || "",
+          program_ids: subject.program_id ? [subject.program_id] : [],
+          semester: subject.semester || 1,
+          name: subject.name || "",
+          code: subject.code || "",
+          credits: subject.credits || 4,
+          subject_type: subject.subject_type || "THEORY",
+        })
+      } else {
+        setFormData(defaultForm)
+      }
+    }
+  }, [open, subject])
 
   function set(key: string, value: any) {
     setFormData(prev => ({ ...prev, [key]: value }))
@@ -101,21 +123,31 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
     setFormData(prev => ({ ...prev, department_id, program_id: "", program_ids: [] }))
   }
 
-  const canSubmit = (formData.program_id || formData.program_ids.length > 0) && formData.name.trim() && formData.code.trim()
+  const canSubmit = isEdit 
+    ? formData.program_id && formData.name.trim() && formData.code.trim()
+    : (formData.program_id || formData.program_ids.length > 0) && formData.name.trim() && formData.code.trim()
 
   async function handleSubmit() {
     if (!canSubmit) return
     setLoading(true)
-    const { department_id, program_id, ...payload } = formData
-    const idsToSend = formData.program_ids.length > 0 
-      ? formData.program_ids 
-      : (program_id ? [program_id] : [])
+    const { department_id, program_id, program_ids, ...payload } = formData
     
-    await onSubmit({
-      ...payload,
-      program_ids: idsToSend,
-    })
-    setFormData(defaultForm)
+    if (isEdit) {
+      await onSubmit({
+        ...payload,
+        program_id: program_id || null,
+      })
+    } else {
+      const idsToSend = program_ids.length > 0 
+        ? program_ids 
+        : (program_id ? [program_id] : [])
+      
+      await onSubmit({
+        ...payload,
+        program_ids: idsToSend,
+      })
+      setFormData(defaultForm)
+    }
     setLoading(false)
   }
 
@@ -129,8 +161,12 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
               <BookMarked className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight font-['Plus_Jakarta_Sans']">Create Subject</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Fill in the subject details below</p>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight font-['Plus_Jakarta_Sans']">
+                {isEdit ? "Edit Subject" : "Create Subject"}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isEdit ? "Modify subject catalog parameters" : "Fill in the subject details below"}
+              </p>
             </div>
           </div>
           <button
@@ -156,7 +192,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
 
           {/* Programs */}
           <div>
-            <FieldLabel>Programs *</FieldLabel>
+            <FieldLabel>{isEdit ? "Program *" : "Programs *"}</FieldLabel>
             {!formData.department_id ? (
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
                 Select a department first
@@ -165,6 +201,13 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
                 No programs for this department
               </div>
+            ) : isEdit ? (
+              <StyledSelect value={formData.program_id} onChange={v => set("program_id", v)}>
+                <option value="">Select Program</option>
+                {filteredPrograms.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </StyledSelect>
             ) : (
               <div className="space-y-2.5 max-h-40 overflow-y-auto border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
                 {filteredPrograms.map(p => {
@@ -270,7 +313,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             disabled={!canSubmit || loading}
             className="flex-[2] h-11 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-2xl shadow-md shadow-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
           >
-            {loading ? "Creating…" : "Create Subject"}
+            {loading ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : "Create Subject")}
           </button>
         </div>
       </DialogContent>

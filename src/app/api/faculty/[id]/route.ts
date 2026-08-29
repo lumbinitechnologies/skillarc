@@ -26,28 +26,25 @@ export async function PUT(
     if (role && [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(role)) {
       updateData.role = role
     }
+    if (department_id !== undefined) {
+      updateData.department_id = department_id || null
+    }
 
     const { data: faculty, error } = await supabase
       .from("users")
       .update(updateData)
       .eq("id", id)
       .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
-      .select()
+      .select(`
+        *,
+        department:department_id(
+          id,
+          name
+        )
+      `)
       .single()
 
     if (error) throw error
-
-    // Handle department mapping
-    if (department_id) {
-      const { error: deptError } = await supabase.from("departments_hierarchy").upsert([
-        {
-          user_id: id,
-          department_id,
-          role: role || faculty.role,
-        },
-      ])
-      if (deptError) throw deptError
-    }
 
     // Handle Timetable Builder permission
     if (is_timetable_builder !== undefined) {

@@ -31,6 +31,7 @@ import { SubjectsList } from "@/components/subjects/subjects-list"
 import { CreateSubjectDialog } from "@/components/subjects/create-subject-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 
 export function SubjectsClientPage({
   initialSubjects,
@@ -40,10 +41,23 @@ export function SubjectsClientPage({
 }: any) {
   const [subjects, setSubjects] = useState(initialSubjects)
   const [open, setOpen] = useState(false)
+  const [selectedSubject, setSelectedSubject] = useState<any>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const { toast } = useToast()
+
+  function handleOpenDialog(subject?: any) {
+    if (subject) {
+      setSelectedSubject(subject)
+    } else {
+      setSelectedSubject(null)
+    }
+    setOpen(true)
+  }
 
   async function handleCreate(data: any) {
     const res = await fetch("/api/subjects", {
@@ -93,25 +107,80 @@ export function SubjectsClientPage({
     })
   }
 
-  async function handleDelete(id: string) {
-    const res = await fetch(`/api/subjects/${id}`, {
-      method: "DELETE",
+  async function handleEdit(data: any) {
+    if (!selectedSubject) return
+    const res = await fetch(`/api/subjects/${selectedSubject.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
     })
 
     if (!res.ok) {
       toast({
         title: "Error",
-        description: "Failed to delete subject",
+        description: "Failed to update subject",
         variant: "destructive",
       })
       return
     }
 
-    setSubjects((prev: any) => prev.filter((s: any) => s.id !== id))
+    const updated = await res.json()
+    const selectedProgram = programs.find((p: any) => p.id === updated.program_id)
+    const formatted = {
+      ...updated,
+      program: selectedProgram ? {
+        id: selectedProgram.id,
+        name: selectedProgram.name,
+        department: selectedProgram.department ? {
+          id: selectedProgram.department.id,
+          name: selectedProgram.department.name
+        } : null
+      } : null
+    }
+
+    setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+    setOpen(false)
+    setSelectedSubject(null)
+
     toast({
-      title: "Deleted",
-      description: "Subject removed successfully",
+      title: "Success",
+      description: "Subject updated successfully",
     })
+  }
+
+  function handleDelete(id: string) {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`/api/subjects/${deleteId}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) throw new Error("Failed to delete subject")
+
+      setSubjects((prev: any) => prev.filter((s: any) => s.id !== deleteId))
+      setDeleteOpen(false)
+      setDeleteId(null)
+      toast({
+        title: "Deleted",
+        description: "Subject removed successfully",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete subject",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const filteredSubjects = subjects.filter((s: any) => {
@@ -157,7 +226,7 @@ export function SubjectsClientPage({
             Import CSV
           </button>
           <button
-            onClick={() => setOpen(true)}
+            onClick={() => handleOpenDialog()}
                  className="self-start md:self-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-100 transition-all duration-200 active:scale-95 flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -186,15 +255,20 @@ export function SubjectsClientPage({
         <SubjectsList
           subjects={filteredSubjects}
           onDelete={handleDelete}
+          onEdit={handleOpenDialog}
         />
       </motion.div>
 
       <CreateSubjectDialog
         open={open}
-        onOpenChange={setOpen}
-        onSubmit={handleCreate}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen)
+          if (!isOpen) setSelectedSubject(null)
+        }}
+        onSubmit={selectedSubject ? handleEdit : handleCreate}
         departments={departments}
         programs={programs}
+        subject={selectedSubject}
       />
 
       <BulkImportDialog
@@ -203,6 +277,15 @@ export function SubjectsClientPage({
         entity="subjects"
         institutionId={institutionId}
         onImported={() => window.location.reload()}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Subject"
+        description="Are you sure you want to delete this subject? All associated student records and timetable slots for this subject will be affected."
+        loading={isDeleting}
       />
     </motion.div>
   )
