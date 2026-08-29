@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { SectionsList } from "@/components/sections/sections-list"
 import { CreateSectionDialog } from "@/components/sections/create-section-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import type { Section, SectionWithFacultyAdvisor, CreateSectionInput } from "@/modules/sections"
 import { Plus } from "lucide-react"
 
@@ -26,6 +27,8 @@ export function SectionsClientPage({
   const [isOpen, setIsOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const { toast } = useToast()
 
   const handleCreateSection = async (data: CreateSectionInput) => {
@@ -95,17 +98,24 @@ export function SectionsClientPage({
     }
   }
 
-  const handleDeleteSection = async (sectionId: string) => {
-    if (!confirm("Are you sure you want to delete this section?")) return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
+    setIsLoading(true)
     try {
-      const response = await fetch(`/api/sections/${sectionId}`, {
+      const response = await fetch(`/api/sections/${deleteId}`, {
         method: "DELETE",
       })
 
       if (!response.ok) throw new Error("Failed to delete section")
 
-      setSections(sections.filter((s) => s.id !== sectionId))
+      setSections(sections.filter((s) => s.id !== deleteId))
+      setDeleteOpen(false)
+      setDeleteId(null)
 
       toast({
         title: "Success",
@@ -117,6 +127,8 @@ export function SectionsClientPage({
         description: error instanceof Error ? error.message : "Failed to delete section",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -147,7 +159,7 @@ export function SectionsClientPage({
           sections={sections}
           isLoading={isLoading}
           onEdit={handleOpenDialog}
-          onDelete={handleDeleteSection}
+          onDelete={triggerDelete}
         />
       </Card>
 
@@ -159,6 +171,15 @@ export function SectionsClientPage({
         programs={programs}
         facultyAdvisors={facultyAdvisors}
         isLoading={isLoading}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Section"
+        description="Are you sure you want to delete this class section? Students assigned to this section will lose their section registration."
+        loading={isLoading}
       />
     </div>
   )

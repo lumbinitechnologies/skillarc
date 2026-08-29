@@ -30,6 +30,7 @@ const itemVariants = {
 }
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import {
   Table,
   TableBody,
@@ -53,9 +54,12 @@ export function DepartmentsClientPage({
   initialDepartments,
   institutionId,
 }: Props) {
-  const [departments, setDepartments] = useState(initialDepartments)
+  const [departments, setDepartments] = useState<Department[]>(initialDepartments)
   const [name, setName] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const loadDepartments = async () => {
     const res = await fetch(`/api/departments?institution_id=${institutionId}`)
@@ -96,11 +100,16 @@ export function DepartmentsClientPage({
     }
   }
 
-  const deleteDepartment = async (id: string) => {
-    if (!confirm("Delete department?")) return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
+    setIsDeleting(true)
     try {
-      const res = await fetch(`/api/departments/${id}`, {
+      const res = await fetch(`/api/departments/${deleteId}`, {
         method: "DELETE",
       })
 
@@ -108,12 +117,16 @@ export function DepartmentsClientPage({
 
       if (res.ok) {
         await loadDepartments()
+        setDeleteOpen(false)
+        setDeleteId(null)
       } else {
         alert(`Error deleting department: ${data.error || "Failed to delete"}`)
       }
     } catch (err: any) {
       console.error("Delete error:", err)
       alert(`Request failed: ${err.message || "Unknown error"}`)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -224,7 +237,7 @@ export function DepartmentsClientPage({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteDepartment(dept.id)}
+                        onClick={() => triggerDelete(dept.id)}
                         className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -238,6 +251,15 @@ export function DepartmentsClientPage({
         </div>
       </Card>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Department"
+        description="Are you sure you want to delete this department? All academic programs, sections, and student registries belonging to this department will be impacted."
+        loading={isDeleting}
+      />
     </motion.div>
   )
 }

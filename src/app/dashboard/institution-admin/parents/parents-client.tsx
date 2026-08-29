@@ -7,6 +7,7 @@ import { ParentList } from "@/components/parents/parent-list"
 import { CreateParentDialog } from "@/components/parents/create-parent-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import type { Parent, CreateParentInput, UpdateParentInput } from "@/modules/parents"
 
 interface ParentsClientPageProps {
@@ -20,6 +21,8 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const { toast } = useToast()
 
   const loadParents = async () => {
@@ -78,16 +81,22 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
     }
   }
 
-  const handleDelete = async (parentId: string) => {
-    if (!confirm("Are you sure you want to delete this parent?")) return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/parents/${parentId}`, {
+      const response = await fetch(`/api/parents/${deleteId}`, {
         method: "DELETE",
       })
       if (!response.ok) throw new Error("Failed to delete parent")
       await loadParents()
+      setDeleteOpen(false)
+      setDeleteId(null)
       toast({
         title: "Success",
         description: "Parent removed successfully",
@@ -124,7 +133,7 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
             setSelectedParent(parent)
             setIsOpen(true)
           }}
-          onDelete={handleDelete}
+          onDelete={triggerDelete}
         />
       </Card>
 
@@ -146,6 +155,15 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
         entity="parents"
         institutionId={institutionId}
         onImported={() => loadParents()}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Parent Account"
+        description="Are you sure you want to delete this parent account? The student link relations will be unlinked."
+        loading={isLoading}
       />
     </div>
   )

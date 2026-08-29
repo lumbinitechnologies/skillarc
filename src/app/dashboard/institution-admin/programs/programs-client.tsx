@@ -33,6 +33,7 @@ import { BookOpenCheck, Plus } from "lucide-react"
 
 import { ProgramList } from "@/components/programs/program-list"
 import { CreateProgramDialog } from "@/components/programs/create-program-dialog"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 
 import type {
   Program,
@@ -65,6 +66,8 @@ export function ProgramsClientPage({
     useState<Program | null>(null)
 
   const [isLoading, setIsLoading] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const { toast } = useToast()
 
@@ -187,19 +190,17 @@ export function ProgramsClientPage({
     }
   }
 
-  const handleDeleteProgram = async (
-    programId: string
-  ) => {
-    if (
-      !confirm(
-        "Are you sure you want to delete this program?"
-      )
-    )
-      return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
 
+  const confirmDelete = async () => {
+    if (!deleteId) return
+    setIsLoading(true)
     try {
       const response = await fetch(
-        `/api/programs/${programId}`,
+        `/api/programs/${deleteId}`,
         {
           method: "DELETE",
         }
@@ -210,21 +211,21 @@ export function ProgramsClientPage({
       }
 
       await loadPrograms()
+      setDeleteOpen(false)
+      setDeleteId(null)
 
       toast({
         title: "Success",
-        description:
-          "Program deleted successfully",
+        description: "Program deleted successfully",
       })
     } catch (error) {
       toast({
         title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Delete failed",
+        description: error instanceof Error ? error.message : "Delete failed",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -282,7 +283,7 @@ export function ProgramsClientPage({
           programs={programs}
           isLoading={isLoading}
           onEdit={handleOpenDialog}
-          onDelete={handleDeleteProgram}
+          onDelete={triggerDelete}
         />
       </Card>
       </motion.div>
@@ -298,6 +299,15 @@ export function ProgramsClientPage({
         program={selectedProgram}
         departments={departments}
         isLoading={isLoading}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Program"
+        description="Are you sure you want to delete this program? All classes, students, and subjects associated with this program will be affected."
+        loading={isLoading}
       />
     </motion.div>
   )

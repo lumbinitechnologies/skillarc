@@ -36,9 +36,10 @@ export async function PUT(
       .eq("id", id)
       .select(`
         *,
-        faculty:faculty_id(id,name,email),
-        section:section_id(id,name),
-        program:program_id(id,name)
+        program:program_id(
+          id, name,
+          department:department_id(id, name)
+        )
       `)
       .single()
 

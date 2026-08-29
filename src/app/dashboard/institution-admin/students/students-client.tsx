@@ -32,6 +32,7 @@ import { GraduationCap, Plus, Upload } from "lucide-react"
 import { StudentList } from "@/components/students/student-list"
 import { CreateStudentDialog } from "@/components/students/create-student-dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
 import StudentSearch from "@/modules/students/components/StudentSearch"
 import StudentFilters from "@/modules/students/components/StudentFilters"
 import StudentDrawer from "@/modules/students/components/StudentDrawer"
@@ -70,6 +71,8 @@ export function StudentsClientPage({
   const [selectedStudent, setSelectedStudent] = useState<StudentWithSection | null>(null)
   const [drawerOpen, setDrawerOpen]   = useState(false)
   const [isLoading, setIsLoading]     = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
   const { toast } = useToast()
 
@@ -163,16 +166,23 @@ export function StudentsClientPage({
     }
   }
 
-  const handleDelete = async (studentId: string) => {
-    if (!confirm("Are you sure you want to delete this student?")) return
+  const triggerDelete = (id: string) => {
+    setDeleteId(id)
+    setDeleteOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteId) return
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/students/${studentId}`, { method: "DELETE" })
+      const response = await fetch(`/api/students/${deleteId}`, { method: "DELETE" })
       if (!response.ok) throw new Error("Failed to delete student")
       // If we just deleted the last item on this page, go back one
       const newPage = students.length === 1 && page > 1 ? page - 1 : page
       setPage(newPage)
       await loadStudents(newPage, limit)
+      setDeleteOpen(false)
+      setDeleteId(null)
       toast({ title: "Success", description: "Student removed successfully" })
     } catch (error) {
       toast({
@@ -291,7 +301,7 @@ export function StudentsClientPage({
             setSelectedStudent(student)
             setDrawerOpen(true)
           }}
-          onDelete={handleDelete}
+          onDelete={triggerDelete}
           // Pagination footer props
           totalCount={totalCount}
           page={page}
@@ -331,6 +341,15 @@ export function StudentsClientPage({
         open={drawerOpen}
         student={selectedStudent}
         onClose={() => setDrawerOpen(false)}
+      />
+
+      <DeleteConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={confirmDelete}
+        title="Delete Student Profile"
+        description="Are you sure you want to remove this student? This will permanently delete their portal access and enrollment details."
+        loading={isLoading}
       />
     </motion.div>
   )
