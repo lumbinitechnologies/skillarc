@@ -483,8 +483,8 @@ async function announcements(
     () =>
       supabase
         .from("subject_announcements")
-        .select("title, content, created_at, subjects(name)")
-        .eq("institution_id", profile.institution_id)
+        .select("title, description, created_at, subjects!inner(name, institution_id)")
+        .eq("subjects.institution_id", profile.institution_id)
         .order("created_at", { ascending: false })
         .limit(ACADEMIC_CONTEXT_LIMITS.maxAnnouncements),
     state,
@@ -494,7 +494,7 @@ async function announcements(
     "\nRecent Notices:",
     ...rows.map(
       (a: any) =>
-        `- ${clip(a.title, 80)}: ${clip(a.content, 220)}${a.subjects?.name ? ` [${clip(a.subjects.name, 60)}]` : ""} (${new Date(a.created_at).toISOString().slice(0, 10)})`,
+        `- ${clip(a.title, 80)}: ${clip(a.description, 220)}${a.subjects?.name ? ` [${clip(a.subjects.name, 60)}]` : ""} (${new Date(a.created_at).toISOString().slice(0, 10)})`,
     ),
   ];
 }
