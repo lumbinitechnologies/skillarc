@@ -211,8 +211,6 @@ export default function InstitutionAdminDashboardClient({
     ? clientTime.getHours() * 60 + clientTime.getMinutes()
     : 0
 
-  const nowPct = Math.max(0, Math.min(100, ((currentMinutes - timelineStart) / totalMinutes) * 100))
-
   const abbreviateDepartment = (name: string) => {
     if (!name) return "GEN"
     if (name.length <= 5 && /^[A-Z&]+$/.test(name)) return name
@@ -276,6 +274,45 @@ export default function InstitutionAdminDashboardClient({
       timeLabel: `${formatPeriodTime(p.start_time)} - ${formatPeriodTime(p.end_time)}`
     }
   })
+
+  // Calculate nowPct relative to the evenly spaced periods
+  const getNowPct = () => {
+    if (!clientTime || periodDensities.length === 0) return 0
+    const currentMins = clientTime.getHours() * 60 + clientTime.getMinutes()
+    
+    const firstPeriod = periodDensities[0]
+    const lastPeriod = periodDensities[periodDensities.length - 1]
+    
+    const firstStart = getMinutes(firstPeriod.start_time)
+    const lastEnd = getMinutes(lastPeriod.end_time)
+    
+    if (currentMins <= firstStart) return 0
+    if (currentMins >= lastEnd) return 100
+    
+    const N = periodDensities.length
+    for (let i = 0; i < N; i++) {
+      const p = periodDensities[i]
+      const start = getMinutes(p.start_time)
+      const end = getMinutes(p.end_time)
+      
+      if (currentMins >= start && currentMins <= end) {
+        const ratio = (currentMins - start) / (end - start)
+        return ((i + ratio) / N) * 100
+      }
+      
+      if (i < N - 1) {
+        const nextP = periodDensities[i + 1]
+        const nextStart = getMinutes(nextP.start_time)
+        if (currentMins > end && currentMins < nextStart) {
+          const ratio = (currentMins - end) / (nextStart - end)
+          return ((i + 1) / N) * 100
+        }
+      }
+    }
+    return 0
+  }
+
+  const nowPct = getNowPct()
 
   const peakClassesCount = Math.max(...periodDensities.map(pd => pd.count), 1)
 
@@ -341,25 +378,25 @@ export default function InstitutionAdminDashboardClient({
       </div>
 
       {/* 01. INSTITUTION PULSE HERO WITH DENSITY TIMELINE */}
-      <section className="fade-in-section relative overflow-hidden rounded-[32px] border border-slate-800 bg-slate-950 p-6 md:p-8 text-white shadow-2xl">
+      <section className="fade-in-section relative overflow-hidden rounded-[32px] border border-slate-100 bg-white p-6 md:p-8 text-slate-900 shadow-[0_10px_40px_rgba(108,99,255,0.04)]">
         {/* Glow backgrounds */}
-        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-[#6C63FF]/10 blur-[100px] pointer-events-none" />
+        <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-[#6C63FF]/5 blur-[100px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-[#00C2A8]/5 blur-[80px] pointer-events-none" />
 
         {/* Pulse top header */}
-        <div className="flex items-center justify-between border-b border-slate-800/80 pb-6 mb-6">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-6 mb-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 border border-slate-800 text-[#6C63FF]">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-50/80 border border-indigo-100/60 text-[#6C63FF]">
               <Building2 size={20} />
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6C63FF]">{getGreeting()}</p>
-              <h2 className="text-lg font-bold text-slate-100 mt-0.5 tracking-tight font-['Plus_Jakarta_Sans']">
+              <h2 className="text-lg font-bold text-slate-900 mt-0.5 tracking-tight font-['Plus_Jakarta_Sans']">
                 {institution?.name ?? "Institution Dashboard"}
               </h2>
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-full bg-slate-900/60 border border-slate-800 px-3.5 py-1.5 text-[10px] font-bold text-emerald-400 tracking-wider">
+          <div className="flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-100 px-3.5 py-1.5 text-[10px] font-bold text-emerald-700 tracking-wider">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
             LIVE PULSE
           </div>
@@ -368,7 +405,7 @@ export default function InstitutionAdminDashboardClient({
         <div className="grid gap-8 lg:grid-cols-[180px_minmax(0,1fr)_180px] items-center">
           {/* Left Main Metric */}
           <div className="min-w-0 text-center lg:text-left space-y-1">
-            <div className="text-4xl md:text-5xl font-black text-white font-['Space_Grotesk'] tracking-tight">
+            <div className="text-4xl md:text-5xl font-black text-slate-900 font-['Space_Grotesk'] tracking-tight">
               {totalClassesToday}
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E57D37]">Classes Today</p>
@@ -384,7 +421,7 @@ export default function InstitutionAdminDashboardClient({
             {/* Time scaled activity density bars */}
             <div className="relative h-28 pt-4 pb-10">
               {/* Bottom guide line */}
-              <div className="absolute bottom-10 left-0 right-0 w-full h-[2px] bg-slate-800" />
+              <div className="absolute bottom-10 left-0 right-0 w-full h-[2px] bg-slate-200" />
 
               {/* Real-time slider NOW indicator pill on the track */}
               {clientTime && nowPct > 0 && nowPct < 100 && (
@@ -392,10 +429,10 @@ export default function InstitutionAdminDashboardClient({
                   className="absolute bottom-10 -translate-x-1/2 flex flex-col items-center z-25 pointer-events-none"
                   style={{ left: `${nowPct}%` }}
                 >
-                  <span className="bg-[#00C2A8] text-slate-950 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-md tracking-wider mb-1">
+                  <span className="bg-[#00C2A8] text-slate-950 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-sm tracking-wider mb-1">
                     NOW
                   </span>
-                  <div className="h-2 w-2 rounded-full bg-[#00C2A8] border border-slate-950 shadow-[0_0_8px_rgba(0,194,168,0.5)] -mb-1" />
+                  <div className="h-2 w-2 rounded-full bg-[#00C2A8] border-2 border-white shadow-[0_0_8px_rgba(0,194,168,0.4)] -mb-1" />
                 </div>
               )}
 
@@ -417,16 +454,16 @@ export default function InstitutionAdminDashboardClient({
                           onMouseEnter={() => setActiveTooltip(p.period_number)}
                           onMouseLeave={() => setActiveTooltip(null)}
                           style={{ height: `${heightVal}%` }}
-                          className={`w-full rounded-t-md border-t transition-all duration-200 cursor-pointer text-left relative ${
+                          className={`w-[80%] mx-auto rounded-t-md border-t transition-all duration-200 cursor-pointer text-left relative ${
                             p.status === "completed"
-                              ? "bg-[#00C2A8]/15 hover:bg-[#00C2A8]/30 border-[#00C2A8]/20"
+                              ? "bg-[#00C2A8]/20 hover:bg-[#00C2A8]/35 border-[#00C2A8]/40"
                               : p.status === "live"
-                              ? "bg-[#6C63FF]/75 hover:bg-[#6C63FF] border-[#6C63FF] animate-pulse shadow-[0_0_15px_rgba(108,99,255,0.2)]"
-                              : "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/60"
+                              ? "bg-[#6C63FF] hover:bg-[#5b52f0] border-[#6C63FF] shadow-[0_4px_16px_rgba(108,99,255,0.25)]"
+                              : "bg-slate-100 hover:bg-slate-200 border-slate-200/80"
                           }`}
                         >
                           {/* Peak classes counter directly over active bars */}
-                          <span className="absolute -top-4.5 left-1/2 -translate-x-1/2 text-[9px] font-black text-slate-500 group-hover/bar:text-white transition-colors">
+                          <span className="absolute -top-4.5 left-1/2 -translate-x-1/2 text-[9px] font-black text-slate-400 group-hover/bar:text-slate-900 transition-colors">
                             {p.count}
                           </span>
                         </button>
@@ -439,8 +476,8 @@ export default function InstitutionAdminDashboardClient({
                         p.status === "live"
                           ? "text-[#6C63FF]"
                           : p.count > 0
-                          ? "text-slate-300"
-                          : "text-slate-600"
+                          ? "text-slate-700"
+                          : "text-slate-400"
                       }`}>
                         P{p.period_number}
                       </span>
@@ -448,8 +485,8 @@ export default function InstitutionAdminDashboardClient({
                         p.status === "live"
                           ? "text-[#00C2A8]"
                           : p.count > 0
-                          ? "text-slate-400"
-                          : "text-slate-550"
+                          ? "text-slate-500"
+                          : "text-slate-400"
                       }`}>
                         {p.start_time.substring(0, 5)} - {p.end_time.substring(0, 5)}
                       </span>
@@ -457,18 +494,18 @@ export default function InstitutionAdminDashboardClient({
 
                     {/* Interactive hover breakdown tooltip */}
                     {activeTooltip === p.period_number && p.count > 0 && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 bg-slate-900 border border-slate-800 text-slate-100 rounded-2xl p-4 shadow-2xl z-50 w-60 text-xs animate-in fade-in duration-100 space-y-3">
-                        <div className="border-b border-slate-800 pb-2">
-                          <h4 className="font-bold text-slate-100 tracking-tight">{p.timeLabel}</h4>
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 bg-white border border-slate-100 text-slate-900 rounded-2xl p-4 shadow-[0_12px_36px_rgba(15,23,42,0.12)] z-50 w-60 text-xs animate-in fade-in duration-100 space-y-3">
+                        <div className="border-b border-slate-100 pb-2">
+                          <h4 className="font-bold text-slate-900 tracking-tight">{p.timeLabel}</h4>
                           <p className="text-[10px] font-black text-[#6C63FF] uppercase tracking-wider mt-1">
                             {p.count} classes scheduled
                           </p>
                         </div>
                         <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                           {p.deptGroups.slice(0, 4).map(group => (
-                            <div key={group.name} className="flex justify-between items-center text-[11px] font-semibold text-slate-400">
+                            <div key={group.name} className="flex justify-between items-center text-[11px] font-semibold text-slate-600">
                               <span className="truncate max-w-[130px]">{group.name}</span>
-                              <span className="bg-slate-850 px-2 py-0.5 rounded-md text-[9px] font-black text-slate-300">
+                              <span className="bg-slate-100 px-2 py-0.5 rounded-md text-[9px] font-black text-slate-700">
                                 {group.count} {group.count === 1 ? "class" : "classes"}
                               </span>
                             </div>
@@ -479,7 +516,7 @@ export default function InstitutionAdminDashboardClient({
                             </div>
                           )}
                         </div>
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider text-center pt-1.5 border-t border-slate-800/80">
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider text-center pt-1.5 border-t border-slate-100">
                           Click to view details
                         </div>
                       </div>
@@ -490,7 +527,7 @@ export default function InstitutionAdminDashboardClient({
             </div>
 
             {/* Timetable timeline flow counts */}
-            <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+            <div className="flex items-center justify-center gap-6 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">
               <span className="flex items-center gap-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#00C2A8]" />
                 {completedClassesCount} Completed
@@ -500,7 +537,7 @@ export default function InstitutionAdminDashboardClient({
                 {liveClassesCount} Active
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-slate-700" />
+                <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
                 {upcomingClassesCount} Upcoming
               </span>
             </div>
@@ -508,7 +545,7 @@ export default function InstitutionAdminDashboardClient({
 
           {/* Right Main Metric */}
           <div className="min-w-0 text-center lg:text-right space-y-1">
-            <div className="text-4xl md:text-5xl font-black text-white font-['Space_Grotesk'] tracking-tight">
+            <div className="text-4xl md:text-5xl font-black text-slate-900 font-['Space_Grotesk'] tracking-tight">
               {attendanceRate !== null ? `${attendanceRate}%` : "—"}
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#E57D37]">Today&apos;s Attendance</p>
@@ -516,8 +553,8 @@ export default function InstitutionAdminDashboardClient({
         </div>
 
         {/* Pulse footer text details */}
-        <div className="border-t border-slate-850 mt-8 pt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xs font-semibold">
-          <div className="text-slate-400 flex items-center gap-2">
+        <div className="border-t border-slate-100 mt-8 pt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xs font-semibold">
+          <div className="text-slate-500 flex items-center gap-2">
             <span className="h-1.5 w-1.5 rounded-full bg-[#6C63FF] shrink-0" />
             {totalClassesToday === 0 ? (
               <span>No classes scheduled today</span>
@@ -528,14 +565,14 @@ export default function InstitutionAdminDashboardClient({
             )}
           </div>
           {nextClass && (
-            <div className="text-slate-300 flex items-center gap-2 self-start sm:self-auto bg-slate-900 border border-slate-850 rounded-xl px-3 py-1.5 shadow-sm">
+            <div className="text-slate-700 flex items-center gap-2 self-start sm:self-auto bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-sm">
               <span className="text-[10px] font-black tracking-wider text-[#FC8402] uppercase shrink-0">NEXT UP:</span>
-              <span className="truncate max-w-[120px] font-bold text-white">{nextClass.subject?.name}</span>
-              <span className="text-slate-400 shrink-0">· Period {nextClass.period}</span>
+              <span className="truncate max-w-[120px] font-bold text-slate-900">{nextClass.subject?.name}</span>
+              <span className="text-slate-500 shrink-0">· Period {nextClass.period}</span>
             </div>
           )}
           {attendanceRate === null && (
-            <div className="text-[10px] font-semibold text-slate-500 tracking-wide">
+            <div className="text-[10px] font-semibold text-slate-400 tracking-wide">
               Attendance details will record as classes begin
             </div>
           )}
