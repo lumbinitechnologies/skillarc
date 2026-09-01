@@ -8,22 +8,77 @@ import {
   ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen
 } from "lucide-react";
 import { Card, Badge, Button, Input, Select, SectionHeader, EmptyState, Skeleton } from "@/components/placements-ui";
+import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 
 interface EventItem {
   id: string;
   name: string;
   department: string;
   date: string; // YYYY-MM-DD
-  time: string; // HH:MM
+  time: string; // HH:MM (12-hour display version)
   location: string;
   description: string;
   capacity: number;
   filled: number;
   organizer: string;
   organizerRole?: string;
+  staff_coord_phone?: string;
+  student_coord?: string;
+  student_coord_phone?: string;
   tags: string[];
   registeredUsers: string[];
 }
+
+const TIME_OPTIONS = [
+  "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
+  "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM",
+  "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
+  "05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM",
+  "08:00 PM"
+];
+
+const parseTime12To24 = (timeStr: string) => {
+  if (!timeStr) return "12:00";
+  const parts = timeStr.split(" ");
+  if (parts.length < 2) return timeStr; // fallback if already 24h
+  const [time, modifier] = parts;
+  let [hours, minutes] = time.split(":");
+  if (hours === "12") {
+    hours = "00";
+  }
+  if (modifier === "PM") {
+    hours = String(parseInt(hours, 10) + 12);
+  }
+  return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+};
+
+const formatTime24To12 = (time24: string) => {
+  if (!time24) return "12:00 PM";
+  const parts = time24.split(":");
+  const hours = parseInt(parts[0], 10);
+  const minutes = parts[1] || "00";
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+  return `${String(displayHours).padStart(2, "0")}:${minutes} ${ampm}`;
+};
+
+const CLOCK_HOURS = Array.from({ length: 12 }, (_, idx) => {
+  const h = idx + 1;
+  const angle = (h * 30 - 90) * (Math.PI / 180);
+  const r = 76;
+  const x = 100 + r * Math.cos(angle) - 12;
+  const y = 100 + r * Math.sin(angle) - 12;
+  return { val: h, label: String(h), x, y, angle: h * 30 };
+});
+
+const CLOCK_MINUTES = Array.from({ length: 12 }, (_, idx) => {
+  const m = idx * 5;
+  const angle = (idx * 30 - 90) * (Math.PI / 180);
+  const r = 76;
+  const x = 100 + r * Math.cos(angle) - 12;
+  const y = 100 + r * Math.sin(angle) - 12;
+  return { val: m, label: String(m).padStart(2, "0"), x, y, angle: idx * 30 };
+});
 
 const DEPT_NAMES: Record<string, string> = {
   "computer-science": "Computer Science",
@@ -36,11 +91,11 @@ const DEPT_NAMES: Record<string, string> = {
 };
 
 const DEPT_COLOR_HEX: Record<string, string> = {
-  "computer-science": "#6C63FF", // Primary Indigo
-  "mathematics": "#8B5CF6", // Secondary Purple
-  "physics": "#FFB020", // Warning Gold
-  "chemistry": "#F04438", // Error Red
-  "biology": "#00C2A8", // Accent Mint
+  "computer-science": "#6C63FF",
+  "mathematics": "#8B5CF6",
+  "physics": "#FFB020",
+  "chemistry": "#F04438",
+  "biology": "#00C2A8",
   "english": "#06b6d4",
   "history": "#ef4444",
 };
@@ -64,18 +119,83 @@ export default function EventsPortalClient() {
 
   // New Event Form Modal
   const [showForm, setShowForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
-    department: "computer-science",
+    department: "",
     date: "",
-    time: "",
+    time: "09:00 AM",
     location: "",
     organizer: "",
     organizerRole: "",
+    staff_coord_phone: "",
+    student_coord: "",
+    student_coord_phone: "",
     capacity: "100",
     description: "",
     tags: "",
   });
+
+  // Dynamic Departments from DB
+  const [colgDepts, setColgDepts] = useState<{ id: string; name: string }[]>([]);
+
+  const getDeptName = (deptId: string) => {
+    const match = colgDepts.find(d => d.id === deptId);
+    return match ? match.name : (DEPT_NAMES[deptId] || "General");
+  };
+
+  const getDeptColor = (deptId: string) => {
+    if (DEPT_COLOR_HEX[deptId]) return DEPT_COLOR_HEX[deptId];
+    const colors = ["#6C63FF", "#8B5CF6", "#00C2A8", "#FFB020", "#F04438", "#06b6d4", "#ec4899", "#3b82f6"];
+    const idx = colgDepts.findIndex(d => d.id === deptId);
+    return idx !== -1 ? colors[idx % colors.length] : "#6C63FF";
+  };
+
+  // Delete Confirmation States
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Custom Clock Time Picker States
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"hours" | "minutes">("hours");
+  const [selectedHour, setSelectedHour] = useState<number>(9);
+  const [selectedMinute, setSelectedMinute] = useState<number>(0);
+  const [selectedTimeAmPm, setSelectedTimeAmPm] = useState<"AM" | "PM">("AM");
+
+  const openClockPicker = () => {
+    const parts = form.time.split(" ");
+    if (parts.length >= 2) {
+      const [hPart, mPart] = parts[0].split(":");
+      setSelectedHour(parseInt(hPart, 10));
+      setSelectedMinute(parseInt(mPart, 10));
+      setSelectedTimeAmPm(parts[1] as "AM" | "PM");
+    } else {
+      setSelectedHour(9);
+      setSelectedMinute(0);
+      setSelectedTimeAmPm("AM");
+    }
+    setPickerMode("hours");
+    setShowTimePicker(true);
+  };
+
+  const handleSelectClockVal = (val: number) => {
+    if (pickerMode === "hours") {
+      setSelectedHour(val);
+      setPickerMode("minutes");
+    } else {
+      setSelectedMinute(val);
+    }
+  };
+
+  const saveClockPickerTime = () => {
+    const hh = String(selectedHour).padStart(2, "0");
+    const mm = String(selectedMinute).padStart(2, "0");
+    const formatted = `${hh}:${mm} ${selectedTimeAmPm}`;
+    setForm(p => ({ ...p, time: formatted }));
+    setShowTimePicker(false);
+  };
 
   // Calendar State
   const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 1)); // July 2026
@@ -109,6 +229,28 @@ export default function EventsPortalClient() {
     getUserDetails();
   }, []);
 
+  useEffect(() => {
+    async function fetchCollegeDepts() {
+      if (!institutionId) return;
+      try {
+        const { data, error } = await supabase
+          .from("departments")
+          .select("id, name")
+          .eq("institution_id", institutionId)
+          .order("name", { ascending: true });
+        if (data) {
+          setColgDepts(data);
+          if (data.length > 0) {
+            setForm(p => ({ ...p, department: data[0].id }));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching departments:", err);
+      }
+    }
+    fetchCollegeDepts();
+  }, [institutionId]);
+
   // Fetch Events from Supabase Database
   const fetchEvents = async () => {
     setLoading(true);
@@ -137,26 +279,39 @@ export default function EventsPortalClient() {
 
       const mapped: EventItem[] = (data || []).map((e: any) => {
         let descText = e.description || "";
-        let deptName = "computer-science";
+        let deptName = "";
         let tagsList: string[] = ["Academic"];
+        let staffName = "Staff Coordinator";
+        let staffRole = "Faculty";
+        let staffPhone = "";
+        let studCoord = "";
+        let studPhone = "";
         
         try {
           const json = JSON.parse(e.description);
           if (json && typeof json === "object" && "description" in json) {
             descText = json.description;
-            deptName = json.department || "computer-science";
+            deptName = json.department || "";
             tagsList = json.tags || [];
+            staffName = json.organizer || "Staff Coordinator";
+            staffRole = json.organizerRole || "Faculty";
+            staffPhone = json.staff_coord_phone || "";
+            studCoord = json.student_coord || "";
+            studPhone = json.student_coord_phone || "";
           }
         } catch {
           // Plain text fallback
         }
 
         let dateVal = "2026-07-01";
-        let timeVal = "12:00";
+        let timeVal = "12:00 PM";
         if (e.event_date) {
-          const dt = new Date(e.event_date);
-          dateVal = dt.toISOString().split("T")[0];
-          timeVal = dt.toTimeString().slice(0, 5);
+          const parts = e.event_date.split("T");
+          dateVal = parts[0] || "2026-07-01";
+          if (parts[1]) {
+            const time24 = parts[1].slice(0, 5);
+            timeVal = formatTime24To12(time24);
+          }
         }
 
         const registeredUsers = e.event_registrations?.map((r: any) => r.user_id) || [];
@@ -171,8 +326,11 @@ export default function EventsPortalClient() {
           description: descText,
           capacity: 100,
           filled: registeredUsers.length,
-          organizer: "Staff Coordinator",
-          organizerRole: "Faculty",
+          organizer: staffName,
+          organizerRole: staffRole,
+          staff_coord_phone: staffPhone,
+          student_coord: studCoord,
+          student_coord_phone: studPhone,
           tags: tagsList,
           registeredUsers,
         };
@@ -283,46 +441,106 @@ export default function EventsPortalClient() {
     e.preventDefault();
     if (!form.name || !form.date || !form.time || !userId) return;
 
+    // Check if the event date is set in the past
+    const time24 = parseTime12To24(form.time);
+    const eventDateStr = `${form.date}T${time24}:00`;
+    const selectedDate = new Date(eventDateStr);
+    const now = new Date();
+    if (selectedDate < now) {
+      alert("Event date and time cannot be in the past.");
+      return;
+    }
+
     const descPayload = JSON.stringify({
       description: form.description,
       department: form.department,
-      tags: form.tags ? form.tags.split(",").map(t => t.trim()) : ["Event"]
+      tags: form.tags ? form.tags.split(",").map(t => t.trim()) : ["Event"],
+      organizer: form.organizer,
+      organizerRole: form.organizerRole,
+      staff_coord_phone: form.staff_coord_phone,
+      student_coord: form.student_coord,
+      student_coord_phone: form.student_coord_phone,
     });
 
     const payload = {
       title: form.name,
       description: descPayload,
-      event_date: `${form.date}T${form.time}:00`,
+      event_date: eventDateStr,
       venue: form.location || "Campus Hall",
       created_by: userId,
       institution_id: institutionId,
     };
 
     try {
-      const { error } = await supabase
-        .from("events")
-        .insert([payload]);
+      if (isEditing && editingEventId) {
+        const { error } = await supabase
+          .from("events")
+          .update(payload)
+          .eq("id", editingEventId);
 
-      if (error) throw error;
+        if (error) throw error;
+        triggerToast("Event successfully updated");
+      } else {
+        const { error } = await supabase
+          .from("events")
+          .insert([payload]);
+
+        if (error) throw error;
+        triggerToast("Event successfully scheduled");
+      }
 
       fetchEvents();
       setShowForm(false);
+      setIsEditing(false);
+      setEditingEventId(null);
       setForm({
         name: "",
-        department: "computer-science",
+        department: colgDepts[0]?.id || "",
         date: "",
-        time: "",
+        time: "09:00 AM",
         location: "",
         organizer: "",
         organizerRole: "",
+        staff_coord_phone: "",
+        student_coord: "",
+        student_coord_phone: "",
         capacity: "100",
         description: "",
         tags: "",
       });
-      triggerToast("Event successfully scheduled");
     } catch (err) {
-      console.error("Error creating event:", err);
-      alert("Failed to create event in database.");
+      console.error("Error saving event:", err);
+      alert("Failed to save event in database.");
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    setIsDeleting(true);
+    try {
+      // First, delete registrations
+      await supabase
+        .from("event_registrations")
+        .delete()
+        .eq("event_id", id);
+
+      // Next, delete the event
+      const { error } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      triggerToast("Event deleted successfully");
+      setSelectedEventId(null);
+      fetchEvents();
+      setDeleteConfirmOpen(false);
+      setDeletingEventId(null);
+    } catch (err) {
+      console.error("Error deleting event:", err);
+      alert("Failed to delete event.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -355,7 +573,30 @@ export default function EventsPortalClient() {
         subtitle="Explore and schedule academic conferences, bootcamps, and lectures"
         action={
           isCoordinator && (
-            <Button variant="primary" className="text-xs" onClick={() => setShowForm(true)}>
+            <Button
+              variant="primary"
+              className="text-xs"
+              onClick={() => {
+                setForm({
+                  name: "",
+                  department: colgDepts[0]?.id || "",
+                  date: "",
+                  time: "09:00 AM",
+                  location: "",
+                  organizer: "",
+                  organizerRole: "",
+                  staff_coord_phone: "",
+                  student_coord: "",
+                  student_coord_phone: "",
+                  capacity: "100",
+                  description: "",
+                  tags: "",
+                });
+                setIsEditing(false);
+                setEditingEventId(null);
+                setShowForm(true);
+              }}
+            >
               <Plus size={14} /> Schedule Event
             </Button>
           )
@@ -379,8 +620,8 @@ export default function EventsPortalClient() {
             <div className="flex flex-wrap gap-3 items-center">
               <Select className="text-xs w-44" value={dept} onChange={e => setDept(e.target.value)}>
                 <option value="all">All Departments</option>
-                {Object.entries(DEPT_NAMES).map(([slug, name]) => (
-                  <option key={slug} value={slug}>{name}</option>
+                {colgDepts.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </Select>
 
@@ -440,14 +681,14 @@ export default function EventsPortalClient() {
                     <div
                       className="h-28 flex items-end p-4 relative"
                       style={{
-                        background: `linear-gradient(135deg, ${DEPT_COLOR_HEX[item.department] || "#6C63FF"}ee, ${DEPT_COLOR_HEX[item.department] || "#6C63FF"}aa)`,
+                        background: `linear-gradient(135deg, ${getDeptColor(item.department)}ee, ${getDeptColor(item.department)}aa)`,
                       }}
                     >
                       <div className="absolute top-3 right-3 bg-white/95 text-slate-850 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-slate-100 shadow-sm">
                         {status === "today" ? "Today" : status === "past" ? "Closed" : "Upcoming"}
                       </div>
                       <Badge variant="neutral" className="bg-black/30 text-white border-none text-[10px] font-bold">
-                        {DEPT_NAMES[item.department] || "General"}
+                        {getDeptName(item.department)}
                       </Badge>
                     </div>
 
@@ -484,12 +725,12 @@ export default function EventsPortalClient() {
                   >
                     <div
                       className="w-2 h-10 rounded-full shrink-0"
-                      style={{ backgroundColor: DEPT_COLOR_HEX[item.department] || "#6C63FF" }}
+                      style={{ backgroundColor: getDeptColor(item.department) }}
                     />
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-slate-800 text-sm truncate">{item.name}</h4>
                       <p className="text-xs text-slate-400 font-semibold mt-0.5">
-                        {DEPT_NAMES[item.department] || "General"} · {item.date} at {item.time} · {item.location}
+                        {getDeptName(item.department)} · {item.date} at {item.time} · {item.location}
                       </p>
                     </div>
                     <Badge variant={status === "today" ? "warning" : status === "past" ? "neutral" : "success"}>
@@ -571,7 +812,7 @@ export default function EventsPortalClient() {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <Badge variant="info" className="mb-2">
-                    {DEPT_NAMES[selectedEvent.department] || "General"} Department
+                    {getDeptName(selectedEvent.department)} Department
                   </Badge>
                   <h2 className="text-2xl font-black font-['Plus_Jakarta_Sans'] tracking-tight text-slate-900 leading-snug">{selectedEvent.name}</h2>
                 </div>
@@ -583,7 +824,7 @@ export default function EventsPortalClient() {
               <div
                 className="h-44 w-full rounded-3xl mb-6 flex flex-col justify-end p-5 relative overflow-hidden"
                 style={{
-                  background: `linear-gradient(135deg, ${DEPT_COLOR_HEX[selectedEvent.department] || "#6C63FF"}ee, ${DEPT_COLOR_HEX[selectedEvent.department] || "#6C63FF"}77)`,
+                  background: `linear-gradient(135deg, ${getDeptColor(selectedEvent.department)}ee, ${getDeptColor(selectedEvent.department)}77)`,
                 }}
               >
                 <div className="text-white text-xs font-bold drop-shadow-sm flex items-center gap-1.5">
@@ -594,7 +835,7 @@ export default function EventsPortalClient() {
               <div className="space-y-6">
                 <div>
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Details & Agenda</h4>
-                  <p className="text-sm text-slate-600 leading-relaxed font-semibold">{selectedEvent.description}</p>
+                  <p className="text-sm text-slate-650 leading-relaxed font-semibold">{selectedEvent.description}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-xs font-semibold text-slate-500">
@@ -603,8 +844,32 @@ export default function EventsPortalClient() {
                     <p className="text-slate-900 font-bold">{selectedEvent.date} · {selectedEvent.time}</p>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Coordinator</p>
-                    <p className="text-slate-900 font-bold">{selectedEvent.organizer} ({selectedEvent.organizerRole || "Faculty"})</p>
+                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Location Venue</p>
+                    <p className="text-slate-900 font-bold">{selectedEvent.location}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-5 text-xs font-semibold text-slate-500">
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Staff Coordinator</p>
+                    <p className="text-slate-900 font-bold">{selectedEvent.organizer}</p>
+                    <p className="text-slate-550 text-[10px] font-semibold">{selectedEvent.organizerRole || "Faculty"}</p>
+                    {selectedEvent.staff_coord_phone && (
+                      <p className="text-slate-550 text-[10px] mt-0.5 font-bold">📞 {selectedEvent.staff_coord_phone}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Student Coordinator</p>
+                    {selectedEvent.student_coord ? (
+                      <>
+                        <p className="text-slate-900 font-bold">{selectedEvent.student_coord}</p>
+                        {selectedEvent.student_coord_phone && (
+                          <p className="text-slate-550 text-[10px] mt-0.5 font-bold">📞 {selectedEvent.student_coord_phone}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-slate-400 italic text-[11px] mt-0.5">None Assigned</p>
+                    )}
                   </div>
                 </div>
 
@@ -629,18 +894,61 @@ export default function EventsPortalClient() {
             </div>
 
             {userId && (
-              <div className="border-t border-slate-100 pt-5 mt-8 flex gap-3">
-                <Button
-                  variant={selectedEvent.registeredUsers.includes(userId) ? "secondary" : "primary"}
-                  className="flex-1 w-full"
-                  onClick={() => handleRegister(selectedEvent.id)}
-                >
-                  {selectedEvent.registeredUsers.includes(userId) ? (
-                    <span className="flex items-center justify-center gap-1.5 text-emerald-600 font-black"><CheckCircle2 size={16} /> Registered</span>
-                  ) : (
-                    "Reserve My Seat"
-                  )}
-                </Button>
+              <div className="border-t border-slate-100 pt-5 mt-8 flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <Button
+                    variant={selectedEvent.registeredUsers.includes(userId) ? "secondary" : "primary"}
+                    className="flex-1 w-full"
+                    onClick={() => handleRegister(selectedEvent.id)}
+                  >
+                    {selectedEvent.registeredUsers.includes(userId) ? (
+                      <span className="flex items-center justify-center gap-1.5 text-emerald-600 font-black"><CheckCircle2 size={16} /> Registered</span>
+                    ) : (
+                      "Reserve My Seat"
+                    )}
+                  </Button>
+                </div>
+
+                {isCoordinator && (
+                  <div className="flex gap-2 w-full mt-1 border-t border-slate-100/60 pt-3">
+                    <Button
+                      variant="secondary"
+                      className="flex-1 text-slate-700 border-slate-200 hover:bg-slate-50"
+                      onClick={() => {
+                        setForm({
+                          name: selectedEvent.name,
+                          department: selectedEvent.department,
+                          date: selectedEvent.date,
+                          time: selectedEvent.time,
+                          location: selectedEvent.location,
+                          organizer: selectedEvent.organizer,
+                          organizerRole: selectedEvent.organizerRole || "",
+                          staff_coord_phone: selectedEvent.staff_coord_phone || "",
+                          student_coord: selectedEvent.student_coord || "",
+                          student_coord_phone: selectedEvent.student_coord_phone || "",
+                          capacity: String(selectedEvent.capacity),
+                          description: selectedEvent.description,
+                          tags: selectedEvent.tags.join(", "),
+                        });
+                        setIsEditing(true);
+                        setEditingEventId(selectedEvent.id);
+                        setShowForm(true);
+                      }}
+                    >
+                      Edit Event
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flex-1 text-white bg-red-600 hover:bg-red-500 border-none"
+                      onClick={() => {
+                        setDeletingEventId(selectedEvent.id);
+                        setDeleteConfirmOpen(true);
+                      }}
+                    >
+                      Delete Event
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -654,7 +962,9 @@ export default function EventsPortalClient() {
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
                 <CalIcon className="text-[#6C63FF]" size={18} />
-                <h3 className="font-black text-slate-900 text-lg font-['Plus_Jakarta_Sans']">Schedule Department Event</h3>
+                <h3 className="font-black text-slate-900 text-lg font-['Plus_Jakarta_Sans']">
+                  {isEditing ? "Edit Department Event" : "Schedule Department Event"}
+                </h3>
               </div>
               <button onClick={() => setShowForm(false)} className="p-1.5 border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-650 rounded-xl transition-all"><X size={15} /></button>
             </div>
@@ -669,8 +979,8 @@ export default function EventsPortalClient() {
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Department</label>
                   <Select value={form.department} onChange={e => setForm(p => ({ ...p, department: e.target.value }))}>
-                    {Object.entries(DEPT_NAMES).map(([slug, name]) => (
-                      <option key={slug} value={slug}>{name}</option>
+                    {colgDepts.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </Select>
                 </div>
@@ -683,11 +993,26 @@ export default function EventsPortalClient() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Date *</label>
-                  <Input type="date" required value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                  <Input 
+                    type="date" 
+                    required 
+                    min={new Date().toISOString().split("T")[0]}
+                    value={form.date} 
+                    onChange={e => setForm(p => ({ ...p, date: e.target.value }))} 
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Time *</label>
-                  <Input type="time" required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))} />
+                  <div className="relative">
+                    <Input 
+                      required 
+                      readOnly 
+                      value={form.time} 
+                      onClick={openClockPicker} 
+                      className="cursor-pointer font-bold text-slate-900 bg-white pr-10"
+                    />
+                    <Clock size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
 
@@ -702,9 +1027,26 @@ export default function EventsPortalClient() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Location Venue</label>
-                <Input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Staff Contact Number</label>
+                  <Input value={form.staff_coord_phone} onChange={e => setForm(p => ({ ...p, staff_coord_phone: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Student Coordinator</label>
+                  <Input value={form.student_coord} onChange={e => setForm(p => ({ ...p, student_coord: e.target.value }))} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Student Contact Number</label>
+                  <Input value={form.student_coord_phone} onChange={e => setForm(p => ({ ...p, student_coord_phone: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Location Venue</label>
+                  <Input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} />
+                </div>
               </div>
 
               <div>
@@ -717,9 +1059,143 @@ export default function EventsPortalClient() {
 
               <div className="flex gap-2 justify-end pt-4 border-t border-slate-100 mt-6">
                 <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button type="submit">Publish Event</Button>
+                <Button type="submit">{isEditing ? "Save Changes" : "Publish Event"}</Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      <DeleteConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        onConfirm={() => deletingEventId && handleDeleteEvent(deletingEventId)}
+        title="Delete Event"
+        description="Are you sure you want to delete this event? This action cannot be undone and will remove all registration records."
+        loading={isDeleting}
+      />
+
+      {showTimePicker && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setShowTimePicker(false)}>
+          <div 
+            className="bg-white border border-slate-100 text-slate-900 rounded-[32px] p-6 shadow-2xl space-y-5 w-[290px] animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header: Displays selected time */}
+            <div className="text-center space-y-1">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Time</h4>
+              <div className="flex items-baseline justify-center gap-1.5 font-['Space_Grotesk'] text-3xl font-black">
+                <button
+                  type="button"
+                  onClick={() => setPickerMode("hours")}
+                  className={`transition-colors duration-150 ${
+                    pickerMode === "hours" ? "text-[#6C63FF]" : "text-slate-400 hover:text-slate-650"
+                  }`}
+                >
+                  {String(selectedHour).padStart(2, "0")}
+                </button>
+                <span className="text-slate-300">:</span>
+                <button
+                  type="button"
+                  onClick={() => setPickerMode("minutes")}
+                  className={`transition-colors duration-150 ${
+                    pickerMode === "minutes" ? "text-[#6C63FF]" : "text-slate-400 hover:text-slate-650"
+                  }`}
+                >
+                  {String(selectedMinute).padStart(2, "0")}
+                </button>
+                <span className="text-sm font-bold text-slate-400 ml-1 uppercase">{selectedTimeAmPm}</span>
+              </div>
+            </div>
+
+            {/* Clock Dial Face */}
+            <div className="w-[200px] h-[200px] bg-slate-50 border border-slate-100 rounded-full relative mx-auto my-2 shadow-inner">
+              {/* Center pivot dot */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#6C63FF] z-20" />
+
+              {/* Hand pointer line */}
+              {(() => {
+                const rotationAngle = pickerMode === "hours" 
+                  ? selectedHour * 30 
+                  : (selectedMinute / 5) * 30;
+                return (
+                  <div 
+                    className="absolute bottom-1/2 left-1/2 w-[2px] bg-[#6C63FF]/70 origin-bottom z-10 pointer-events-none transition-transform duration-200"
+                    style={{
+                      height: "76px",
+                      marginLeft: "-1px",
+                      transform: `rotate(${rotationAngle}deg)`
+                    }}
+                  />
+                );
+              })()}
+
+              {/* Render Numbers */}
+              {(pickerMode === "hours" ? CLOCK_HOURS : CLOCK_MINUTES).map(item => {
+                const isSelected = pickerMode === "hours" 
+                  ? selectedHour === item.val 
+                  : selectedMinute === item.val;
+                return (
+                  <button
+                    key={item.val}
+                    type="button"
+                    style={{ left: `${item.x}px`, top: `${item.y}px` }}
+                    onClick={() => handleSelectClockVal(item.val)}
+                    className={`absolute w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black tracking-tighter transition-all duration-150 z-20 ${
+                      isSelected 
+                        ? "bg-[#6C63FF] text-white font-black scale-110 shadow-md shadow-indigo-150" 
+                        : "text-slate-500 hover:bg-slate-200/60 hover:text-slate-900"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* AM/PM toggle */}
+            <div className="flex bg-slate-50 rounded-2xl p-1 border border-slate-100">
+              <button
+                type="button"
+                onClick={() => setSelectedTimeAmPm("AM")}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                  selectedTimeAmPm === "AM" 
+                    ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100" 
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                AM
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTimeAmPm("PM")}
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                  selectedTimeAmPm === "PM" 
+                    ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100" 
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                PM
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowTimePicker(false)}
+                className="flex-1 py-2.5 text-xs font-bold rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-850 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveClockPickerTime}
+                className="flex-1 py-2.5 text-xs font-bold rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white hover:opacity-95 transition-all shadow-md shadow-indigo-100 cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
           </div>
         </div>
       )}
