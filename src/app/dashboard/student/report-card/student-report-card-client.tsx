@@ -95,41 +95,48 @@ export function StudentReportCardClient({
       subjectGradeColumns.some((column: any) => column.id === entry.column_id)
     )
 
-    const gradedItems = mySubmissions.map(sub => {
-      const assignment = subjectAssignments.find(a => a.id === sub.assignment_id)!
-      const maxScore = assignment.max_score || 100
-      const pct = Math.round((sub.grade! / maxScore) * 100)
-      return {
-        id: sub.assignment_id,
-        title: assignment.title.length > 20 ? assignment.title.substring(0, 20) + "…" : assignment.title,
-        fullTitle: assignment.title,
-        type: assignment.type,
-        score: sub.grade!,
-        maxScore,
-        pct,
-        feedback: sub.feedback,
-        submittedAt: sub.submitted_at,
-      }
-    })
+    const gradedItems = mySubmissions
+      .map(sub => {
+        const assignment = subjectAssignments.find(a => a.id === sub.assignment_id)
+        if (!assignment) return null
+        const rawTitle = assignment.title || "Assignment"
+        const maxScore = Number(assignment.max_score || 100)
+        const pct = maxScore > 0 ? Math.round((Number(sub.grade || 0) / maxScore) * 100) : 0
+        return {
+          id: sub.assignment_id,
+          title: rawTitle.length > 20 ? rawTitle.substring(0, 20) + "…" : rawTitle,
+          fullTitle: rawTitle,
+          type: assignment.type || "Assignment",
+          score: Number(sub.grade || 0),
+          maxScore,
+          pct,
+          feedback: sub.feedback,
+          submittedAt: sub.submitted_at,
+        }
+      })
+      .filter(Boolean) as Array<any>
 
-    const customGradedItems = subjectGradeColumns.map((column: any) => {
-      const entry = subjectGradeEntries.find((item: any) => item.column_id === column.id)
-      const score = entry?.score != null ? Number(entry.score) : null
-      const maxScore = Number(column.max_score ?? 100)
-      const pct = score != null && maxScore > 0 ? Math.round((score / maxScore) * 100) : null
+    const customGradedItems = subjectGradeColumns
+      .map((column: any) => {
+        const entry = subjectGradeEntries.find((item: any) => item.column_id === column.id)
+        if (entry?.score == null || entry?.score === "") return null
+        const score = Number(entry.score)
+        const maxScore = Number(column.max_score ?? 100)
+        const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null
 
-      return {
-        id: column.id,
-        title: column.title,
-        fullTitle: column.title,
-        type: column.type,
-        score: score ?? 0,
-        maxScore,
-        pct,
-        feedback: entry?.feedback ?? null,
-        submittedAt: entry?.graded_at ?? null,
-      }
-    }).filter((item: any) => item.score !== 0 || item.score === 0)
+        return {
+          id: column.id,
+          title: column.title || "Assessment",
+          fullTitle: column.title || "Assessment",
+          type: column.type || "Custom",
+          score,
+          maxScore,
+          pct,
+          feedback: entry?.feedback ?? null,
+          submittedAt: entry?.graded_at ?? null,
+        }
+      })
+      .filter(Boolean) as Array<any>
 
     const allItems = [...gradedItems, ...customGradedItems]
 
@@ -157,16 +164,19 @@ export function StudentReportCardClient({
   const overallPct = overallMax > 0 ? Math.round((overallScored / overallMax) * 100) : 0
 
   const radarData = subjectReports.map(r => ({
-    subject: r.subject.code,
+    subject: r.subject?.code || r.subject?.name || "Course",
     Performance: r.overallPct || 0,
   }))
 
-  const summaryBar = subjectReports.map(r => ({
-    id: r.subject.id,
-    name: r.subject.name.length > 15 ? r.subject.name.substring(0, 15) + "..." : r.subject.name,
-    Performance: r.overallPct || 0,
-    fill: r.color,
-  }))
+  const summaryBar = subjectReports.map(r => {
+    const sName = r.subject?.name || "Course"
+    return {
+      id: r.subject?.id || "course",
+      name: sName.length > 15 ? sName.substring(0, 15) + "..." : sName,
+      Performance: r.overallPct || 0,
+      fill: r.color,
+    }
+  })
 
   const TYPE_COLORS = {
     Assignment: "#10b981",
@@ -183,7 +193,7 @@ export function StudentReportCardClient({
         </Link>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Award className="w-7 h-7 text-indigo-600" />
-          My Report Card
+          My Grades
         </h1>
         <p className="text-gray-500 mt-1 text-sm font-medium">Track your academic progress across all enrolled subjects.</p>
       </div>

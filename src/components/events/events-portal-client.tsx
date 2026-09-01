@@ -5,7 +5,7 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   Calendar as CalIcon, MapPin, User as UserIcon, Users, Search, Plus, Grid, List, CheckCircle2,
-  ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen
+  ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame
 } from "lucide-react";
 import { Card, Badge, Button, Input, Select, SectionHeader, EmptyState, Skeleton } from "@/components/placements-ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -110,7 +110,7 @@ export default function EventsPortalClient() {
 
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
-  const [timeline, setTimeline] = useState("all"); // all, upcoming, today, past
+  const [timelineTab, setTimelineTab] = useState<"active" | "completed">("active"); // default to active (upcoming & live)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
@@ -350,7 +350,7 @@ export default function EventsPortalClient() {
     }
   }, [profileLoaded]);
 
-  const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"].includes(userRole?.toLowerCase());
+  const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head"].includes(userRole?.toLowerCase());
 
   // Timeline Helper
   const getTimelineStatus = (dateStr: string) => {
@@ -363,19 +363,27 @@ export default function EventsPortalClient() {
     return "upcoming";
   };
 
+  const activeCount = events.filter(e => {
+    const s = getTimelineStatus(e.date);
+    return s === "upcoming" || s === "today";
+  }).length;
+
+  const completedCount = events.filter(e => {
+    const s = getTimelineStatus(e.date);
+    return s === "past";
+  }).length;
+
   const filteredEvents = events.filter((e) => {
     const status = getTimelineStatus(e.date);
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase()) || e.description.toLowerCase().includes(search.toLowerCase());
     const matchDept = dept === "all" ? true : e.department === dept;
-    const matchTimeline =
-      timeline === "all" ? true :
-      timeline === "upcoming" ? status === "upcoming" || status === "today" :
-      timeline === "today" ? status === "today" :
-      status === "past";
+    const matchTab = timelineTab === "active"
+      ? (status === "upcoming" || status === "today")
+      : (status === "past");
 
     const matchCalendarDate = selectedDateStr ? e.date === selectedDateStr : true;
 
-    return matchSearch && matchDept && matchTimeline && matchCalendarDate;
+    return matchSearch && matchDept && matchTab && matchCalendarDate;
   });
 
   const selectedEvent = events.find(e => e.id === selectedEventId);
@@ -606,51 +614,95 @@ export default function EventsPortalClient() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
         {/* Left Listing */}
         <div className="lg:col-span-3 space-y-6">
+          {/* Top Tab Switcher: Upcoming & Live vs Completed */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="inline-flex p-1 bg-slate-100/80 border border-slate-200/60 rounded-2xl gap-1.5 shadow-inner">
+              <button
+                type="button"
+                onClick={() => {
+                  setTimelineTab("active");
+                  setSelectedDateStr(null);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                  timelineTab === "active"
+                    ? "bg-white text-[#6C63FF] shadow-sm font-black scale-[1.02]"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Flame size={14} className={timelineTab === "active" ? "text-amber-500 fill-amber-500" : "text-slate-400"} />
+                <span>Upcoming & Live</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  timelineTab === "active" ? "bg-[#6C63FF]/10 text-[#6C63FF]" : "bg-slate-200/60 text-slate-500"
+                }`}>
+                  {activeCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTimelineTab("completed");
+                  setSelectedDateStr(null);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
+                  timelineTab === "completed"
+                    ? "bg-white text-slate-900 shadow-sm font-black scale-[1.02]"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <CheckCircle2 size={14} className={timelineTab === "completed" ? "text-emerald-500" : "text-slate-400"} />
+                <span>Completed Events</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  timelineTab === "completed" ? "bg-slate-900 text-white" : "bg-slate-200/60 text-slate-500"
+                }`}>
+                  {completedCount}
+                </span>
+              </button>
+            </div>
+
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2 self-start sm:self-center">
+              Showing <span className="font-['Space_Grotesk'] text-slate-900 text-sm font-bold">{filteredEvents.length}</span> {timelineTab === "active" ? "Active Events" : "Completed Events"}
+            </div>
+          </div>
+
           <div className="bg-white/80 border border-slate-100 rounded-3xl p-4 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="relative flex-1 min-w-[200px]">
               <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
                 className="pl-10 text-xs"
-                placeholder="Search event title or keywords..."
+                placeholder={timelineTab === "active" ? "Search upcoming & live events..." : "Search completed events..."}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
 
             <div className="flex flex-wrap gap-3 items-center">
-              <Select className="text-xs w-44" value={dept} onChange={e => setDept(e.target.value)}>
+              <Select className="text-xs w-48" value={dept} onChange={e => setDept(e.target.value)}>
                 <option value="all">All Departments</option>
                 {colgDepts.map(d => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </Select>
 
-              <Select className="text-xs w-40" value={timeline} onChange={e => setTimeline(e.target.value)}>
-                <option value="all">All Dates</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="today">Today</option>
-                <option value="past">Past Events</option>
-              </Select>
-
               {selectedDateStr && (
                 <button
                   onClick={() => setSelectedDateStr(null)}
-                  className="bg-[#6C63FF]/10 text-[#6C63FF] border border-[#6C63FF]/20 px-3 py-2 rounded-2xl text-[10px] font-bold hover:bg-[#6C63FF]/15 transition-all"
+                  className="bg-[#6C63FF]/10 text-[#6C63FF] border border-[#6C63FF]/20 px-3 py-2 rounded-2xl text-[10px] font-bold hover:bg-[#6C63FF]/15 transition-all cursor-pointer"
                 >
-                  Clear Date: {selectedDateStr} ✕
+                  Date: {selectedDateStr} ✕
                 </button>
               )}
 
               <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100/80">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-xl transition-all duration-200 ${viewMode === "grid" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "grid" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
                 >
                   <Grid size={14} />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-xl transition-all duration-200 ${viewMode === "list" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "list" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
                 >
                   <List size={14} />
                 </button>
@@ -658,16 +710,15 @@ export default function EventsPortalClient() {
             </div>
           </div>
 
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            Showing <span className="font-['Space_Grotesk'] text-slate-800 text-sm font-bold">{filteredEvents.length}</span> Active Events
-          </div>
-
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-48" />)}
             </div>
           ) : filteredEvents.length === 0 ? (
-            <EmptyState message="No scheduled events match your criteria" icon={<CalIcon size={32} />} />
+            <EmptyState 
+              message={timelineTab === "active" ? "No upcoming or ongoing events found" : "No completed events found"} 
+              icon={<CalIcon size={32} />} 
+            />
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredEvents.map((item) => {
@@ -773,8 +824,20 @@ export default function EventsPortalClient() {
                 return (
                   <button
                     key={`day-${index}`}
-                    onClick={() => setSelectedDateStr(isSelected ? null : dateStr)}
-                    className={`h-8 w-8 rounded-full flex flex-col items-center justify-center font-['Space_Grotesk'] font-bold mx-auto relative transition-all duration-200 ${
+                    onClick={() => {
+                      if (isSelected) {
+                        setSelectedDateStr(null);
+                      } else {
+                        setSelectedDateStr(dateStr);
+                        const dateStatus = getTimelineStatus(dateStr);
+                        if (dateStatus === "past") {
+                          setTimelineTab("completed");
+                        } else {
+                          setTimelineTab("active");
+                        }
+                      }
+                    }}
+                    className={`h-8 w-8 rounded-full flex flex-col items-center justify-center font-['Space_Grotesk'] font-bold mx-auto relative transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
                         : "hover:bg-slate-50 text-slate-700"
@@ -1201,9 +1264,13 @@ export default function EventsPortalClient() {
       )}
 
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 border-l-4 border-[#6C63FF] text-white text-xs font-bold px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 z-[60]">
-          <CheckCircle2 size={14} className="text-[#6C63FF]" />
-          {toastMessage}
+        <div className="fixed top-6 right-6 z-[60] animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-emerald-50/95 border border-emerald-200 text-emerald-900 text-xs font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 backdrop-blur-md">
+            <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+              <CheckCircle2 size={14} />
+            </div>
+            <span>{toastMessage}</span>
+          </div>
         </div>
       )}
     </div>

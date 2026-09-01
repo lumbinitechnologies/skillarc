@@ -684,8 +684,13 @@ export function FacultySubjectDetailClient({
 
   useEffect(() => {
     if (currentSub) {
-      setScoreInput(currentSub.grade != null ? String(currentSub.grade) : "")
-      setFeedbackInput(currentSub.feedback || "")
+      if (currentSub.status === "graded") {
+        setScoreInput(currentSub.grade != null ? String(currentSub.grade) : "")
+        setFeedbackInput(currentSub.feedback || "")
+      } else {
+        setScoreInput("")
+        setFeedbackInput("")
+      }
     } else {
       setScoreInput("")
       setFeedbackInput("")
@@ -1103,62 +1108,37 @@ export function FacultySubjectDetailClient({
       </div>
 
       {/* Tabs Menu with premium pill buttons */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1 bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1">
-          {[
-            { id: "assignments", label: "Assignments", icon: ListTodo },
-            { id: "modules", label: "Modules", icon: BookOpen },
-            { id: "syllabus", label: "Syllabus", icon: Book },
-            { id: "evaluation", label: "Evaluation", icon: CheckCircle },
-            { id: "meetings", label: "Video Classroom", icon: Video },
-            { id: "announcements", label: "Stream", icon: MessageSquare },
-            { id: "students", label: "Roster", icon: Users },
-            { id: "attendance", label: "Attendance", icon: ClipboardList },
-            { id: "grades", label: "Grades", icon: Award },
-          ].map((tab) => {
-            const active = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id as any)
-                  setSelectedGradingAssignment(null)
-                }}
-                className={`flex-1 min-w-[100px] flex items-center justify-center py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 ${
-                  active
-                    ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
-                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-                }`}
-              >
-                <tab.icon className={`w-3.5 h-3.5 mr-2 ${active ? "text-white" : "text-slate-400"}`} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-
-        {(activeTab === "assignments" || activeTab === "syllabus") && (
-          <div className="relative group self-start md:self-center">
-            <button className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95">
-              <Plus size={14} /> Create Coursework
+      <div className="w-full bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1">
+        {[
+          { id: "assignments", label: "Assignments", icon: ListTodo },
+          { id: "modules", label: "Modules", icon: BookOpen },
+          { id: "syllabus", label: "Syllabus", icon: Book },
+          { id: "evaluation", label: "Evaluation", icon: CheckCircle },
+          { id: "meetings", label: "Video Classroom", icon: Video },
+          { id: "announcements", label: "Stream", icon: MessageSquare },
+          { id: "students", label: "Roster", icon: Users },
+          { id: "attendance", label: "Attendance", icon: ClipboardList },
+          { id: "grades", label: "Grades", icon: Award },
+        ].map((tab) => {
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id as any)
+                setSelectedGradingAssignment(null)
+              }}
+              className={`flex-1 min-w-[100px] flex items-center justify-center py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 cursor-pointer ${
+                active
+                  ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
+                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+              }`}
+            >
+              <tab.icon className={`w-3.5 h-3.5 mr-2 ${active ? "text-white" : "text-slate-400"}`} />
+              {tab.label}
             </button>
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-30 py-1.5 overflow-hidden">
-              {(["Assignment", "Quiz", "Coding Assignment", "Material", "Syllabus"] as const).map(type => (
-                <button
-                  key={type}
-                  onClick={() => {
-                    setModalType(type)
-                    setEditingAssignment(null)
-                    setIsModalOpen(true)
-                  }}
-                  className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-indigo-50/50 hover:text-[#6C63FF] transition-colors"
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+          )
+        })}
       </div>
 
       {/* Main Body */}
@@ -1166,7 +1146,34 @@ export function FacultySubjectDetailClient({
         
         {/* Tab 1: Assignments */}
         {activeTab === "assignments" && (
-          <div className="space-y-8">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans']">Coursework & Assignments</h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Manage and track student assignments, quizzes, and coding tasks</p>
+              </div>
+              <div className="relative group self-start sm:self-auto">
+                <button className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-2.5 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95 cursor-pointer">
+                  <Plus size={14} /> Create Assignment
+                </button>
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-30 py-1.5 overflow-hidden">
+                  {(["Assignment", "Quiz", "Coding Assignment"] as const).map(type => (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setModalType(type)
+                        setEditingAssignment(null)
+                        setIsModalOpen(true)
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-indigo-50/50 hover:text-[#6C63FF] transition-colors cursor-pointer"
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             {standardAssignments.length === 0 && quizzes.length === 0 && codingAssignments.length === 0 ? (
               <div className="text-center py-16 bg-white border border-slate-200 rounded-3xl shadow-sm">
                 <ListTodo className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -1177,7 +1184,7 @@ export function FacultySubjectDetailClient({
                     setModalType("Assignment")
                     setIsModalOpen(true)
                   }}
-                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl"
+                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                 >
                   Create Now
                 </button>
@@ -1236,11 +1243,38 @@ export function FacultySubjectDetailClient({
         {/* Tab 2: Modules */}
         {activeTab === "modules" && (
           <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans']">Learning Modules & Materials</h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Upload lecture slides, notes, and study resources for students</p>
+              </div>
+              <button
+                onClick={() => {
+                  setModalType("Material")
+                  setEditingAssignment(null)
+                  setIsModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-2.5 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95 cursor-pointer self-start sm:self-auto"
+              >
+                <Plus size={14} /> Add Module
+              </button>
+            </div>
+
             {materials.length === 0 ? (
-              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl shadow-sm">
                 <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-slate-700 font-bold text-lg">No Modules Available</h3>
                 <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Upload syllabus modules, lecture slides, and resource materials for this course.</p>
+                <button
+                  onClick={() => {
+                    setModalType("Material")
+                    setEditingAssignment(null)
+                    setIsModalOpen(true)
+                  }}
+                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  + Add Module Now
+                </button>
               </div>
             ) : (
               <SectionGroup
@@ -1261,32 +1295,51 @@ export function FacultySubjectDetailClient({
         {/* Tab 3: Syllabus */}
         {activeTab === "syllabus" && (
           <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 font-['Plus_Jakarta_Sans']">Course Syllabus & Curriculum</h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">Publish unit breakdown, course objectives, and curriculum guidelines</p>
+              </div>
+              <button
+                onClick={() => {
+                  setModalType("Syllabus")
+                  setEditingAssignment(null)
+                  setIsModalOpen(true)
+                }}
+                className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white text-xs font-bold px-5 py-2.5 rounded-2xl shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95 cursor-pointer self-start sm:self-auto"
+              >
+                <Plus size={14} /> Add Syllabus
+              </button>
+            </div>
+
             {syllabusItems.length === 0 ? (
-              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl">
+              <div className="text-center py-20 bg-white border border-slate-100 rounded-3xl shadow-sm">
                 <Book className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <h3 className="text-slate-700 font-bold text-lg">No Syllabus Overview Yet</h3>
-                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Post a syllabus overview or curriculum guide using the Stream tab to populate this section.</p>
+                <p className="text-slate-400 text-sm mt-1 max-w-md mx-auto">Add a syllabus overview, curriculum guidelines, or unit breakdown for this course.</p>
+                <button
+                  onClick={() => {
+                    setModalType("Syllabus")
+                    setEditingAssignment(null)
+                    setIsModalOpen(true)
+                  }}
+                  className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  + Add Syllabus Now
+                </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {syllabusItems.map((item) => (
-                  <div key={item.id} className="bg-white border border-slate-200 rounded-3xl p-5 hover:border-indigo-200 hover:shadow-md transition-all duration-200">
-                    <div className="flex items-center gap-4">
-                      <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <Book size={18} />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-slate-800 text-sm truncate">{item.title}</h3>
-                        <p className="text-xs text-slate-500 mt-1 truncate">{item.description || "Syllabus overview resource"}</p>
-                      </div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500">
-                      <span>{item.due_date ? `Due ${formatDueDate(item.due_date)}` : "No due date"}</span>
-                      <span className="font-semibold text-indigo-600">Syllabus</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SectionGroup
+                label="Syllabus"
+                items={syllabusItems}
+                type="Syllabus"
+                cfg={typeConfig["Syllabus"]}
+                statsFn={getSubmissionStats}
+                onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                onDelete={handleDeleteAssignment}
+                formatDate={formatDueDate}
+                onGrade={() => {}}
+              />
             )}
           </div>
         )}
@@ -1514,10 +1567,24 @@ export function FacultySubjectDetailClient({
                           </div>
                         )}
 
-                        {/* Standard File Submission */}
+                        {/* Standard File & Text Submission */}
                         {selectedGradingAssignment.type === "Assignment" && (
-                          <div className="space-y-4 flex-grow flex flex-col justify-center">
-                            {currentSub.file_url ? (
+                          <div className="space-y-4 flex-grow flex flex-col justify-start">
+                            {/* Student Written Solution / Remarks */}
+                            {(currentSub.code_content || (currentSub.status === "pending" && currentSub.feedback)) && (
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2 text-left">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                                  <FileText size={16} className="text-[#6C63FF]" />
+                                  <span>Student Written Answer / Remarks:</span>
+                                </div>
+                                <div className="bg-white border border-slate-200/80 rounded-xl p-4 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-sans">
+                                  {currentSub.code_content || currentSub.feedback}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Submitted Document Attachment */}
+                            {currentSub.file_url && (
                               <div className="border border-slate-200 p-6 rounded-2xl text-center bg-slate-50">
                                 <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-bounce" />
                                 <h4 className="font-bold text-slate-800">Submitted Document</h4>
@@ -1531,12 +1598,12 @@ export function FacultySubjectDetailClient({
                                   View / Download Attachment
                                 </a>
                               </div>
-                            ) : (
-                              <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed text-slate-400">
-                                Text entry solution:
-                                <p className="mt-3 p-4 bg-white border border-slate-200 rounded-xl text-left font-sans text-xs text-slate-700 font-normal">
-                                  {currentSub.feedback || "No text description provided by student."}
-                                </p>
+                            )}
+
+                            {/* Empty Fallback if neither exists */}
+                            {!currentSub.file_url && !currentSub.code_content && (!currentSub.feedback || currentSub.status === "graded") && (
+                              <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed text-slate-400 text-xs">
+                                No text description or file attachment was provided by the student.
                               </div>
                             )}
                           </div>
@@ -1743,12 +1810,12 @@ export function FacultySubjectDetailClient({
                           </div>
                         </div>
                         <div className="flex-1">
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Feedback Notes</label>
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Faculty Feedback Remarks (To Student)</label>
                           <input
                             type="text"
                             value={feedbackInput}
                             onChange={e => setFeedbackInput(e.target.value)}
-                            placeholder="Add evaluation remarks..."
+                            placeholder="Add evaluation remarks for the student..."
                             className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-2 text-sm text-slate-700"
                           />
                         </div>
@@ -2582,12 +2649,15 @@ export function FacultySubjectDetailClient({
           <div className="space-y-6 text-left">
             {/* Top meeting launch bar */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-2 bg-gradient-to-br from-indigo-900 to-indigo-950 border border-indigo-800 rounded-3xl p-6 shadow-sm text-white flex flex-col justify-between">
+              <div className="md:col-span-2 bg-white border border-slate-100 rounded-3xl p-6 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-col justify-between">
                 <div>
-                  <h3 className="text-lg font-extrabold flex items-center gap-2">
-                    <Video size={20} className="text-indigo-400" /> Start Live Interactive Lecture
+                  <h3 className="text-base font-extrabold text-slate-900 font-['Plus_Jakarta_Sans'] flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-50 text-[#6C63FF] flex items-center justify-center flex-shrink-0">
+                      <Video size={16} />
+                    </div>
+                    <span>Start Live Interactive Lecture</span>
                   </h3>
-                  <p className="text-xs text-indigo-200 mt-2 leading-relaxed font-sans font-normal">
+                  <p className="text-xs text-slate-500 mt-2.5 leading-relaxed font-sans font-medium">
                     Instantly launch a virtual class meeting room with drawing whiteboard, screen recorder, participant breakout groups, and live chat. Students enrolled in this subject will get a prominent join notification banner instantly.
                   </p>
                 </div>
@@ -2597,11 +2667,11 @@ export function FacultySubjectDetailClient({
                     type="text"
                     placeholder="Enter lecture title (e.g. DFS/BFS Algorithms)"
                     id="instant-meet-title"
-                    className="flex-grow bg-white/10 hover:bg-white/15 focus:bg-white/20 border border-white/20 rounded-xl px-4 py-2 text-xs font-bold text-white placeholder-indigo-300 outline-none"
+                    className="flex-grow bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none transition-all"
                   />
                   <select
                     id="instant-meet-section"
-                    className="bg-indigo-950 border border-white/20 rounded-xl px-4 py-2 text-xs font-bold text-white outline-none cursor-pointer"
+                    className="bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none cursor-pointer transition-all"
                   >
                     {sections.map(s => (
                       <option key={s.id} value={s.id}>
@@ -2616,7 +2686,7 @@ export function FacultySubjectDetailClient({
                       handleStartInstantMeeting(title, sectionId)
                     }}
                     disabled={isStartingMeeting}
-                    className="px-6 py-2.5 bg-white text-indigo-900 hover:bg-indigo-50 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+                    className="px-6 py-2.5 bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] hover:from-[var(--primary-600)] hover:to-[var(--primary-700)] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm hover:shadow-md hover:shadow-indigo-100 transition-all duration-200 active:scale-95 cursor-pointer flex-shrink-0"
                   >
                     {isStartingMeeting ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} fill="currentColor" />}
                     Start Class
@@ -2625,19 +2695,22 @@ export function FacultySubjectDetailClient({
               </div>
 
               {/* Schedule meeting box */}
-              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+              <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-[0_2px_8px_rgba(15,23,42,0.01)] flex flex-col justify-between">
                 <div>
-                  <h3 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
-                    <Calendar size={16} className="text-slate-500" /> Schedule Class Call
+                  <h3 className="font-extrabold text-slate-900 text-sm font-['Plus_Jakarta_Sans'] flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+                      <Calendar size={14} />
+                    </div>
+                    <span>Schedule Class Call</span>
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-normal font-sans font-normal">
+                  <p className="text-xs text-slate-500 mt-2 leading-normal font-sans font-medium">
                     Schedule a future video lecture slot. Upcoming slots will be rendered on student calendars.
                   </p>
                 </div>
 
                 <button
                   onClick={() => setIsCreateMeetingModalOpen(true)}
-                  className="mt-6 w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-all"
+                  className="mt-6 w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Schedule New Lecture
                 </button>
@@ -3051,9 +3124,31 @@ export function FacultySubjectDetailClient({
 
       {/* Local Toast Alert overlay */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-2xl flex items-center gap-3 animate-slide-in max-w-sm text-white">
-          <CheckCircle2 size={16} className="text-emerald-400" />
-          <span className="text-xs font-bold">{toast.message}</span>
+        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+            toast.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
+              : toast.type === "warning"
+              ? "bg-amber-50/95 border-amber-200 text-amber-900"
+              : "bg-indigo-50/95 border-indigo-200 text-indigo-900"
+          }`}>
+            <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              toast.type === "success"
+                ? "bg-emerald-100 text-emerald-700"
+                : toast.type === "warning"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-indigo-100 text-indigo-700"
+            }`}>
+              <CheckCircle2 size={16} />
+            </div>
+            <span className="text-xs font-bold leading-snug">{toast.message}</span>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-lg hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors ml-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -3118,14 +3213,19 @@ function SectionGroup({
                   <h4 className="font-extrabold text-slate-800 text-sm truncate">{item.title}</h4>
                   <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] font-semibold text-slate-400">
                     <span className={`px-2 py-0.5 rounded-lg text-[10px] ${cfg.bg} ${cfg.color}`}>{cfg.label}</span>
-                    <span className="flex items-center gap-1 font-medium"><Calendar size={12} /> Due {formatDate(item.due_date)}</span>
+                    {(type !== "Material" && type !== "Syllabus" && item.due_date) && (
+                      <span className="flex items-center gap-1 font-medium"><Calendar size={12} /> Due {formatDate(item.due_date)}</span>
+                    )}
+                    {((type === "Material" || type === "Syllabus") && item.created_at) && (
+                      <span className="flex items-center gap-1 font-medium"><Calendar size={12} /> Posted {formatDate(item.created_at)}</span>
+                    )}
                     <span className="font-medium">Assigned to: {item.section_ids?.map((sid: string) => sid.substring(0, 4)).join(", ") || "All"}</span>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 ml-4">
-                {type !== "Material" && (
+                {(type !== "Material" && type !== "Syllabus") && (
                   <div className="flex items-center gap-2">
                     {stats.pending > 0 && (
                       <span className="text-[10px] font-extrabold text-orange-700 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">
@@ -3145,7 +3245,7 @@ function SectionGroup({
                   </div>
                 )}
                 <div className="flex items-center gap-1">
-                  {type !== "Material" && stats.total > 0 && (
+                  {(type !== "Material" && type !== "Syllabus") && stats.total > 0 && (
                     <button
                       onClick={() => onGrade(item)}
                       className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-600 hover:bg-indigo-100 text-xs font-bold rounded-xl transition-all"
@@ -3311,7 +3411,7 @@ function CreateWorksheetModal({
     }
 
     setIsSubmitting(true)
-    const fullDueDateStr = dueDate ? `${dueDate}T${dueTime}:00` : null
+    const fullDueDateStr = (type === "Material" || type === "Syllabus") ? null : (dueDate ? `${dueDate}T${dueTime}:00` : null)
 
     const data = {
       subject_id: subjectId,
@@ -3389,40 +3489,41 @@ function CreateWorksheetModal({
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={e => setDueDate(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Time</label>
-              <input
-                type="time"
-                value={dueTime}
-                onChange={e => setDueTime(e.target.value)}
-                className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
-              />
-            </div>
-
-            {type !== "Material" && (
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Max Score</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={maxScore}
-                  onChange={e => setMaxScore(Number(e.target.value))}
-                  className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
-                />
-              </div>
+            {(type !== "Material" && type !== "Syllabus") && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Date</label>
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Time</label>
+                  <input
+                    type="time"
+                    value={dueTime}
+                    onChange={e => setDueTime(e.target.value)}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Max Score</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={maxScore}
+                    onChange={e => setMaxScore(Number(e.target.value))}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
+                  />
+                </div>
+              </>
             )}
 
             {/* Target Sections */}
-            <div className={type === "Material" ? "col-span-2" : ""}>
+            <div className={(type === "Material" || type === "Syllabus") ? "col-span-2" : ""}>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Target Sections <span className="text-red-500">*</span></label>
               <div className="flex flex-wrap gap-2 py-1">
                 {sections.map((sec) => {

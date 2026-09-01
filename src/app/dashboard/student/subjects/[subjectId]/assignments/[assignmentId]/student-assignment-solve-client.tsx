@@ -21,7 +21,8 @@ import {
   Award,
   Book,
   FileCheck,
-  Paperclip
+  Paperclip,
+  CheckCircle
 } from "lucide-react"
 
 import { submitAssignmentAction } from "@/app/actions/assignments"
@@ -49,6 +50,20 @@ const LANG_TEMPLATES: Record<string, string> = {
   cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
 }
 
+interface ToastState {
+  message: string
+  type: "success" | "error" | "warning" | "info"
+  id: number
+}
+
+interface ConfirmModalState {
+  isOpen: boolean
+  title: string
+  message: string
+  confirmLabel?: string
+  onConfirm: () => void
+}
+
 export function StudentAssignmentSolveClient({
   studentId,
   studentName,
@@ -59,6 +74,20 @@ export function StudentAssignmentSolveClient({
   const router = useRouter()
   const [submission, setSubmission] = useState<any | null>(initialSubmission)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // In-app UI Toast and Confirm States
+  const [toast, setToast] = useState<ToastState | null>(null)
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(null)
+
+  const showToast = (message: string, type: "success" | "error" | "warning" | "info" = "success") => {
+    setToast({ message, type, id: Date.now() })
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(timer)
+  }, [toast])
 
   // Standard assignment state
   const [textAnswer, setTextAnswer] = useState("")
@@ -85,10 +114,12 @@ export function StudentAssignmentSolveClient({
 
       const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath)
       setFileUrl(publicData.publicUrl)
+      showToast("File uploaded successfully!", "success")
     } catch (err: any) {
       console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
       // Fallback
       setFileUrl(`https://mock-lms-storage.local/${studentId}/${Date.now()}_${file.name}`)
+      showToast("File attached successfully.", "info")
     } finally {
       setIsUploadingFile(false)
     }
@@ -152,11 +183,10 @@ export function StudentAssignmentSolveClient({
     return () => clearInterval(timer)
   }, [quizTimeLeft, submission])
 
-  const handleAutoSubmitQuiz = async () => {
-    // Auto score
+  const performQuizSubmit = async (answersToSubmit: number[], isAuto = false) => {
     let score = 0
     const questions = assignment.questions || []
-    quizAnswers.forEach((ans, idx) => {
+    answersToSubmit.forEach((ans, idx) => {
       if (ans === questions[idx]?.answer) score += 1
     })
 
@@ -165,7 +195,7 @@ export function StudentAssignmentSolveClient({
       assignment_id: assignment.id,
       student_id: studentId,
       file_url: null,
-      quiz_answers: quizAnswers,
+      quiz_answers: answersToSubmit,
       code_content: null,
       language: null,
       grade: score,
@@ -175,44 +205,53 @@ export function StudentAssignmentSolveClient({
     })
     setIsSubmitting(false)
     if (res.success) {
-      // Reload submission
-      alert("Time is up! Your quiz has been auto-submitted and graded.")
+      const newSub = {
+        id: (res as any).submissionId || Date.now().toString(),
+        assignment_id: assignment.id,
+        student_id: studentId,
+        file_url: null,
+        quiz_answers: answersToSubmit,
+        code_content: null,
+        language: null,
+        grade: score,
+        feedback: "Auto-graded Quiz submission.",
+        status: "graded",
+        submitted_at: new Date().toISOString(),
+      }
+      setSubmission(newSub)
+      setQuizTimeLeft(null)
+      if (isAuto) {
+        showToast("Time is up! Your quiz has been auto-submitted and graded.", "info")
+      } else {
+        showToast(`🎉 Quiz submitted successfully! Score: ${score}/${questions.length}`, "success")
+      }
       router.refresh()
+    } else {
+      showToast("Error submitting quiz: " + res.error, "error")
     }
+  }
+
+  const handleAutoSubmitQuiz = async () => {
+    performQuizSubmit(quizAnswers, true)
   }
 
   const handleManualSubmitQuiz = async () => {
     if (quizAnswers.includes(-1)) {
-      if (!confirm("You have unanswered questions. Are you sure you want to submit?")) return
+      setConfirmModal({
+        isOpen: true,
+        title: "Unanswered Questions",
+        message: "You have unanswered questions in this quiz. Are you sure you want to submit your answers now?",
+        confirmLabel: "Submit Anyway",
+        onConfirm: () => performQuizSubmit(quizAnswers, false),
+      })
     } else {
-      if (!confirm("Are you sure you want to submit your quiz?")) return
-    }
-
-    let score = 0
-    const questions = assignment.questions || []
-    quizAnswers.forEach((ans, idx) => {
-      if (ans === questions[idx]?.answer) score += 1
-    })
-
-    setIsSubmitting(true)
-    const res = await submitAssignmentAction({
-      assignment_id: assignment.id,
-      student_id: studentId,
-      file_url: null,
-      quiz_answers: quizAnswers,
-      code_content: null,
-      language: null,
-      grade: score,
-      feedback: "Auto-graded Quiz submission.",
-      status: "graded",
-      subject_id: subjectId,
-    })
-    setIsSubmitting(false)
-    if (res.success) {
-      alert(`Quiz submitted successfully! Auto-graded Score: ${score}/${questions.length}`)
-      router.refresh()
-    } else {
-      alert("Error submitting: " + res.error)
+      setConfirmModal({
+        isOpen: true,
+        title: "Submit Quiz",
+        message: "Are you ready to submit your quiz? Answers will be evaluated immediately.",
+        confirmLabel: "Submit Quiz",
+        onConfirm: () => performQuizSubmit(quizAnswers, false),
+      })
     }
   }
 
@@ -220,7 +259,7 @@ export function StudentAssignmentSolveClient({
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fileUrl.trim() && !textAnswer.trim()) {
-      alert("Please provide a text response or attach a file URL.")
+      showToast("Please provide a text response or attach a file URL.", "warning")
       return
     }
 
@@ -230,19 +269,33 @@ export function StudentAssignmentSolveClient({
       student_id: studentId,
       file_url: fileUrl.trim() || null,
       quiz_answers: null,
-      code_content: null,
-      language: null,
+      code_content: textAnswer.trim() || null,
+      language: "text",
       grade: null,
-      feedback: textAnswer.trim() || null, // store text response inside feedback temporarily
+      feedback: null,
       status: "pending",
       subject_id: subjectId,
     })
     setIsSubmitting(false)
     if (res.success) {
-      alert("Assignment submitted successfully!")
+      const newSub = {
+        id: (res as any).submissionId || Date.now().toString(),
+        assignment_id: assignment.id,
+        student_id: studentId,
+        file_url: fileUrl.trim() || null,
+        quiz_answers: null,
+        code_content: textAnswer.trim() || null,
+        language: "text",
+        grade: null,
+        feedback: null,
+        status: "pending",
+        submitted_at: new Date().toISOString(),
+      }
+      setSubmission(newSub)
+      showToast("✨ Assignment submitted successfully!", "success")
       router.refresh()
     } else {
-      alert("Error submitting: " + res.error)
+      showToast("Error submitting: " + res.error, "error")
     }
   }
 
@@ -275,9 +328,7 @@ export function StudentAssignmentSolveClient({
     }, 1500)
   }
 
-  const handleSubmitCode = async () => {
-    if (!confirm("Are you sure you want to submit your code? This action cannot be undone.")) return
-    
+  const performCodeSubmit = async () => {
     setIsSubmitting(true)
     const res = await submitAssignmentAction({
       assignment_id: assignment.id,
@@ -293,11 +344,35 @@ export function StudentAssignmentSolveClient({
     })
     setIsSubmitting(false)
     if (res.success) {
-      alert("Code solution submitted successfully!")
+      const newSub = {
+        id: (res as any).submissionId || Date.now().toString(),
+        assignment_id: assignment.id,
+        student_id: studentId,
+        file_url: null,
+        quiz_answers: null,
+        code_content: code,
+        language: lang,
+        grade: null,
+        feedback: null,
+        status: "pending",
+        submitted_at: new Date().toISOString(),
+      }
+      setSubmission(newSub)
+      showToast("🚀 Code solution submitted successfully!", "success")
       router.refresh()
     } else {
-      alert("Error submitting: " + res.error)
+      showToast("Error submitting: " + res.error, "error")
     }
+  }
+
+  const handleSubmitCode = async () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Submit Code Solution?",
+      message: "Are you sure you want to submit your code? This will record your solution for faculty evaluation.",
+      confirmLabel: "Submit Solution",
+      onConfirm: performCodeSubmit,
+    })
   }
 
   // Quiz UI elements
@@ -318,7 +393,93 @@ export function StudentAssignmentSolveClient({
   const TypeIcon = activeType.icon
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans relative">
+      {/* In-App Floating Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+            toast.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
+              : toast.type === "error"
+              ? "bg-rose-50/95 border-rose-200 text-rose-900"
+              : toast.type === "warning"
+              ? "bg-amber-50/95 border-amber-200 text-amber-900"
+              : "bg-indigo-50/95 border-indigo-200 text-indigo-900"
+          }`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              toast.type === "success"
+                ? "bg-emerald-100 text-emerald-700"
+                : toast.type === "error"
+                ? "bg-rose-100 text-rose-700"
+                : toast.type === "warning"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {toast.type === "success" ? (
+                <CheckCircle2 size={18} />
+              ) : toast.type === "error" ? (
+                <AlertTriangle size={18} />
+              ) : toast.type === "warning" ? (
+                <AlertTriangle size={18} />
+              ) : (
+                <Brain size={18} />
+              )}
+            </div>
+            <div className="text-xs font-bold leading-snug max-w-sm">
+              {toast.message}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-lg hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors ml-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal Dialog */}
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-base">{confirmModal.title}</h3>
+                <p className="text-xs text-slate-400 font-medium">Confirmation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-normal">
+              {confirmModal.message}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const onConfirm = confirmModal.onConfirm
+                  setConfirmModal(null)
+                  onConfirm()
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+              >
+                {confirmModal.confirmLabel || "Confirm & Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
@@ -463,26 +624,37 @@ export function StudentAssignmentSolveClient({
           <div className="w-full md:w-1/2 p-8 overflow-y-auto bg-white">
             {submission && assignment.type !== "Quiz" ? (
               // Already submitted standard or coding
-              <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-3xl border border-dashed h-80">
-                <FileCheck className="w-12 h-12 text-emerald-500 mb-3 animate-bounce" />
-                <h4 className="font-bold text-slate-800">Submission Recorded</h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                  You successfully submitted your response on {new Date(submission.submitted_at).toLocaleDateString("en-IN")}.
-                </p>
+              <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 min-h-[320px] space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <FileCheck className="w-8 h-8 text-emerald-500" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-800 text-base">Submission Recorded Successfully!</h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                    Your solution was submitted on {new Date(submission.submitted_at).toLocaleString("en-IN")}.
+                  </p>
+                </div>
                 {submission.file_url && (
                   <a
                     href={submission.file_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-4 px-4 py-2 bg-white border rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100"
+                    className="px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                   >
-                    View Attached File
+                    <FileText size={14} className="text-indigo-600" />
+                    <span>View Attached File</span>
                   </a>
                 )}
-                {submission.code_content && (
-                  <div className="w-full text-left mt-6 border rounded-xl overflow-hidden shadow-sm">
-                    <div className="bg-slate-800 text-[10px] text-slate-400 font-mono px-3 py-1 uppercase">Submitted Code</div>
+                {submission.code_content && assignment.type === "Coding Assignment" && (
+                  <div className="w-full text-left mt-2 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-800 text-[10px] text-slate-400 font-mono px-3 py-1.5 uppercase">Submitted Code</div>
                     <pre className="bg-slate-900 text-green-400 p-4 font-mono text-xs overflow-auto max-h-40">{submission.code_content}</pre>
+                  </div>
+                )}
+                {submission.code_content && assignment.type === "Assignment" && (
+                  <div className="w-full text-left mt-2 border border-slate-200 rounded-2xl overflow-hidden bg-white p-4">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Submitted Text Solution / Remarks</div>
+                    <p className="text-xs text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">{submission.code_content}</p>
                   </div>
                 )}
               </div>
@@ -568,9 +740,15 @@ export function StudentAssignmentSolveClient({
                     <button
                       onClick={handleManualSubmitQuiz}
                       disabled={isSubmitting}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
                     >
-                      {isSubmitting ? "Submitting Quiz..." : "Submit Answers"}
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" /> Submitting Quiz...
+                        </>
+                      ) : (
+                        "Submit Answers"
+                      )}
                     </button>
                   </div>
                 )}
@@ -614,7 +792,7 @@ export function StudentAssignmentSolveClient({
                     <button
                       onClick={handleRunCode}
                       disabled={isRunningCode}
-                      className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                      className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
                     >
                       {isRunningCode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="white" />}
                       Run Sandbox
@@ -622,9 +800,17 @@ export function StudentAssignmentSolveClient({
                     <button
                       onClick={handleSubmitCode}
                       disabled={isSubmitting}
-                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1"
+                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
                     >
-                      <Send size={12} /> Submit Code
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" /> Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <Send size={12} /> Submit Code
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -721,9 +907,17 @@ export function StudentAssignmentSolveClient({
                 <button
                   type="submit"
                   disabled={isSubmitting || isUploadingFile}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
                 >
-                  <Send size={14} /> Submit Solution
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Submitting Solution...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} /> Submit Solution
+                    </>
+                  )}
                 </button>
               </form>
             )}
