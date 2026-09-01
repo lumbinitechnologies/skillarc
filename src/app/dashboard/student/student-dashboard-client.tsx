@@ -171,7 +171,7 @@ export default function StudentPage({
               📋 To-Do List
             </Link>
             <Link href="/dashboard/student/report-card" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-[11px] font-bold text-[#ECDFCB] shadow-sm transition hover:-translate-y-0.5 hover:border-[#E57D37]/50 hover:bg-[#1C3F73]">
-              🏆 Report Card
+              🏆 Grades
             </Link>
           </div>
         </div>

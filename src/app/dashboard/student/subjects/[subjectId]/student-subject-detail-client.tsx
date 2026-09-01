@@ -26,7 +26,8 @@ import {
   Play,
   ClipboardList,
   FolderKanban,
-  Star
+  Star,
+  X
 } from "lucide-react"
 import { replyToAnnouncementAction } from "@/app/actions/announcements"
 import { supabase } from "@/lib/supabase"
@@ -74,6 +75,18 @@ export function StudentSubjectDetailClient({
   const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<any[]>(subjectAnnouncements)
   const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
+
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null)
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ message, type })
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // Real-time meetings state for active classroom classes
   const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
@@ -204,11 +217,12 @@ export function StudentSubjectDetailClient({
 
     setIsReplying(prev => ({ ...prev, [announcementId]: false }))
     if (!res.success) {
-      alert("Error sending reply: " + res.error)
+      showToast("Error sending reply: " + res.error, "error")
       return
     }
 
     setReplyTextByAnnouncement(prev => ({ ...prev, [announcementId]: "" }))
+    showToast("Reply posted successfully!", "success")
     setLocalSubjectAnnouncements(prev =>
       prev.map((ann) =>
         ann.id === announcementId
@@ -219,7 +233,38 @@ export function StudentSubjectDetailClient({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300 relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+            toast.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
+              : toast.type === "error"
+              ? "bg-rose-50/95 border-rose-200 text-rose-900"
+              : "bg-indigo-50/95 border-indigo-200 text-indigo-900"
+          }`}>
+            <div className={`w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              toast.type === "success"
+                ? "bg-emerald-100 text-emerald-700"
+                : toast.type === "error"
+                ? "bg-rose-100 text-rose-700"
+                : "bg-indigo-100 text-indigo-700"
+            }`}>
+              <CheckCircle2 size={16} />
+            </div>
+            <div className="text-xs font-bold leading-snug">
+              {toast.message}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-lg hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors ml-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top Banner (Bright, airy layout) */}
       <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-sm relative overflow-hidden">
         {/* Soft, glowing vector backdrop */}
@@ -394,7 +439,7 @@ export function StudentSubjectDetailClient({
                           </div>
                         </div>
                         <div className="mt-4 text-[10px] font-semibold text-slate-500 flex items-center justify-between">
-                          <span>{item.due_date ? `Due ${formatDueDate(item.due_date)}` : "No due date"}</span>
+                          <span>{item.due_date ? `Due ${formatDueDate(item.due_date)}` : (item.created_at ? `Posted ${formatDueDate(item.created_at)}` : "Learning Resource")}</span>
                           <span className="text-[#6C63FF] font-bold">View Module</span>
                         </div>
                       </div>

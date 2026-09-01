@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import { StudentAssignmentSolveClient } from "./student-assignment-solve-client"
 
@@ -21,7 +22,9 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
 
   if (!user) redirect("/auth/login")
 
-  const { data: profile } = await supabase
+  const adminClient = createSupabaseAdminClient()
+
+  const { data: profile } = await adminClient
     .from("users")
     .select("id, name, role")
     .eq("id", user.id)
@@ -30,7 +33,7 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
   if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
 
   // 1. Fetch Assignment Info
-  const { data: assignment } = await supabase
+  const { data: assignment } = await adminClient
     .from("assignments")
     .select("*")
     .eq("id", assignmentId)
@@ -41,7 +44,7 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
   }
 
   // 2. Fetch Student's Submission for this assignment
-  const { data: submission } = await supabase
+  const { data: submission } = await adminClient
     .from("submissions")
     .select("*")
     .eq("assignment_id", assignmentId)

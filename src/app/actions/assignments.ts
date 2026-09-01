@@ -218,6 +218,7 @@ export async function submitAssignmentAction(data: {
     .eq("student_id", data.student_id)
     .maybeSingle()
 
+  let submissionId = existing?.id
   let error
   if (existing) {
     const { error: updateError } = await supabase
@@ -235,19 +236,24 @@ export async function submitAssignmentAction(data: {
       .eq("id", existing.id)
     error = updateError
   } else {
-    const { error: insertError } = await supabase.from("submissions").insert({
-      assignment_id: data.assignment_id,
-      student_id: data.student_id,
-      file_url: data.file_url,
-      quiz_answers: data.quiz_answers,
-      code_content: data.code_content,
-      language: data.language,
-      grade: data.grade,
-      feedback: data.feedback,
-      status: data.status,
-      submitted_at: new Date().toISOString(),
-    })
+    const { data: inserted, error: insertError } = await supabase
+      .from("submissions")
+      .insert({
+        assignment_id: data.assignment_id,
+        student_id: data.student_id,
+        file_url: data.file_url,
+        quiz_answers: data.quiz_answers,
+        code_content: data.code_content,
+        language: data.language,
+        grade: data.grade,
+        feedback: data.feedback,
+        status: data.status,
+        submitted_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single()
     error = insertError
+    if (inserted?.id) submissionId = inserted.id
   }
 
   if (error) {
@@ -292,7 +298,7 @@ export async function submitAssignmentAction(data: {
 
   revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)
   revalidatePath(`/dashboard/student/subjects/${data.subject_id}`)
-  return { success: true }
+  return { success: true, submissionId }
 }
 
 // ---------------------------------------------------------------------------

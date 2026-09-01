@@ -198,7 +198,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
     if (item.name === "Placements") {
       return enabledFeatures.includes("placements")
     }
-    if (item.name === "Report Card") {
+    if (item.name === "Report Card" || item.name === "Grades") {
       return enabledFeatures.includes("report_cards")
     }
     if (item.name === "Intake Cohorts") {
