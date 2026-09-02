@@ -1,7 +1,10 @@
 "use client"
 
 import React, { useState } from "react"
-import { CalendarDays, Clock3, MapPin, Grid, List, Calendar } from "lucide-react"
+import { CalendarDays, Clock3, MapPin, Grid, List, Calendar, Video, Printer, ExternalLink } from "lucide-react"
+import AcademicEventsBanner from "@/modules/timetable/components/academic-events-banner"
+import TimetablePrintModal from "@/modules/timetable/components/timetable-print-modal"
+import { AcademicEvent, Slot } from "@/modules/timetable/types/timetable.types"
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const PERIOD_LABELS: Record<number, string> = {
@@ -12,12 +15,35 @@ const PERIOD_LABELS: Record<number, string> = {
   5: "2:00 – 3:00",
 }
 
+const COLORS: Record<string, { bg: string; border: string; text: string; sub: string }> = {
+  DAA:       { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#3b82f6" },
+  DCN:       { bg: "#ede9fe", border: "#ddd6fe", text: "#3b0764", sub: "#7c3aed" },
+  WT:        { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
+  TOC:       { bg: "#ffedd5", border: "#fed7aa", text: "#7c2d12", sub: "#ea580c" },
+  "OE I":    { bg: "#d1fae5", border: "#a7f3d0", text: "#064e3b", sub: "#10b981" },
+  "P&T":     { bg: "#fce7f3", border: "#fbcfe8", text: "#831843", sub: "#ec4899" },
+  TDPCL:     { bg: "#ccfbf1", border: "#99f6e4", text: "#134e4a", sub: "#14b8a6" },
+  BSBHRM613: { bg: "#ede9fe", border: "#c4b5fd", text: "#3730a3", sub: "#6366f1" },
+  BSBLDR811: { bg: "#e0e7ff", border: "#c7d2fe", text: "#1e1b4b", sub: "#4f46e5" },
+  TAELED803: { bg: "#ccfbf1", border: "#99f6e4", text: "#115e59", sub: "#0d9488" },
+  BSBHRM611: { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
+  BSBINS603: { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#2563eb" },
+  BSBLDR601: { bg: "#ffedd5", border: "#fed7aa", text: "#7c2d12", sub: "#ea580c" },
+  BSBLDR812: { bg: "#fce7f3", border: "#fbcfe8", text: "#831843", sub: "#db2777" },
+  BSBSTR801: { bg: "#d1fae5", border: "#a7f3d0", text: "#064e3b", sub: "#059669" },
+}
+const DEFAULT_CARD = { bg: "#f8fafc", border: "#e2e8f0", text: "#0f172a", sub: "#64748b" }
+
 interface TimetableSlot {
   id?: string
   day: string
   period: number
   subject_id: string
   faculty_id: string
+  room?: string | null
+  delivery_mode?: string | null
+  meeting_link?: string | null
+  notes?: string | null
   week_id?: string | null
 }
 
@@ -35,25 +61,40 @@ interface WeekInfo {
 }
 
 interface StudentTimetableClientProps {
+  studentName?: string
+  sectionName?: string
+  programName?: string
   timetableRows: TimetableSlot[]
   subjectMap: Record<string, SubjectInfo>
   facultyMap: Record<string, string>
   periodTimings?: Array<{ id: string; label: string; time: string }>
   weeks?: WeekInfo[]
+  academicEvents?: AcademicEvent[]
   multiWeekEnabled?: boolean
 }
 
 export default function StudentTimetableClient({
+  studentName = "Student",
+  sectionName = "Section A",
+  programName = "Graduate Diploma of Management",
   timetableRows,
   subjectMap,
   facultyMap,
-  periodTimings,
+  periodTimings = [
+    { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
+    { id: "P2", label: "Period 2", time: "9:45 – 10:45" },
+    { id: "P3", label: "Period 3", time: "11:00 – 12:00" },
+    { id: "P4", label: "Period 4", time: "12:00 – 1:00" },
+    { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
+  ],
   weeks = [],
+  academicEvents = [],
   multiWeekEnabled = false,
 }: StudentTimetableClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
 
-  // Auto-select current week or week 1 if multi-week is enabled
+  // Auto-select current week or week 1
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(() => {
     if (!multiWeekEnabled || weeks.length === 0) return null
     const today = new Date().toISOString().split("T")[0]
@@ -64,7 +105,7 @@ export default function StudentTimetableClient({
   // Filter timetable rows for current week or static template
   const activeRows = multiWeekEnabled && weeks.length > 0
     ? timetableRows.filter((r) => r.week_id === selectedWeekId)
-    : timetableRows.filter((r) => !r.week_id) // Type 1 static timetable
+    : timetableRows.filter((r) => !r.week_id)
 
   const activeWeek = weeks.find((w) => w.id === selectedWeekId)
 
@@ -80,7 +121,7 @@ export default function StudentTimetableClient({
 
   const finalPeriodLabels = Object.keys(periodLabelsMap).length > 0 ? periodLabelsMap : PERIOD_LABELS
 
-  // Prepare list format grouped by day
+  // List format grouped by day
   const timetableByDay = DAY_ORDER.map((day) => ({
     day,
     slots: activeRows
@@ -88,19 +129,46 @@ export default function StudentTimetableClient({
       .map((slot) => {
         const subject = subjectMap[slot.subject_id]
         return {
+          id: slot.id,
           period: slot.period,
           subject: subject?.code ?? "Class",
-          subjectName: subject?.name ?? "Subject pending",
-          faculty: facultyMap[slot.faculty_id] ?? "Faculty advisor pending",
+          subjectName: subject?.name ?? "Unit Name Pending",
+          faculty: facultyMap[slot.faculty_id] ?? "Assigned Faculty",
+          room: slot.room || null,
+          deliveryMode: slot.delivery_mode || "ON_CAMPUS",
+          meetingLink: slot.meeting_link || null,
           time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
         }
       })
       .sort((a, b) => a.period - b.period),
   })).filter((dayEntry) => dayEntry.slots.length > 0)
 
-  // Determine periods dynamically (default min 5)
+  // Determine periods dynamically
   const maxPeriod = Math.max(5, ...activeRows.map((r) => r.period))
   const periods = Array.from({ length: maxPeriod }, (_, i) => i + 1)
+
+  // Generic Slot[] for print modal
+  const genericSlots: Slot[] = activeRows.map((r) => {
+    const subject = subjectMap[r.subject_id]
+    return {
+      id: r.id,
+      day: r.day,
+      period: `P${r.period}`,
+      faculty_id: null,
+      faculty_name: facultyMap[r.faculty_id] || "Faculty",
+      room: r.room || null,
+      delivery_mode: r.delivery_mode || "ON_CAMPUS",
+      meeting_link: r.meeting_link || null,
+      subject: {
+        id: r.subject_id,
+        code: subject?.code || "Unit",
+        name: subject?.name || "Unit",
+        semester: 1,
+        institution_id: "",
+        program_id: null,
+      },
+    }
+  })
 
   function formatDate(d: string) {
     if (!d) return ""
@@ -117,88 +185,100 @@ export default function StudentTimetableClient({
   }
 
   return (
-    <div className="max-w-6xl w-full mx-auto space-y-6 text-left">
-      {/* Header Bar */}
+    <div className="max-w-6xl w-full mx-auto space-y-6 text-left font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">Weekly schedule</p>
+            <p className="text-[11px] font-extrabold text-[#6C63FF] uppercase tracking-wider">
+              Student Class Schedule
+            </p>
             {multiWeekEnabled && (
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 uppercase tracking-wide">
                 Live Weekly
               </span>
             )}
           </div>
-          <h1 className="text-2xl font-black text-slate-900 mt-1 tracking-tight">Your Timetable</h1>
-          <p className="text-xs text-slate-500 font-semibold mt-1">
-            Pulling live class slot schedules assigned to your section.
+          <h1 className="text-2xl font-black text-slate-900 mt-1 tracking-tight">
+            Your Course Timetable
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            {programName} · {sectionName} · Pulling live session dates, locations, and video class links.
           </p>
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-center">
+          {/* Print / Export Button */}
+          <button
+            onClick={() => setIsPrintModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-xs"
+          >
+            <Printer size={14} className="text-[#6C63FF]" /> Export & Print
+          </button>
+
           {/* View Toggle button */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
             <button
               onClick={() => setViewMode("grid")}
-              className={`flex items-center gap-1.5 px-4.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === "grid"
-                  ? "bg-white text-indigo-700 shadow-sm border border-slate-200/50"
+                  ? "bg-white text-[#6C63FF] shadow-xs border border-slate-200/50"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              <Grid size={13} />
-              Grid View
+              <Grid size={13} /> Grid
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-4.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 viewMode === "list"
-                  ? "bg-white text-indigo-700 shadow-sm border border-slate-200/50"
+                  ? "bg-white text-[#6C63FF] shadow-xs border border-slate-200/50"
                   : "text-slate-500 hover:text-slate-800"
               }`}
             >
-              <List size={13} />
-              List View
+              <List size={13} /> List
             </button>
-          </div>
-
-          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-50 border border-cyan-150 text-cyan-750 text-xs font-bold shadow-sm">
-            <CalendarDays size={15} />
-            {activeRows.length} classes
           </div>
         </div>
       </div>
 
+      {/* Academic Events / Holidays Banner */}
+      <AcademicEventsBanner
+        events={academicEvents}
+        activeWeekStartDate={activeWeek?.start_date}
+        activeWeekEndDate={activeWeek?.end_date}
+      />
+
       {/* Week Selector Carousel if Multi-Week Enabled */}
       {multiWeekEnabled && weeks.length > 0 && (
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Calendar size={15} className="text-indigo-600" />
-              <span className="text-xs font-bold text-slate-800">Select Academic Week:</span>
+              <Calendar size={16} className="text-[#6C63FF]" />
+              <span className="text-xs font-bold text-slate-800">Academic Week:</span>
             </div>
             {activeWeek && (
-              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+              <span className="text-xs font-bold text-[#6C63FF] bg-purple-50 px-3 py-1 rounded-full border border-purple-100">
                 {formatDate(activeWeek.start_date)} – {formatDate(activeWeek.end_date)}
               </span>
             )}
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {weeks.map((w) => {
               const isSelected = selectedWeekId === w.id
               return (
                 <button
                   key={w.id}
                   onClick={() => setSelectedWeekId(w.id)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-xl text-left transition-all border ${
+                  className={`shrink-0 px-4 py-2.5 rounded-2xl text-left transition-all ${
                     isSelected
-                      ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
-                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? "bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] text-white shadow-sm ring-2 ring-[#6C63FF]/30"
+                      : "bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100"
                   }`}
                 >
                   <div className="text-xs font-extrabold">{w.title || `Week ${w.week_number}`}</div>
-                  <div className={`text-[10px] mt-0.5 ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
+                  <div className={`text-[10px] mt-0.5 ${isSelected ? "text-purple-100" : "text-slate-400"}`}>
                     {formatDate(w.start_date)} – {formatDate(w.end_date)}
                   </div>
                 </button>
@@ -208,105 +288,155 @@ export default function StudentTimetableClient({
         </div>
       )}
 
+      {/* Content Rendering: Grid View or List View */}
       {activeRows.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center text-slate-400 text-xs font-bold">
+        <div className="bg-white border border-slate-100 rounded-3xl p-12 text-center text-slate-500 text-sm">
           {multiWeekEnabled && weeks.length > 0
-            ? "No class schedules assigned for this specific week."
-            : "No class schedules have been assigned to your section yet."}
+            ? "No class sessions scheduled for this specific week."
+            : "No timetable slots found for your section."}
         </div>
       ) : viewMode === "grid" ? (
-        /* Grid Format View */
-        <div className="overflow-x-auto bg-white border border-slate-200 rounded-3xl shadow-sm p-6">
-          <div className="min-w-[850px]">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-slate-150 bg-slate-50/50">
-                  <th className="p-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider w-[120px]">Day</th>
-                  {periods.map((p) => (
-                    <th key={p} className="p-4 text-center text-xs font-bold text-slate-500 border-l border-slate-100">
-                      <span className="block font-extrabold text-slate-800">Period {p}</span>
-                      <span className="block text-[9px] text-slate-400 font-sans font-semibold mt-1">
-                        {finalPeriodLabels[p] || "TBD"}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {DAY_ORDER.map((day) => {
-                  const daySlotsCount = activeRows.filter((r) => r.day === day).length
-                  return (
-                    <tr key={day} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 align-middle">
-                        <span className="text-xs font-bold text-slate-800">{day}</span>
-                        {daySlotsCount > 0 && (
-                          <span className="block text-[9px] text-slate-400 font-semibold mt-0.5">
-                            {daySlotsCount} class{daySlotsCount === 1 ? "" : "es"}
-                          </span>
-                        )}
-                      </td>
-                      {periods.map((p) => {
-                        const slot = activeRows.find(
-                          (r) => r.day === day && r.period === p
-                        )
-                        if (!slot) {
-                          return (
-                            <td key={p} className="p-4 text-center text-slate-300 font-sans text-xs border-l border-slate-100 align-middle">
-                              —
-                            </td>
-                          )
-                        }
-                        const subject = subjectMap[slot.subject_id]
-                        const facultyName = facultyMap[slot.faculty_id] ?? "Faculty pending"
-                        return (
-                          <td key={p} className="p-4 border-l border-slate-100 align-middle bg-indigo-50/15">
-                            <div className="space-y-1 text-center">
-                              <div className="text-[11px] font-black text-indigo-700">
-                                {subject?.code ?? "Class"}
-                              </div>
-                              <div className="text-[10px] font-bold text-slate-800 leading-tight">
-                                {subject?.name ?? "Subject pending"}
-                              </div>
-                              <div className="text-[9px] font-semibold text-slate-400">
-                                {facultyName}
-                              </div>
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs overflow-x-auto">
+          <table className="w-full border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <th className="pb-3 w-28">Day / Period</th>
+                {periods.map((p) => (
+                  <th key={p} className="pb-3 px-2 text-center min-w-[140px]">
+                    <div className="text-slate-700 font-extrabold text-xs">Period {p}</div>
+                    <div className="text-[10px] text-slate-400 font-normal">
+                      {finalPeriodLabels[p] ?? `Period ${p}`}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {DAY_ORDER.map((day) => (
+                <tr key={day} className="hover:bg-slate-50/50 transition">
+                  <td className="py-4 font-bold text-slate-800 text-xs align-top">
+                    {day}
+                  </td>
+                  {periods.map((p) => {
+                    const row = activeRows.find((r) => r.day === day && r.period === p)
+                    const subject = row ? subjectMap[row.subject_id] : null
+                    const faculty = row ? facultyMap[row.faculty_id] : null
+                    const c = COLORS[subject?.code ?? ""] ?? DEFAULT_CARD
+
+                    if (!row || !subject) {
+                      return (
+                        <td key={p} className="p-2 align-middle text-center text-slate-200">
+                          <div className="h-18 rounded-xl border border-dashed border-slate-200/60 bg-slate-50/40 flex items-center justify-center">
+                            <span className="text-[11px] text-slate-300">—</span>
+                          </div>
+                        </td>
+                      )
+                    }
+
+                    const isOnline = row.delivery_mode === "ONLINE"
+                    const isHybrid = row.delivery_mode === "HYBRID"
+
+                    return (
+                      <td key={p} className="p-1.5 align-top">
+                        <div
+                          style={{ backgroundColor: c.bg, borderColor: c.border }}
+                          className="p-3 rounded-2xl border shadow-2xs flex flex-col justify-between min-h-[86px] transition hover:shadow-sm"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span style={{ color: c.text }} className="font-extrabold text-xs">
+                                {subject.code}
+                              </span>
                             </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                            <p style={{ color: c.sub }} className="text-[10px] font-semibold truncate mt-0.5">
+                              {faculty || "Faculty"}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] font-bold">
+                            {row.room && (
+                              <span className="bg-white/90 text-slate-700 px-1.5 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
+                                <MapPin size={8} /> {row.room}
+                              </span>
+                            )}
+                            {isOnline && (
+                              <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                                <Video size={8} /> Online
+                              </span>
+                            )}
+                            {row.meeting_link && (
+                              <a
+                                href={row.meeting_link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="bg-[#6C63FF] text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 hover:opacity-90 transition"
+                              >
+                                Join <ExternalLink size={7} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        /* List Format View */
-        <div className="grid gap-6 md:grid-cols-2">
-          {timetableByDay.map((dayEntry) => (
-            <div key={dayEntry.day} className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="font-extrabold text-slate-800 text-sm">{dayEntry.day}</h3>
-                <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-0.5 rounded-full">
-                  {dayEntry.slots.length} Classes
+        /* List View */
+        <div className="space-y-4">
+          {timetableByDay.map(({ day, slots }) => (
+            <div key={day} className="bg-white border border-slate-100 rounded-3xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 className="font-extrabold text-slate-800 text-sm">{day}</h3>
+                <span className="text-xs font-semibold text-slate-400">
+                  {slots.length} {slots.length === 1 ? "Class" : "Classes"}
                 </span>
               </div>
-              <div className="grid gap-3">
-                {dayEntry.slots.map((slot) => (
-                  <div key={`${dayEntry.day}-${slot.period}`} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border border-slate-100 rounded-2xl p-4 bg-slate-50/50 hover:border-indigo-100 transition-all">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                        <Clock3 size={16} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {slots.map((slot) => (
+                  <div
+                    key={slot.id || `${slot.period}-${slot.subject}`}
+                    className="p-4 rounded-2xl border border-slate-200 bg-slate-50 flex flex-col justify-between gap-2"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-slate-900 text-xs">{slot.subject}</span>
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-200/60 px-2 py-0.5 rounded-md">
+                          Period {slot.period}
+                        </span>
                       </div>
-                      <div>
-                        <div className="text-xs font-extrabold text-slate-800">{slot.subject} · {slot.subjectName}</div>
-                        <div className="text-[10px] text-slate-400 font-semibold mt-0.5">{slot.time}</div>
-                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium mt-1 truncate">
+                        {slot.subjectName}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                      <MapPin size={14} className="text-slate-450" />
-                      <span>{slot.faculty}</span>
+
+                    <div className="text-[10px] text-slate-500 space-y-1 pt-2 border-t border-slate-200/60">
+                      <div className="flex items-center gap-1.5">
+                        <Clock3 size={11} className="text-slate-400" />
+                        <span>{slot.time}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin size={11} className="text-slate-400" />
+                        <span>{slot.room}</span>
+                        {slot.deliveryMode === "ONLINE" && (
+                          <span className="bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded text-[9px] font-bold">
+                            Online
+                          </span>
+                        )}
+                      </div>
+                      {slot.meetingLink && (
+                        <a
+                          href={slot.meetingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-[#6C63FF] hover:underline"
+                        >
+                          <Video size={11} /> Join Online Class <ExternalLink size={9} />
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -315,6 +445,18 @@ export default function StudentTimetableClient({
           ))}
         </div>
       )}
+
+      {/* Timetable Print Modal */}
+      <TimetablePrintModal
+        open={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        institutionName="SkillArc Institute of Management"
+        programName={programName}
+        sectionName={sectionName}
+        week={activeWeek}
+        slots={genericSlots}
+        periods={periodTimings}
+      />
     </div>
   )
 }

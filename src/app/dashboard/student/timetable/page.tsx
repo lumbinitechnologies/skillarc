@@ -15,7 +15,7 @@ export default async function StudentTimetablePage() {
 
   const { data: userProfile } = await supabase
     .from("users")
-    .select("id, role, institution_id, organization_id")
+    .select("id, role, institution_id, organization_id, name")
     .eq("id", user.id)
     .single()
 
@@ -23,11 +23,13 @@ export default async function StudentTimetablePage() {
 
   const { data: studentData } = await supabase
     .from("students")
-    .select("id, section_id")
+    .select("id, section_id, sections(name, program:program_id(name))")
     .eq("id", user.id)
     .single()
 
   const profile = { ...userProfile, ...studentData }
+  const sectionName = (studentData as any)?.sections?.name || "Your Section"
+  const programName = (studentData as any)?.sections?.program?.name || "Enrolled Qualification"
 
   // Check organization features for multi_week_timetable
   let multiWeekEnabled = false
@@ -52,10 +54,21 @@ export default async function StudentTimetablePage() {
     weeks = weeksData ?? []
   }
 
+  // Fetch academic calendar events / holidays
+  let academicEvents: any[] = []
+  if (profile.institution_id) {
+    const { data: eventsData } = await supabase
+      .from("academic_calendar_events")
+      .select("*")
+      .eq("institution_id", profile.institution_id)
+      .order("start_date", { ascending: true })
+    academicEvents = eventsData ?? []
+  }
+
   const { data: timetableRows = [] } = profile.section_id
     ? await supabase
         .from("timetable_slots")
-        .select("id, day, period, subject_id, faculty_id, week_id")
+        .select("id, day, period, subject_id, faculty_id, room, delivery_mode, meeting_link, notes, week_id")
         .eq("institution_id", profile.institution_id)
         .eq("section_id", profile.section_id)
         .order("day")
@@ -87,15 +100,25 @@ export default async function StudentTimetablePage() {
     .eq("institution_id", profile.institution_id)
     .maybeSingle()
 
-  const periodTimings = settings?.period_timings as Array<{ id: string; label: string; time: string }> || []
+  const periodTimings = settings?.period_timings as Array<{ id: string; label: string; time: string }> || [
+    { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
+    { id: "P2", label: "Period 2", time: "9:45 – 10:45" },
+    { id: "P3", label: "Period 3", time: "11:00 – 12:00" },
+    { id: "P4", label: "Period 4", time: "12:00 – 1:00" },
+    { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
+  ]
 
   return (
     <StudentTimetableClient
+      studentName={profile.name || "Student"}
+      sectionName={sectionName}
+      programName={programName}
       timetableRows={timetableRows ?? []}
       subjectMap={subjectObj}
       facultyMap={facultyObj}
       periodTimings={periodTimings}
       weeks={weeks}
+      academicEvents={academicEvents}
       multiWeekEnabled={multiWeekEnabled}
     />
   )
