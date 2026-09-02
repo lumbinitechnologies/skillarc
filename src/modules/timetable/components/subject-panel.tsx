@@ -5,42 +5,57 @@ import { useSearchParams } from "next/navigation"
 import { useTimetable } from "../context/timetable-context"
 import SubjectCard from "./subject-card"
 import { supabase } from "@/lib/supabase"
+import { BookOpen, Search } from "lucide-react"
 
-const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
+const font = "'Plus Jakarta Sans', 'Inter', sans-serif"
 
 export default function SubjectPanel() {
   const { subjects, loading } = useTimetable()
   const searchParams = useSearchParams()
   const [query, setQuery] = useState("")
   const [sectionName, setSectionName] = useState<string | null>(null)
+  const [programName, setProgramName] = useState<string | null>(null)
 
   const semester = searchParams.get("semester")
   const sectionId = searchParams.get("section")
+  const programId = searchParams.get("program")
 
   useEffect(() => {
     let active = true
 
-    async function loadSectionName() {
-      if (!sectionId) {
-        if (active) setSectionName(null)
-        return
+    async function loadMeta() {
+      if (sectionId) {
+        const { data } = await supabase
+          .from("sections")
+          .select("name, program:program_id(name)")
+          .eq("id", sectionId)
+          .maybeSingle()
+
+        if (active && data) {
+          setSectionName(data.name ?? null)
+          if ((data as any).program?.name) {
+            setProgramName((data as any).program.name)
+          }
+        }
+      } else if (programId) {
+        const { data } = await supabase
+          .from("programs")
+          .select("name")
+          .eq("id", programId)
+          .maybeSingle()
+
+        if (active && data) {
+          setProgramName(data.name ?? null)
+        }
       }
-
-      const { data } = await supabase
-        .from("sections")
-        .select("name")
-        .eq("id", sectionId)
-        .single()
-
-      if (active) setSectionName(data?.name ?? null)
     }
 
-    loadSectionName()
+    loadMeta()
 
     return () => {
       active = false
     }
-  }, [sectionId])
+  }, [sectionId, programId])
 
   const filtered = subjects.filter(
     (s) =>
@@ -48,47 +63,80 @@ export default function SubjectPanel() {
       s.name.toLowerCase().includes(query.toLowerCase())
   )
 
-  const subtitle = semester || sectionId
-    ? `${semester ? `Semester ${semester}` : "Semester"}${sectionName ? ` · Section ${sectionName}` : sectionId ? " · Section selected" : ""}`
-    : "Select a section"
+  const subtitle = [
+    programName,
+    semester ? `Sem ${semester}` : null,
+    sectionName ? `Sec ${sectionName}` : null,
+  ].filter(Boolean).join(" · ") || (semester ? `Semester ${semester}` : "Select a section")
 
   return (
-    <div style={{
-      backgroundColor: "#ffffff", borderRadius: 16,
-      border: "1px solid #f3f4f6", boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
-      display: "flex", flexDirection: "column", overflow: "hidden",
-      fontFamily: font, height: "100%",
-    }}>
+    <div
+      style={{
+        backgroundColor: "#ffffff",
+        borderRadius: 20,
+        border: "1px solid #e2e8f0",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        fontFamily: font,
+        height: "100%",
+      }}
+    >
       {/* Header */}
-      <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #f3f4f6" }}>
+      <div style={{ padding: "16px 18px 14px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#fafafa" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
           <div>
-            <p style={{ fontWeight: 700, fontSize: 13, color: "#111827" }}>Subjects</p>
-            <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{subtitle}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <BookOpen size={14} className="text-[#6C63FF]" />
+              <p style={{ fontWeight: 800, fontSize: 13, color: "#0f172a", margin: 0 }}>Units of Study</p>
+            </div>
+            <p style={{ fontSize: 11, color: "#64748b", marginTop: 3, fontWeight: 500 }} className="truncate max-w-[210px]">
+              {subtitle}
+            </p>
           </div>
-          <span style={{
-            fontSize: 10, fontWeight: 600, color: "#6b7280",
-            backgroundColor: "#f3f4f6", padding: "2px 8px", borderRadius: 999,
-          }}>
-            {filtered.length}
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: "#6C63FF",
+              backgroundColor: "#ede9fe",
+              padding: "2px 8px",
+              borderRadius: 999,
+            }}
+          >
+            {filtered.length} {filtered.length === 1 ? "Unit" : "Units"}
           </span>
         </div>
 
         <div style={{ position: "relative" }}>
-          <svg style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, color: "#9ca3af" }}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Search
+            size={13}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#94a3b8",
+            }}
+          />
           <input
             type="text"
-            placeholder="Search subjects…"
+            placeholder="Search qualification units…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
-              width: "100%", paddingLeft: 28, paddingRight: 10,
-              paddingTop: 6, paddingBottom: 6,
-              fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb",
-              backgroundColor: "#f9fafb", color: "#374151", outline: "none",
+              width: "100%",
+              paddingLeft: 30,
+              paddingRight: 10,
+              paddingTop: 7,
+              paddingBottom: 7,
+              fontSize: 11,
+              borderRadius: 10,
+              border: "1px solid #cbd5e1",
+              backgroundColor: "#ffffff",
+              color: "#1e293b",
+              outline: "none",
               boxSizing: "border-box",
             }}
           />
@@ -98,16 +146,29 @@ export default function SubjectPanel() {
       {/* List */}
       <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
         {loading ? (
-          <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 24 }}>Loading…</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 8 }}>
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                style={{
+                  height: 72,
+                  borderRadius: 12,
+                  backgroundColor: "#f1f5f9",
+                  animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                }}
+              />
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
-          <p style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 24 }}>No subjects found</p>
+          <div style={{ textAlign: "center", padding: "36px 16px", color: "#64748b", fontSize: 12 }}>
+            <p style={{ fontWeight: 700, margin: 0, color: "#334155" }}>No units found</p>
+            <p style={{ fontSize: 11, marginTop: 4, color: "#94a3b8" }}>
+              {query ? "Try another search term" : "No subjects configured for this program & semester"}
+            </p>
+          </div>
         ) : (
-          filtered.map((s) => <SubjectCard key={s.id} subject={s} />)
+          filtered.map((subject) => <SubjectCard key={subject.id} subject={subject} />)
         )}
-      </div>
-
-      <div style={{ padding: "10px 16px", borderTop: "1px solid #f3f4f6", display: "flex", alignItems: "center", gap: 6 }}>
-        <p style={{ fontSize: 10, color: "#9ca3af" }}>Drag cards into the grid</p>
       </div>
     </div>
   )

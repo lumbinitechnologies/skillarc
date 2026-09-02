@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
           "report_cards",
           "intake_cohorts",
           "interventions",
-          "multi_week_timetable"
+          "multi_week_timetable",
+          "admissions_workflow",
+          "direct_onboarding"
         ]
       })
     }

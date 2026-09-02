@@ -1,8 +1,10 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
-import { Subject, Faculty, Slot, TimetableWeek } from "../types/timetable.types"
+import { Subject, Faculty, Slot, TimetableWeek, AcademicEvent, TimetableClash } from "../types/timetable.types"
 import { timetableService } from "../services/timetableService"
+import { clashDetectionService } from "../services/clashDetectionService"
+import { supabase } from "@/lib/supabase"
 
 interface TimetableContextType {
   loading: boolean
@@ -14,17 +16,26 @@ interface TimetableContextType {
   institutionId: string | null
   sectionId: string | null
   semester: string | null
+  programId: string | null
   weeks: TimetableWeek[]
   selectedWeek: TimetableWeek | null
+  academicEvents: AcademicEvent[]
+  clashes: TimetableClash[]
+  isScanningClashes: boolean
   setSelectedWeek: (week: TimetableWeek | null) => void
   reloadWeeks: () => Promise<void>
   reloadSlots: () => Promise<void>
+  scanClashes: () => Promise<void>
   assignSubject: (
     day: string,
     period: string,
     subject: Subject | undefined,
     facultyId?: string | null,
-    facultyName?: string | null
+    facultyName?: string | null,
+    room?: string | null,
+    deliveryMode?: string | null,
+    meetingLink?: string | null,
+    notes?: string | null
   ) => void
   clearSlot: (day: string, period: string) => Promise<void>
 }
@@ -33,6 +44,7 @@ interface TimetableProviderProps {
   children: React.ReactNode
   semester?: string | null
   sectionId?: string | null
+  programId?: string | null
 }
 
 const TimetableContext = createContext<TimetableContextType | null>(null)
@@ -41,6 +53,7 @@ export function TimetableProvider({
   children,
   semester,
   sectionId,
+  programId,
 }: TimetableProviderProps) {
   const [loading, setLoading] = useState(true)
   const [multiWeekEnabled, setMultiWeekEnabled] = useState(false)
@@ -50,6 +63,9 @@ export function TimetableProvider({
   const [slots, setSlots] = useState<Slot[]>([])
   const [weeks, setWeeks] = useState<TimetableWeek[]>([])
   const [selectedWeek, setSelectedWeek] = useState<TimetableWeek | null>(null)
+  const [academicEvents, setAcademicEvents] = useState<AcademicEvent[]>([])
+  const [clashes, setClashes] = useState<TimetableClash[]>([])
+  const [isScanningClashes, setIsScanningClashes] = useState(false)
 
   const [periods, setPeriods] = useState<Array<{ id: string; label: string; time: string }>>([
     { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
@@ -59,7 +75,7 @@ export function TimetableProvider({
     { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
   ])
 
-  // Fetch organization features on mount
+  // Check organization features
   useEffect(() => {
     async function checkFeatures() {
       try {
@@ -76,7 +92,24 @@ export function TimetableProvider({
     checkFeatures()
   }, [])
 
-  // Load weeks when section or semester changes
+  // Scan clashes across institution
+  const scanClashes = useCallback(async () => {
+    if (!institutionId) return
+    setIsScanningClashes(true)
+    try {
+      const detected = await clashDetectionService.scanInstitutionClashes(
+        institutionId,
+        selectedWeek?.id ?? null
+      )
+      setClashes(detected)
+    } catch (err) {
+      console.error("Clash scan error:", err)
+    } finally {
+      setIsScanningClashes(false)
+    }
+  }, [institutionId, selectedWeek?.id])
+
+  // Load weeks
   const reloadWeeks = useCallback(async () => {
     if (!institutionId || !sectionId || !semester) return
     try {
@@ -89,7 +122,6 @@ export function TimetableProvider({
       if (fetchedWeeks.length > 0 && !selectedWeek) {
         setSelectedWeek(fetchedWeeks[0])
       } else if (fetchedWeeks.length > 0 && selectedWeek) {
-        // Refresh selectedWeek with latest updated week from fetched list
         const updated = fetchedWeeks.find((w) => w.id === selectedWeek.id)
         if (updated) setSelectedWeek(updated)
         else setSelectedWeek(fetchedWeeks[0])
@@ -101,7 +133,7 @@ export function TimetableProvider({
     }
   }, [institutionId, sectionId, semester, selectedWeek])
 
-  // Load initial timetable data
+  // Load initial timetable data scoped to selected Program / Department
   useEffect(() => {
     async function load() {
       try {
@@ -113,133 +145,209 @@ export function TimetableProvider({
           setSlots([])
           setWeeks([])
           setSelectedWeek(null)
+          setAcademicEvents([])
+          setClashes([])
           return
         }
 
         const id = await timetableService.getCurrentInstitutionId()
         setInstitutionId(id)
 
-        const programId = new URLSearchParams(window.location.search).get("program")
+        // Resolve target program from query or section
+        let targetProgramId = programId || null
+        if (!targetProgramId && sectionId) {
+          const { data: secData } = await supabase
+            .from("sections")
+            .select("program_id")
+            .eq("id", sectionId)
+            .maybeSingle()
+          if (secData?.program_id) {
+            targetProgramId = secData.program_id
+          }
+        }
 
-        const [subjectsData, facultyData, settingsRes, weeksData] = await Promise.all([
-          timetableService.getSubjects(id, Number(semester), programId),
-          timetableService.getFaculty(id, programId),
-          fetch("/api/timetable/settings").then((r) => (r.ok ? r.json() : null)).catch(() => null),
-          timetableService.getWeeks(id, sectionId, Number(semester)),
+        const [subs, facs, events] = await Promise.all([
+          timetableService.getSubjects(id, Number(semester), targetProgramId),
+          timetableService.getFaculty(id, targetProgramId),
+          timetableService.getAcademicCalendarEvents(id),
         ])
 
-        setSubjects(subjectsData)
-        setFaculty(facultyData)
-        setWeeks(weeksData)
+        setSubjects(subs)
+        setFaculty(facs)
+        setAcademicEvents(events)
 
-        let initialWeek: TimetableWeek | null = null
-        if (weeksData.length > 0) {
-          // Auto-select week matching today's date, or week 1
-          const today = new Date().toISOString().split("T")[0]
-          const currentWeek = weeksData.find((w) => w.start_date <= today && today <= w.end_date)
-          initialWeek = currentWeek || weeksData[0]
-          setSelectedWeek(initialWeek)
-        } else {
-          setSelectedWeek(null)
+        // Load multi-week metadata
+        const fetchedWeeks = await timetableService.getWeeks(id, sectionId, Number(semester))
+        setWeeks(fetchedWeeks)
+        if (fetchedWeeks.length > 0) {
+          setSelectedWeek(fetchedWeeks[0])
         }
 
-        if (settingsRes && settingsRes.period_timings && settingsRes.period_timings.length > 0) {
-          setPeriods(settingsRes.period_timings)
-        }
+        // Load slots for initial view
+        const initialWeekId = fetchedWeeks.length > 0 ? fetchedWeeks[0].id : null
+        const initialSlots = await timetableService.getSlots(id, sectionId, Number(semester), initialWeekId)
+        setSlots(initialSlots)
 
-        // Fetch slots for initial week or static timetable
-        const targetWeekId = multiWeekEnabled && initialWeek ? initialWeek.id : null
-        const slotsData = await timetableService.getSlots(id, sectionId, Number(semester), targetWeekId)
-        setSlots(slotsData)
-      } catch (err) {
-        console.error(err)
+        // Initial clash scan
+        const detected = await clashDetectionService.scanInstitutionClashes(id, initialWeekId)
+        setClashes(detected)
+      } catch (err: any) {
+        console.error("Failed to load timetable data:", err?.message || err)
       } finally {
         setLoading(false)
       }
     }
 
     load()
-  }, [semester, sectionId, multiWeekEnabled])
+  }, [semester, sectionId, programId])
 
-  // Reload slots when selectedWeek changes (for multi-week mode)
-  useEffect(() => {
-    async function loadWeekSlots() {
-      if (!institutionId || !sectionId || !semester) return
-      if (!multiWeekEnabled) return
-
-      try {
-        const targetWeekId = selectedWeek ? selectedWeek.id : null
-        const slotsData = await timetableService.getSlots(
-          institutionId,
-          sectionId,
-          Number(semester),
-          targetWeekId
-        )
-        setSlots(slotsData)
-      } catch (err) {
-        console.error("Failed to load slots for selected week:", err)
-      }
-    }
-
-    loadWeekSlots()
-  }, [selectedWeek, institutionId, sectionId, semester, multiWeekEnabled])
-
+  // Reload slots when selectedWeek changes
   const reloadSlots = useCallback(async () => {
     if (!institutionId || !sectionId || !semester) return
-    const targetWeekId = multiWeekEnabled && selectedWeek ? selectedWeek.id : null
-    const slotsData = await timetableService.getSlots(
-      institutionId,
-      sectionId,
-      Number(semester),
-      targetWeekId
-    )
-    setSlots(slotsData)
-  }, [institutionId, sectionId, semester, multiWeekEnabled, selectedWeek])
+    try {
+      setLoading(true)
+      const weekId = selectedWeek ? selectedWeek.id : null
+      const fetchedSlots = await timetableService.getSlots(
+        institutionId,
+        sectionId,
+        Number(semester),
+        weekId
+      )
+      setSlots(fetchedSlots)
+      await scanClashes()
+    } catch (err) {
+      console.error("Failed to reload slots for week:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [institutionId, sectionId, semester, selectedWeek, scanClashes])
 
-  function assignSubject(
-    day: string,
-    period: string,
-    subject: Subject | undefined,
-    facultyId?: string | null,
-    facultyName?: string | null
-  ) {
-    setSlots((prev) => {
-      const nextSlots = prev.filter((s) => !(s.day === day && s.period === period))
+  useEffect(() => {
+    if (!loading && institutionId && sectionId && semester) {
+      reloadSlots()
+    }
+  }, [selectedWeek]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (!subject) return nextSlots
+  // Assign Subject to Slot
+  const assignSubject = useCallback(
+    (
+      day: string,
+      period: string,
+      subject: Subject | undefined,
+      facultyId?: string | null,
+      facultyName?: string | null,
+      room?: string | null,
+      deliveryMode?: string | null,
+      meetingLink?: string | null,
+      notes?: string | null
+    ) => {
+      setSlots((prev) => {
+        const remaining = prev.filter((s) => !(s.day === day && s.period === period))
+        if (!subject) return remaining
 
-      return [
-        ...nextSlots,
-        {
+        const newSlot: Slot = {
           day,
           period,
           faculty_id: facultyId ?? null,
-          faculty_name: facultyName ?? subject.faculty_name ?? null,
-          week_id: multiWeekEnabled && selectedWeek ? selectedWeek.id : null,
+          faculty_name: facultyName ?? null,
+          room: room ?? null,
+          delivery_mode: deliveryMode ?? "ON_CAMPUS",
+          meeting_link: meetingLink ?? null,
+          notes: notes ?? null,
+          week_id: selectedWeek ? selectedWeek.id : null,
           subject: {
             ...subject,
-            faculty_id: facultyId ?? undefined,
-            faculty_name: facultyName ?? subject.faculty_name ?? undefined,
+            faculty_name: facultyName ?? null,
           },
-        },
-      ]
-    })
-  }
+        }
 
-  async function clearSlot(day: string, period: string) {
-    assignSubject(day, period, undefined)
+        return [...remaining, newSlot]
+      })
 
-    if (!institutionId || !sectionId || !semester) return
+      // Persist to Supabase
+      if (institutionId && sectionId && semester && subject) {
+        const periodNum = parseInt(period.replace("P", ""), 10)
+        timetableService
+          .saveSlot({
+            institutionId,
+            sectionId,
+            semester: Number(semester),
+            day,
+            period: periodNum,
+            subjectId: subject.id,
+            facultyId: facultyId || null,
+            room: room ?? null,
+            deliveryMode: deliveryMode ?? "ON_CAMPUS",
+            meetingLink: meetingLink ?? null,
+            notes: notes ?? null,
+            weekId: selectedWeek ? selectedWeek.id : null,
+          })
+          .then(() => {
+            try {
+              timetableService.dispatchTimetableChangeNotifications({
+                institutionId,
+                sectionId,
+                subjectCode: subject.code,
+                subjectName: subject.name,
+                day,
+                periodLabel: period,
+                room,
+                deliveryMode,
+                action: "ASSIGNED",
+              })
+            } catch (notifyErr) {
+              console.warn("Notification dispatch warning:", notifyErr)
+            }
+            scanClashes()
+          })
+          .catch((err: any) => {
+            const detail = err?.message || err?.details || (typeof err === "object" ? JSON.stringify(err) : String(err))
+            console.error("Failed to save slot to database:", detail)
+          })
+      }
+    },
+    [institutionId, sectionId, semester, selectedWeek, scanClashes]
+  )
 
-    await timetableService.deleteSlot({
-      institutionId,
-      sectionId,
-      semester: Number(semester),
-      day,
-      period: Number(period.replace("P", "")),
-      weekId: multiWeekEnabled && selectedWeek ? selectedWeek.id : null,
-    })
-  }
+  // Clear Slot
+  const clearSlot = useCallback(
+    async (day: string, period: string) => {
+      const removedSlot = slots.find((s) => s.day === day && s.period === period)
+
+      setSlots((prev) => prev.filter((s) => !(s.day === day && s.period === period)))
+
+      if (institutionId && sectionId && semester) {
+        const periodNum = parseInt(period.replace("P", ""), 10)
+        try {
+          await timetableService.deleteSlot({
+            institutionId,
+            sectionId,
+            semester: Number(semester),
+            day,
+            period: periodNum,
+            weekId: selectedWeek ? selectedWeek.id : null,
+          })
+
+          if (removedSlot?.subject) {
+            timetableService.dispatchTimetableChangeNotifications({
+              institutionId,
+              sectionId,
+              subjectCode: removedSlot.subject.code,
+              subjectName: removedSlot.subject.name,
+              day,
+              periodLabel: period,
+              action: "CANCELLED",
+            })
+          }
+
+          scanClashes()
+        } catch (err) {
+          console.error("Failed to delete slot from database:", err)
+        }
+      }
+    },
+    [institutionId, sectionId, semester, selectedWeek, slots, scanClashes]
+  )
 
   return (
     <TimetableContext.Provider
@@ -253,11 +361,16 @@ export function TimetableProvider({
         institutionId,
         sectionId: sectionId ?? null,
         semester: semester ?? null,
+        programId: programId ?? null,
         weeks,
         selectedWeek,
+        academicEvents,
+        clashes,
+        isScanningClashes,
         setSelectedWeek,
         reloadWeeks,
         reloadSlots,
+        scanClashes,
         assignSubject,
         clearSlot,
       }}
@@ -268,7 +381,9 @@ export function TimetableProvider({
 }
 
 export function useTimetable() {
-  const ctx = useContext(TimetableContext)
-  if (!ctx) throw new Error("useTimetable must be used inside TimetableProvider")
-  return ctx
+  const context = useContext(TimetableContext)
+  if (!context) {
+    throw new Error("useTimetable must be used within a TimetableProvider")
+  }
+  return context
 }
