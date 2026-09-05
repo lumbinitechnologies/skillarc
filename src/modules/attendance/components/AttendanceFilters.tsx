@@ -1,4 +1,4 @@
-import { BookOpen, CalendarDays, Clock3, GraduationCap, Users } from "lucide-react"
+import { BookOpen, CalendarDays, Clock3, GraduationCap, Layers, Users } from "lucide-react"
 
 interface Props {
   programs: any[]
@@ -18,6 +18,7 @@ interface Props {
   setSelectedSubject: (v: string) => void
   setSelectedPeriod: (v: string) => void
   setSelectedDate: (v: string) => void
+  isCompact?: boolean
 }
 
 export default function AttendanceFilters({
@@ -38,6 +39,7 @@ export default function AttendanceFilters({
   setSelectedSubject,
   setSelectedPeriod,
   setSelectedDate,
+  isCompact = false,
 }: Props) {
   const filteredSections = sections.filter((s: any) => {
     if (!selectedSemester) return false
@@ -55,114 +57,114 @@ export default function AttendanceFilters({
   })
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-900">Class setup</h2>
-        <p className="mt-1 text-sm text-slate-500">Choose the class details before marking attendance.</p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 1. Program */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <GraduationCap size={13} className="text-[#6C63FF]" /> Program
+        </label>
+        <select
+          value={selectedProgram}
+          onChange={(e) => setSelectedProgram(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
+        >
+          <option value="">All programs</option>
+          {programs.map((p: any) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="space-y-4">
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <GraduationCap size={16} /> Program
-          </span>
-          <select
-            value={selectedProgram}
-            onChange={(e) => setSelectedProgram(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          >
-            <option value="">All programs</option>
-            {programs.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+      {/* 2. Semester */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <Layers size={13} className="text-[#6C63FF]" /> Semester
         </label>
+        <select
+          value={selectedSemester}
+          onChange={(e) => setSelectedSemester(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
+        >
+          <option value="">Select semester</option>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+            <option key={sem} value={String(sem)}>
+              Semester {sem}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Users size={16} /> Semester
-          </span>
-          <select
-            value={selectedSemester}
-            onChange={(e) => setSelectedSemester(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          >
-            <option value="">Select semester</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
-              <option key={sem} value={String(sem)}>
-                Semester {sem}
-              </option>
-            ))}
-          </select>
+      {/* 3. Section */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <Users size={13} className="text-[#6C63FF]" /> Section
         </label>
+        <select
+          value={selectedSection}
+          onChange={(e) => setSelectedSection(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
+        >
+          <option value="">Select section</option>
+          {filteredSections.map((s: any) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Users size={16} /> Section
-          </span>
-          <select
-            value={selectedSection}
-            onChange={(e) => setSelectedSection(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          >
-            <option value="">Select section</option>
-            {filteredSections.map((s: any) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+      {/* 4. Subject */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <BookOpen size={13} className="text-[#6C63FF]" /> Subject
         </label>
+        <select
+          value={selectedSubject}
+          onChange={(e) => setSelectedSubject(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs truncate"
+        >
+          <option value="">Select subject</option>
+          {filteredSubjects.map((s: any) => (
+            <option key={s.id} value={s.id}>
+              {s.code ? `${s.code} • ` : ""}{s.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <BookOpen size={16} /> Subject
-          </span>
-          <select
-            value={selectedSubject}
-            onChange={(e) => setSelectedSubject(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          >
-            <option value="">Select subject</option>
-            {filteredSubjects.map((s: any) => (
-              <option key={s.id} value={s.id}>
-                {s.code} • {s.name}
-              </option>
-            ))}
-          </select>
+      {/* 5. Period */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <Clock3 size={13} className="text-[#6C63FF]" /> Period
         </label>
+        <select
+          value={selectedPeriod}
+          onChange={(e) => setSelectedPeriod(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
+        >
+          <option value="">Select period</option>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
+            <option key={p} value={String(p)}>
+              Period {p}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <Clock3 size={16} /> Period
-          </span>
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          >
-            <option value="">Select period</option>
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
-              <option key={p} value={String(p)}>
-                Period {p}
-              </option>
-            ))}
-          </select>
+      {/* 6. Date */}
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          <CalendarDays size={13} className="text-[#6C63FF]" /> Date
         </label>
-
-        <label className="block space-y-2">
-          <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <CalendarDays size={16} /> Date
-          </span>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
-          />
-        </label>
+        <input
+          type="date"
+          value={selectedDate}
+          max={new Date().toISOString().slice(0, 10)}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
+        />
       </div>
     </div>
   )

@@ -13,7 +13,8 @@ import {
   ChevronUp,
   Star,
   ArrowLeft,
-  Calendar
+  Calendar,
+  Printer
 } from "lucide-react"
 
 import {
@@ -186,16 +187,26 @@ export function StudentReportCardClient({
 
   return (
     <div className="max-w-5xl w-full mx-auto p-8 space-y-8 font-sans text-left">
-      {/* Back button */}
-      <div>
-        <Link href="/dashboard/student/subjects" className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-sm font-semibold mb-3 transition-colors">
-          <ArrowLeft size={16} /> Back to subjects
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Award className="w-7 h-7 text-indigo-600" />
-          My Grades
-        </h1>
-        <p className="text-gray-500 mt-1 text-sm font-medium">Track your academic progress across all enrolled subjects.</p>
+      {/* Header & Print Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <Link href="/dashboard/student/subjects" className="text-slate-400 hover:text-slate-700 flex items-center gap-1 text-sm font-semibold mb-3 transition-colors print:hidden">
+            <ArrowLeft size={16} /> Back to subjects
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Award className="w-7 h-7 text-indigo-600" />
+            My Grades & Academic Report Card
+          </h1>
+          <p className="text-gray-500 mt-1 text-sm font-medium">Track your academic progress across all enrolled subjects.</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="print:hidden self-start sm:self-auto flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-slate-800 transition active:scale-[0.98]"
+        >
+          <Printer size={15} /> Print Report Card / PDF
+        </button>
       </div>
 
       {/* Cards */}

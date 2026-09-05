@@ -19,7 +19,7 @@ export async function GET() {
     const { actor, admin } = auth
     const { data, error } = await admin
       .from("admissions_applications")
-      .select("*, programs(id,name), intakes(id,name,start_date,end_date), admission_documents(id,document_name,file_url,status), offer_letters(id,version,status,course_fees,term_start,rendered_html,agreement_document_id)")
+      .select("*, programs(id,name), intakes(id,name,start_date,end_date), admission_documents(id,document_name,file_url,status), offer_letters(id,version,status,course_fees,term_start,rendered_html,agreement_document_id,signed_at,acceptance_reference)")
       .eq("institution_id", actor.institution_id)
       .order("created_at", { ascending: false })
     if (error) throw error

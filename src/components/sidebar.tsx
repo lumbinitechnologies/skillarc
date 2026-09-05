@@ -233,9 +233,9 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
   return (
     <>
       <div className="sidebar-backdrop" onClick={() => document.body.classList.remove("sidebar-open")} />
-      <aside className="sidebar-mobile sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white px-6 py-8 shadow-[0_4px_12px_rgba(0,0,0,0.05)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden self-start">
-        <div className="mb-7 mt-1 flex items-center justify-center px-2">
-          <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-28 w-28 object-contain drop-shadow-[0_0_18px_rgba(229,125,55,0.28)] transition-transform duration-200 hover:scale-[1.03]" />
+      <aside className="sidebar-mobile sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-white px-6 py-6 shadow-[0_4px_12px_rgba(0,0,0,0.05)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden self-start">
+        <div className="mb-6 mt-1 flex items-center justify-center px-1">
+          <img src="/skillarc_logo.svg" alt="SkillArc Logo" className="h-24 w-auto max-w-[240px] object-contain drop-shadow-[0_0_18px_rgba(229,125,55,0.25)] transition-transform duration-200 hover:scale-[1.02]" />
         </div>
 
         {profile && (

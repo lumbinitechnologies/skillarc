@@ -12,14 +12,22 @@ export async function GET() {
   const access = await auth()
   if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   const { actor, admin } = access
-  const [programs, intakes, fees, templates, students] = await Promise.all([
+  const [programs, intakes, fees, templates, students, inst] = await Promise.all([
     admin.from("programs").select("id,name").eq("institution_id", actor.institution_id),
     admin.from("intakes").select("id,name,start_date,end_date").eq("institution_id", actor.institution_id).order("start_date"),
     admin.from("admission_fee_configurations").select("*").eq("institution_id", actor.institution_id).eq("is_active", true),
     admin.from("admission_templates").select("id,document_type,version,name,body,merge_fields,is_active").eq("institution_id", actor.institution_id).eq("is_active", true),
     admin.from("students").select("id,users!inner(name,email,phone)").eq("institution_id", actor.institution_id).order("id").limit(200),
+    admin.from("institutions").select("id,name,domain").eq("id", actor.institution_id).maybeSingle(),
   ])
-  return NextResponse.json({ programs: programs.data ?? [], intakes: intakes.data ?? [], fees: fees.data ?? [], templates: templates.data ?? [], students: students.data ?? [] })
+  return NextResponse.json({
+    institution: inst.data ?? null,
+    programs: programs.data ?? [],
+    intakes: intakes.data ?? [],
+    fees: fees.data ?? [],
+    templates: templates.data ?? [],
+    students: students.data ?? [],
+  })
 }
 
 export async function POST(request: NextRequest) {

@@ -10,6 +10,8 @@ interface SaveAttendancePayload {
   attendanceDate: string
   period: number
   records: Record<string, string>
+  notes?: Record<string, string>
+  sessionNotes?: string
 }
 
 function formatStatus(status: string) {
@@ -20,8 +22,29 @@ function formatStatus(status: string) {
       return "Absent"
     case "LATE":
       return "Late"
+    case "APPROVED_ABSENCE":
+    case "APPROVED ABSENCE":
+    case "EXCUSED":
+      return "Approved Absence"
     default:
       return status ?? ""
+  }
+}
+
+function normalizeStatus(status: string) {
+  switch (status?.toUpperCase()) {
+    case "PRESENT":
+      return "PRESENT"
+    case "ABSENT":
+      return "ABSENT"
+    case "LATE":
+      return "LATE"
+    case "APPROVED ABSENCE":
+    case "APPROVED_ABSENCE":
+    case "EXCUSED":
+      return "APPROVED_ABSENCE"
+    default:
+      return "PRESENT"
   }
 }
 
@@ -45,11 +68,10 @@ export async function getExistingAttendanceAction({
     return { success: false, error: "Please select a valid period before loading attendance.", exists: false }
   }
 
+  // 1. Look for any existing session for this section, date, and period (cross-faculty check)
   const { data: existingSession, error: sessionLookupError } = await supabase
     .from("attendance_sessions")
-    .select("id")
-    .eq("subject_id", subjectId)
-    .eq("faculty_id", user.id)
+    .select("id, faculty_id, subject_id, session_notes")
     .eq("section_id", sectionId)
     .eq("attendance_date", attendanceDate)
     .eq("period", normalizedPeriod)
@@ -60,23 +82,95 @@ export async function getExistingAttendanceAction({
   }
 
   if (!existingSession?.id) {
-    return { success: true, exists: false, records: {} }
+    return { success: true, exists: false, records: {}, notes: {}, sessionNotes: "", isLoggedByOther: false }
+  }
+
+  // Fetch faculty and subject info if marked
+  const isLoggedByOther = Boolean(existingSession.faculty_id && existingSession.faculty_id !== user.id)
+  let loggedByFacultyName = "Another Faculty"
+  let loggedByFacultyEmail = ""
+  let loggedSubjectName = ""
+  let loggedSubjectCode = ""
+
+  if (existingSession.faculty_id) {
+    const { data: facultyUser } = await supabase
+      .from("users")
+      .select("name, email")
+      .eq("id", existingSession.faculty_id)
+      .maybeSingle()
+    if (facultyUser) {
+      loggedByFacultyName = facultyUser.name || "Another Faculty"
+      loggedByFacultyEmail = facultyUser.email || ""
+    }
+  }
+
+  if (existingSession.subject_id) {
+    const { data: subjectData } = await supabase
+      .from("subjects")
+      .select("name, code")
+      .eq("id", existingSession.subject_id)
+      .maybeSingle()
+    if (subjectData) {
+      loggedSubjectName = subjectData.name || ""
+      loggedSubjectCode = subjectData.code || ""
+    }
   }
 
   const { data: existingRecords = [], error: recordsError } = await supabase
     .from("attendance_records")
-    .select("student_id, status")
+    .select("student_id, status, notes")
     .eq("session_id", existingSession.id)
 
   if (recordsError) {
-    return { success: false, error: recordsError.message, exists: false }
+    // Fallback if notes column not present
+    const { data: fallbackRecords = [] } = await supabase
+      .from("attendance_records")
+      .select("student_id, status")
+      .eq("session_id", existingSession.id)
+
+    const records = Object.fromEntries(
+      (fallbackRecords as Array<{ student_id: string; status: string }>).map((row) => [row.student_id, formatStatus(row.status)])
+    )
+    return {
+      success: true,
+      exists: true,
+      sessionId: existingSession.id,
+      records,
+      notes: {},
+      sessionNotes: existingSession.session_notes || "",
+      isLoggedByOther,
+      loggedByFacultyId: existingSession.faculty_id,
+      loggedByFacultyName,
+      loggedByFacultyEmail,
+      loggedSubjectId: existingSession.subject_id,
+      loggedSubjectName,
+      loggedSubjectCode,
+    }
   }
 
   const records = Object.fromEntries(
-    (existingRecords as Array<{ student_id: string; status: string }>).map((row) => [row.student_id, formatStatus(row.status)])
+    (existingRecords as Array<{ student_id: string; status: string; notes?: string }>).map((row) => [row.student_id, formatStatus(row.status)])
   )
 
-  return { success: true, exists: true, sessionId: existingSession.id, records }
+  const notes = Object.fromEntries(
+    (existingRecords as Array<{ student_id: string; status: string; notes?: string }>).filter(r => r.notes).map((row) => [row.student_id, row.notes || ""])
+  )
+
+  return {
+    success: true,
+    exists: true,
+    sessionId: existingSession.id,
+    records,
+    notes,
+    sessionNotes: existingSession.session_notes || "",
+    isLoggedByOther,
+    loggedByFacultyId: existingSession.faculty_id,
+    loggedByFacultyName,
+    loggedByFacultyEmail,
+    loggedSubjectId: existingSession.subject_id,
+    loggedSubjectName,
+    loggedSubjectCode,
+  }
 }
 
 export async function saveAttendanceAction({
@@ -85,6 +179,8 @@ export async function saveAttendanceAction({
   attendanceDate,
   period,
   records,
+  notes = {},
+  sessionNotes = "",
 }: SaveAttendancePayload) {
   const supabase = await createSupabaseServerClient()
   const {
@@ -101,8 +197,13 @@ export async function saveAttendanceAction({
     .eq("id", user.id)
     .single()
 
-  if (!profile || profile.role !== "FACULTY") {
-    return { success: false, error: "Only faculty users can save attendance." }
+  const todayIso = new Date().toISOString().slice(0, 10)
+  if (attendanceDate > todayIso) {
+    return { success: false, error: "Attendance cannot be logged for future dates. Please select today or an earlier date." }
+  }
+
+  if (!profile || !["FACULTY", "HOD", "PROGRAM_HEAD", "TEACHER", "SUPER_ADMIN", "INSTITUTION_ADMIN"].includes(profile.role)) {
+    return { success: false, error: "Only authorized faculty users can save attendance." }
   }
 
   const normalizedPeriod = Number.parseInt(String(period), 10)
@@ -110,11 +211,10 @@ export async function saveAttendanceAction({
     return { success: false, error: "Please select a valid period before saving." }
   }
 
+  // Look for any existing session for this (section_id, attendance_date, period)
   const { data: existingSession, error: sessionLookupError } = await supabase
     .from("attendance_sessions")
-    .select("id")
-    .eq("subject_id", subjectId)
-    .eq("faculty_id", user.id)
+    .select("id, faculty_id, subject_id")
     .eq("section_id", sectionId)
     .eq("attendance_date", attendanceDate)
     .eq("period", normalizedPeriod)
@@ -127,7 +227,8 @@ export async function saveAttendanceAction({
   let sessionId = existingSession?.id
 
   if (!sessionId) {
-    const { data: insertedSession, error: insertSessionError } = await supabase
+    // Attempt with session_notes
+    let insertResult = await supabase
       .from("attendance_sessions")
       .insert({
         subject_id: subjectId,
@@ -135,15 +236,55 @@ export async function saveAttendanceAction({
         section_id: sectionId,
         attendance_date: attendanceDate,
         period: normalizedPeriod,
+        session_notes: sessionNotes || null,
       })
       .select("id")
       .single()
 
-    if (insertSessionError || !insertedSession?.id) {
-      return { success: false, error: insertSessionError?.message ?? "Failed to create attendance session." }
+    if (insertResult.error) {
+      // Fallback without session_notes if column not yet applied
+      insertResult = await supabase
+        .from("attendance_sessions")
+        .insert({
+          subject_id: subjectId,
+          faculty_id: user.id,
+          section_id: sectionId,
+          attendance_date: attendanceDate,
+          period: normalizedPeriod,
+        })
+        .select("id")
+        .single()
     }
 
-    sessionId = insertedSession.id
+    if (insertResult.error || !insertResult.data?.id) {
+      return { success: false, error: insertResult.error?.message ?? "Failed to create attendance session." }
+    }
+
+    sessionId = insertResult.data.id
+  } else {
+    // Update existing session attributes (supports overwriting)
+    try {
+      await supabase
+        .from("attendance_sessions")
+        .update({
+          faculty_id: user.id,
+          subject_id: subjectId,
+          session_notes: sessionNotes || null,
+        })
+        .eq("id", sessionId)
+    } catch {
+      try {
+        await supabase
+          .from("attendance_sessions")
+          .update({
+            faculty_id: user.id,
+            subject_id: subjectId,
+          })
+          .eq("id", sessionId)
+      } catch {
+        // ignore if fails
+      }
+    }
   }
 
   const { error: deleteError } = await supabase
@@ -155,18 +296,33 @@ export async function saveAttendanceAction({
     return { success: false, error: deleteError.message }
   }
 
-  const attendanceRows = Object.entries(records).map(([studentId, status]) => ({
+  // Tier 1: Insert with status and notes
+  const fullAttendanceRows = Object.entries(records).map(([studentId, status]) => ({
     session_id: sessionId,
     student_id: studentId,
-    status: status.toUpperCase(),
+    status: normalizeStatus(status),
+    notes: notes[studentId] || null,
   }))
 
   const { error: insertError } = await supabase
     .from("attendance_records")
-    .insert(attendanceRows)
+    .insert(fullAttendanceRows)
 
   if (insertError) {
-    return { success: false, error: insertError.message }
+    // Tier 2 Fallback: Insert without notes column
+    const fallbackRows = Object.entries(records).map(([studentId, status]) => ({
+      session_id: sessionId,
+      student_id: studentId,
+      status: normalizeStatus(status),
+    }))
+
+    const { error: fallbackErr } = await supabase
+      .from("attendance_records")
+      .insert(fallbackRows)
+
+    if (fallbackErr) {
+      return { success: false, error: fallbackErr.message }
+    }
   }
 
   revalidatePath("/dashboard/faculty/attendance")
@@ -211,12 +367,13 @@ export async function getAdminAttendanceAction({
     return { success: false, error: "Please select a valid period before loading attendance.", exists: false }
   }
 
-  // Query session regardless of faculty_id!
+  // Query session regardless of faculty_id
   const { data: existingSession, error: sessionLookupError } = await adminClient
     .from("attendance_sessions")
     .select(`
       id,
       faculty_id,
+      session_notes,
       faculty:faculty_id(name)
     `)
     .eq("subject_id", subjectId)
@@ -230,25 +387,39 @@ export async function getAdminAttendanceAction({
   }
 
   if (!existingSession?.id) {
-    return { success: true, exists: false, records: {} }
+    return { success: true, exists: false, records: {}, notes: {}, sessionNotes: "" }
   }
 
   const { data: existingRecords = [], error: recordsError } = await adminClient
     .from("attendance_records")
-    .select("student_id, status")
+    .select("student_id, status, notes")
     .eq("session_id", existingSession.id)
 
   if (recordsError) {
-    return { success: false, error: recordsError.message, exists: false }
+    // Fallback if notes column not present
+    const { data: fallbackRecords = [] } = await adminClient
+      .from("attendance_records")
+      .select("student_id, status")
+      .eq("session_id", existingSession.id)
+
+    const records = Object.fromEntries(
+      (fallbackRecords as Array<{ student_id: string; status: string }>).map((row) => [row.student_id, formatStatus(row.status)])
+    )
+    const facultyName = (existingSession as any).faculty?.name || "Unknown Faculty"
+    return { success: true, exists: true, sessionId: existingSession.id, records, notes: {}, sessionNotes: existingSession.session_notes || "", facultyName }
   }
 
   const records = Object.fromEntries(
-    (existingRecords as Array<{ student_id: string; status: string }>).map((row) => [row.student_id, formatStatus(row.status)])
+    (existingRecords as Array<{ student_id: string; status: string; notes?: string }>).map((row) => [row.student_id, formatStatus(row.status)])
+  )
+
+  const notes = Object.fromEntries(
+    (existingRecords as Array<{ student_id: string; status: string; notes?: string }>).filter(r => r.notes).map((row) => [row.student_id, row.notes || ""])
   )
 
   const facultyName = (existingSession as any).faculty?.name || "Unknown Faculty"
 
-  return { success: true, exists: true, sessionId: existingSession.id, records, facultyName }
+  return { success: true, exists: true, sessionId: existingSession.id, records, notes, sessionNotes: existingSession.session_notes || "", facultyName }
 }
 
 export async function getAdminAttendanceAnalyticsAction({
@@ -288,6 +459,7 @@ export async function getAdminAttendanceAnalyticsAction({
       presentRecordsCount: 0,
       absentRecordsCount: 0,
       lateRecordsCount: 0,
+      approvedAbsenceRecordsCount: 0,
     }
   }
 
@@ -304,9 +476,10 @@ export async function getAdminAttendanceAnalyticsAction({
   const present = records.filter(r => r.status === "PRESENT").length
   const absent = records.filter(r => r.status === "ABSENT").length
   const late = records.filter(r => r.status === "LATE").length
+  const approved = records.filter(r => r.status === "APPROVED_ABSENCE" || r.status === "EXCUSED").length
   const total = records.length
 
-  const averageAttendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0
+  const averageAttendanceRate = total > 0 ? Math.round(((present + late + approved) / total) * 100) : 0
 
   return {
     success: true,
@@ -315,6 +488,7 @@ export async function getAdminAttendanceAnalyticsAction({
     presentRecordsCount: present,
     absentRecordsCount: absent,
     lateRecordsCount: late,
+    approvedAbsenceRecordsCount: approved,
   }
 }
 
@@ -324,6 +498,8 @@ export async function saveAdminAttendanceAction({
   attendanceDate,
   period,
   records,
+  notes = {},
+  sessionNotes = "",
 }: SaveAttendancePayload) {
   const adminClient = createSupabaseAdminClient()
   const supabase = await createSupabaseServerClient()
@@ -344,6 +520,11 @@ export async function saveAdminAttendanceAction({
 
   if (profile?.role !== "INSTITUTION_ADMIN") {
     return { success: false, error: "Access denied." }
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10)
+  if (attendanceDate > todayIso) {
+    return { success: false, error: "Attendance cannot be logged for future dates. Please select today or an earlier date." }
   }
 
   const normalizedPeriod = Number.parseInt(String(period), 10)
@@ -368,7 +549,7 @@ export async function saveAdminAttendanceAction({
   let sessionId = existingSession?.id
 
   if (!sessionId) {
-    const { data: insertedSession, error: insertSessionError } = await adminClient
+    let insertResult = await adminClient
       .from("attendance_sessions")
       .insert({
         subject_id: subjectId,
@@ -376,15 +557,39 @@ export async function saveAdminAttendanceAction({
         section_id: sectionId,
         attendance_date: attendanceDate,
         period: normalizedPeriod,
+        session_notes: sessionNotes || null,
       })
       .select("id")
       .single()
 
-    if (insertSessionError || !insertedSession?.id) {
-      return { success: false, error: insertSessionError?.message ?? "Failed to create attendance session." }
+    if (insertResult.error) {
+      insertResult = await adminClient
+        .from("attendance_sessions")
+        .insert({
+          subject_id: subjectId,
+          faculty_id: user.id,
+          section_id: sectionId,
+          attendance_date: attendanceDate,
+          period: normalizedPeriod,
+        })
+        .select("id")
+        .single()
     }
 
-    sessionId = insertedSession.id
+    if (insertResult.error || !insertResult.data?.id) {
+      return { success: false, error: insertResult.error?.message ?? "Failed to create attendance session." }
+    }
+
+    sessionId = insertResult.data.id
+  } else if (sessionNotes) {
+    try {
+      await adminClient
+        .from("attendance_sessions")
+        .update({ session_notes: sessionNotes })
+        .eq("id", sessionId)
+    } catch {
+      // Ignore if column not present yet
+    }
   }
 
   // Delete previous records for the session
@@ -397,23 +602,152 @@ export async function saveAdminAttendanceAction({
     return { success: false, error: deleteError.message }
   }
 
-  const attendanceRows = Object.entries(records).map(([studentId, status]) => ({
+  const fullAttendanceRows = Object.entries(records).map(([studentId, status]) => ({
     session_id: sessionId,
     student_id: studentId,
-    status: status.toUpperCase(),
+    status: normalizeStatus(status),
+    notes: notes[studentId] || null,
   }))
 
   const { error: insertError } = await adminClient
     .from("attendance_records")
-    .insert(attendanceRows)
+    .insert(fullAttendanceRows)
 
   if (insertError) {
-    return { success: false, error: insertError.message }
+    const fallbackRows = Object.entries(records).map(([studentId, status]) => ({
+      session_id: sessionId,
+      student_id: studentId,
+      status: normalizeStatus(status),
+    }))
+
+    const { error: fallbackErr } = await adminClient
+      .from("attendance_records")
+      .insert(fallbackRows)
+
+    if (fallbackErr) {
+      return { success: false, error: fallbackErr.message }
+    }
   }
 
   revalidatePath("/dashboard/institution-admin/attendance")
 
   return { success: true }
+}
+
+// ── Cumulative Student Attendance Calculation (For At-Risk < 80% Detection) ──
+export async function getStudentCumulativeAttendanceAction({
+  sectionId,
+  institutionId,
+}: {
+  sectionId?: string
+  institutionId: string
+}) {
+  const adminClient = createSupabaseAdminClient()
+
+  try {
+    let sessionQuery = adminClient
+      .from("attendance_sessions")
+      .select(`
+        id,
+        section_id,
+        attendance_records (
+          student_id,
+          status
+        )
+      `)
+
+    if (sectionId) {
+      sessionQuery = sessionQuery.eq("section_id", sectionId)
+    }
+
+    const { data: sessions, error } = await sessionQuery
+    if (error || !sessions) {
+      return { success: false, rates: {} }
+    }
+
+    const studentCounts: Record<string, { present: number; late: number; approved: number; absent: number; total: number }> = {}
+
+    for (const session of sessions) {
+      const records = (session.attendance_records as Array<{ student_id: string; status: string }>) || []
+      for (const rec of records) {
+        if (!studentCounts[rec.student_id]) {
+          studentCounts[rec.student_id] = { present: 0, late: 0, approved: 0, absent: 0, total: 0 }
+        }
+        studentCounts[rec.student_id].total += 1
+        const s = rec.status?.toUpperCase()
+        if (s === "PRESENT") studentCounts[rec.student_id].present += 1
+        else if (s === "LATE") studentCounts[rec.student_id].late += 1
+        else if (s === "APPROVED_ABSENCE" || s === "EXCUSED") studentCounts[rec.student_id].approved += 1
+        else if (s === "ABSENT") studentCounts[rec.student_id].absent += 1
+      }
+    }
+
+    const rates: Record<string, { rate: number; total: number; missed: number }> = {}
+    for (const [studentId, counts] of Object.entries(studentCounts)) {
+      const attended = counts.present + counts.late + counts.approved
+      const rate = counts.total > 0 ? Math.round((attended / counts.total) * 100) : 100
+      rates[studentId] = {
+        rate,
+        total: counts.total,
+        missed: counts.absent,
+      }
+    }
+
+    return { success: true, rates }
+  } catch (err: any) {
+    console.error("Failed to compute cumulative attendance:", err)
+    return { success: false, rates: {} }
+  }
+}
+
+// ── Save Attendance Warning Notice Letter ──
+export async function saveWarningLetterAction({
+  institutionId,
+  studentId,
+  warningLevel,
+  attendancePercentage,
+  totalSessions,
+  missedSessions,
+  interventionDate,
+  renderedHtml,
+  notes,
+}: {
+  institutionId: string
+  studentId: string
+  warningLevel: string
+  attendancePercentage: number
+  totalSessions: number
+  missedSessions: number
+  interventionDate: string
+  renderedHtml: string
+  notes?: string
+}) {
+  const adminClient = createSupabaseAdminClient()
+
+  try {
+    const { data, error } = await adminClient
+      .from("attendance_warning_letters")
+      .insert({
+        institution_id: institutionId,
+        student_id: studentId,
+        warning_level: warningLevel,
+        attendance_percentage: attendancePercentage,
+        total_sessions: totalSessions,
+        missed_sessions: missedSessions,
+        intervention_date: interventionDate || null,
+        rendered_letter_html: renderedHtml,
+        notes: notes || null,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return { success: true, warning: data }
+  } catch (err: any) {
+    console.error("Failed to save warning letter:", err)
+    return { success: false, error: err.message }
+  }
 }
 
 export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: string) {
@@ -455,10 +789,11 @@ export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: 
 
   // 3. Map into aggregated format
   const stats = sessions.map((s: any) => {
-    const records = s.attendance_records as Array<{ status: string }> || []
+    const records = (s.attendance_records as Array<{ status: string }>) || []
     const present = records.filter(r => r.status === "PRESENT").length
     const absent = records.filter(r => r.status === "ABSENT").length
     const late = records.filter(r => r.status === "LATE").length
+    const approved = records.filter(r => r.status === "APPROVED_ABSENCE" || r.status === "EXCUSED").length
     const total = records.length
     return {
       session_id: s.id,
@@ -469,6 +804,7 @@ export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: 
       present_count: present,
       absent_count: absent,
       late_count: late,
+      approved_count: approved,
       total_count: total,
     }
   })

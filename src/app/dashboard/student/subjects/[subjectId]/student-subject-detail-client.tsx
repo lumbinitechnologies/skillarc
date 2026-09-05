@@ -27,8 +27,10 @@ import {
   ClipboardList,
   FolderKanban,
   Star,
+  Printer,
   X
 } from "lucide-react"
+import StudentGradePrintModal from "@/modules/gradebook/components/StudentGradePrintModal"
 import { replyToAnnouncementAction } from "@/app/actions/announcements"
 import { supabase } from "@/lib/supabase"
 
@@ -72,6 +74,7 @@ export function StudentSubjectDetailClient({
   gradeEntries = [],
 }: StudentSubjectDetailClientProps) {
   const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "grades" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
+  const [isStudentGradePrintModalOpen, setIsStudentGradePrintModalOpen] = useState(false)
   const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<any[]>(subjectAnnouncements)
   const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
@@ -515,9 +518,18 @@ export function StudentSubjectDetailClient({
                   <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
                     <ClipboardList size={18} className="text-[#6C63FF]" /> Subject Gradebook
                   </h3>
-                  <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100/50 text-[#6C63FF] px-2.5 py-1 rounded-full font-['Space_Grotesk']">
-                    {gradeColumns.length} Columns
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsStudentGradePrintModalOpen(true)}
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm"
+                    >
+                      <Printer size={13} className="text-[#6C63FF]" /> Print Statement of Marks
+                    </button>
+                    <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100/50 text-[#6C63FF] px-2.5 py-1 rounded-full font-['Space_Grotesk']">
+                      {gradeColumns.length} Columns
+                    </span>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -955,6 +967,21 @@ export function StudentSubjectDetailClient({
           </div>
         )}
       </div>
+
+      {/* Student Statement of Marks Print Modal */}
+      <StudentGradePrintModal
+        isOpen={isStudentGradePrintModalOpen}
+        onClose={() => setIsStudentGradePrintModalOpen(false)}
+        studentName={studentName}
+        subjectName={subject.name}
+        subjectCode={subject.code}
+        instructorName={facultyName}
+        academicTerm="Academic Session 2026"
+        gradeColumns={gradeColumns}
+        gradeValueMap={gradeValueMap}
+        gradeEntries={gradeEntries}
+        gradeSummary={gradeSummary}
+      />
     </div>
   )
 }
