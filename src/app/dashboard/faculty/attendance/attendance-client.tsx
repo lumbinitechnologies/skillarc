@@ -1,11 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Save, Printer } from "lucide-react"
+import { Save, Printer, FileText, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react"
 import AttendanceFilters from "@/modules/attendance/components/AttendanceFilters"
 import AttendanceTable from "@/modules/attendance/components/AttendanceTable"
 import AttendancePrintModal from "@/modules/attendance/components/AttendancePrintModal"
-import { getExistingAttendanceAction, saveAttendanceAction } from "./actions"
+import AttendanceWarningModal from "@/modules/attendance/components/AttendanceWarningModal"
+import AttendanceOverwriteModal from "@/modules/attendance/components/AttendanceOverwriteModal"
+import {
+  getExistingAttendanceAction,
+  saveAttendanceAction,
+  getStudentCumulativeAttendanceAction,
+  saveWarningLetterAction,
+} from "./actions"
 
 interface Props {
   facultyId: string
@@ -33,9 +40,24 @@ export default function AttendanceClient({
     new Date().toISOString().slice(0, 10)
   )
   const [attendance, setAttendance] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [sessionNotes, setSessionNotes] = useState("")
+  const [studentCumulativeRates, setStudentCumulativeRates] = useState<
+    Record<string, { rate: number; total: number; missed: number }>
+  >({})
+  const [warningModalStudent, setWarningModalStudent] = useState<any | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
+  const [conflictInfo, setConflictInfo] = useState<{
+    isConflict: boolean
+    loggedByFacultyName: string
+    loggedByFacultyEmail?: string
+    loggedSubjectName?: string
+    loggedSubjectCode?: string
+    loggedSessionNotes?: string
+  } | null>(null)
+  const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false)
   const [isSetupCollapsed, setIsSetupCollapsed] = useState(false)
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
 
@@ -57,6 +79,7 @@ export default function AttendanceClient({
   const presentCount = Object.values(attendance).filter((value) => value === "Present").length
   const absentCount = Object.values(attendance).filter((value) => value === "Absent").length
   const lateCount = Object.values(attendance).filter((value) => value === "Late").length
+  const approvedAbsenceCount = Object.values(attendance).filter((value) => value === "Approved Absence").length
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -110,7 +133,10 @@ export default function AttendanceClient({
       if (!selectedSection || !selectedSubject || !selectedDate || !selectedPeriod) {
         if (isActive) {
           setAttendance({})
+          setNotes({})
+          setSessionNotes("")
           setSessionNotice(null)
+          setConflictInfo(null)
         }
         return
       }
@@ -119,7 +145,10 @@ export default function AttendanceClient({
       if (Number.isNaN(periodValue)) {
         if (isActive) {
           setAttendance({})
+          setNotes({})
+          setSessionNotes("")
           setSessionNotice(null)
+          setConflictInfo(null)
         }
         return
       }
@@ -135,10 +164,31 @@ export default function AttendanceClient({
 
       if (result.success && result.exists) {
         setAttendance(result.records ?? {})
-        setSessionNotice("Existing attendance found for this session. You can edit and save it again.")
+        setNotes(result.notes ?? {})
+        setSessionNotes(result.sessionNotes ?? "")
+
+        if (result.isLoggedByOther) {
+          setConflictInfo({
+            isConflict: true,
+            loggedByFacultyName: result.loggedByFacultyName || "Another Faculty",
+            loggedByFacultyEmail: result.loggedByFacultyEmail || "",
+            loggedSubjectName: result.loggedSubjectName || "",
+            loggedSubjectCode: result.loggedSubjectCode || "",
+            loggedSessionNotes: result.sessionNotes || "",
+          })
+          setSessionNotice(
+            `Attendance for this slot was originally recorded by ${result.loggedByFacultyName || "another faculty member"}${result.loggedSubjectCode ? ` (${result.loggedSubjectCode})` : ""}. Any changes you save will overwrite the existing session.`
+          )
+        } else {
+          setConflictInfo(null)
+          setSessionNotice("Existing attendance session loaded. You can edit and save changes.")
+        }
       } else {
         setAttendance({})
+        setNotes({})
+        setSessionNotes("")
         setSessionNotice(null)
+        setConflictInfo(null)
       }
     }
 
@@ -148,6 +198,26 @@ export default function AttendanceClient({
       isActive = false
     }
   }, [selectedDate, selectedPeriod, selectedSection, selectedSubject])
+
+  // Load cumulative student rates for section
+  useEffect(() => {
+    async function loadCumulative() {
+      if (!selectedSection && !institutionId) return
+      try {
+        const res = await getStudentCumulativeAttendanceAction({
+          sectionId: selectedSection || undefined,
+          institutionId,
+        })
+        if (res.success) {
+          setStudentCumulativeRates(res.rates || {})
+        }
+      } catch (err) {
+        console.error("Error loading cumulative student attendance:", err)
+      }
+    }
+
+    loadCumulative()
+  }, [selectedSection, institutionId])
 
   useEffect(() => {
     const semesterSubjects = subjects.filter(
@@ -178,17 +248,17 @@ export default function AttendanceClient({
     }))
   }
 
-  const handleSave = async () => {
-    if (!selectedSection || !selectedSubject || !selectedDate || !selectedPeriod) {
-      setFeedback("Please choose a section, subject, date and period first.")
-      return
-    }
+  const handleNoteChange = (studentId: string, note: string) => {
+    setNotes((prev) => ({
+      ...prev,
+      [studentId]: note,
+    }))
+  }
 
-    if (!Object.keys(attendance).length) {
-      setFeedback("Select at least one student status before saving.")
-      return
-    }
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const isFutureDate = selectedDate > todayIso
 
+  async function performSave() {
     setIsSaving(true)
     setFeedback(null)
 
@@ -200,156 +270,321 @@ export default function AttendanceClient({
       attendanceDate: selectedDate,
       period: Number.isNaN(periodValue) ? 0 : periodValue,
       records: attendance,
+      notes,
+      sessionNotes,
     })
 
     setIsSaving(false)
+    setIsOverwriteModalOpen(false)
 
     if (result.success) {
-      setFeedback("Attendance saved successfully.")
+      setConflictInfo(null)
+      setFeedback("Attendance records and session notes saved successfully.")
+      setSessionNotice("Attendance records saved successfully.")
     } else {
       setFeedback(result.error ?? "Unable to save attendance right now.")
     }
   }
 
+  async function handleSave() {
+    if (!selectedSection || !selectedSubject || !selectedDate || !selectedPeriod) {
+      setFeedback("Please select a valid class, subject, period, and date before saving.")
+      return
+    }
+
+    if (selectedDate > todayIso) {
+      setFeedback("Attendance cannot be recorded for future dates. Please select today or an earlier date.")
+      return
+    }
+
+    if (!Object.keys(attendance).length) {
+      setFeedback("Select at least one student status before saving.")
+      return
+    }
+
+    if (conflictInfo?.isConflict) {
+      setIsOverwriteModalOpen(true)
+      return
+    }
+
+    await performSave()
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-end md:justify-between">
+    <div className="space-y-6 font-sans">
+      {/* ── HEADER BANNER ── */}
+      <div className="flex flex-col gap-4 rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-slate-500">Faculty Attendance</p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-900">Attendance Center</h1>
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Mark attendance for your current class, review prior marks, and save the session in one place.
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-indigo-50 border border-indigo-200 px-3 py-0.5 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#6C63FF]">
+              Faculty Attendance Desk
+            </span>
+          </div>
+          <h1 className="mt-1.5 text-2xl sm:text-3xl font-extrabold text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
+            Attendance Center
+          </h1>
+          <p className="mt-1 max-w-2xl text-xs sm:text-sm text-slate-500">
+            Mark session-level attendance, record medical/leave exceptions, detect at-risk students, and print official roll sheets.
           </p>
         </div>
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-          <p className="text-sm text-emerald-700">Current session</p>
-          <p className="text-lg font-semibold text-emerald-900">{selectedSection ? "Ready to mark" : "Select a class"}</p>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-right">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Session Status</p>
+            <p className="text-sm font-black text-emerald-900 font-['Plus_Jakarta_Sans',sans-serif]">
+              {selectedSection ? "Ready to Mark" : "Select Class"}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6 items-start">
-        <div className="col-span-3 space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setIsSetupCollapsed((prev) => !prev)}
-              className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              <span>Class setup</span>
-              <span className="text-slate-500">{isSetupCollapsed ? "+" : "−"}</span>
-            </button>
-            {!isSetupCollapsed && (
-              <div className="mt-4">
-                <AttendanceFilters
-                  programs={programs}
-                  sections={sections}
-                  subjects={subjects}
-                  selectedProgram={selectedProgram}
-                  selectedSemester={selectedSemester}
-                  selectedSection={selectedSection}
-                  selectedSubject={selectedSubject}
-                  selectedPeriod={selectedPeriod}
-                  selectedDate={selectedDate}
-                  setSelectedProgram={setSelectedProgram}
-                  setSelectedSemester={setSelectedSemester}
-                  setSelectedSection={setSelectedSection}
-                  setSelectedSubject={setSelectedSubject}
-                  setSelectedPeriod={setSelectedPeriod}
-                  setSelectedDate={setSelectedDate}
-                />
-              </div>
-            )}
-            {isSetupCollapsed && (
-              <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                {selectedSection ? `${selectedSubject ? "Ready" : "Subject pending"} · ${selectedSection ? "Section selected" : "Section pending"}` : "Choose a class to start marking"}
-              </div>
+      {/* ── TOP CLASS & SESSION SELECTOR BAR ── */}
+      <div className="rounded-3xl border border-slate-200/80 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-800 font-['Plus_Jakarta_Sans',sans-serif]">
+              Class & Session Setup
+            </h2>
+            {selectedProgram && selectedSemester && selectedSection && (
+              <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
+                {sections.find((s) => s.id === selectedSection)?.name || "Section"} · {subjects.find((sub) => sub.id === selectedSubject)?.code || "Subject"}
+              </span>
             )}
           </div>
+          <button
+            type="button"
+            onClick={() => setIsSetupCollapsed((prev) => !prev)}
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+          >
+            {isSetupCollapsed ? "Edit Setup ▼" : "Collapse ▲"}
+          </button>
         </div>
 
-        <div className="col-span-6 space-y-4">
+        {!isSetupCollapsed && (
+          <AttendanceFilters
+            programs={programs}
+            sections={sections}
+            subjects={subjects}
+            selectedProgram={selectedProgram}
+            selectedSemester={selectedSemester}
+            selectedSection={selectedSection}
+            selectedSubject={selectedSubject}
+            selectedPeriod={selectedPeriod}
+            selectedDate={selectedDate}
+            setSelectedProgram={setSelectedProgram}
+            setSelectedSemester={setSelectedSemester}
+            setSelectedSection={setSelectedSection}
+            setSelectedSubject={setSelectedSubject}
+            setSelectedPeriod={setSelectedPeriod}
+            setSelectedDate={setSelectedDate}
+          />
+        )}
+      </div>
+
+      {/* ── CONFLICT WARNING BANNER (When marked by another faculty) ── */}
+      {conflictInfo?.isConflict && !isFutureDate && (
+        <div className="rounded-3xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-200">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
+              <ShieldAlert size={24} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-200/70 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                  Slot Conflict Detected
+                </span>
+                <span className="text-xs font-bold text-slate-800">
+                  Recorded by <strong className="text-indigo-700">{conflictInfo.loggedByFacultyName}</strong>
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Attendance for this period was originally logged for{" "}
+                <strong className="text-slate-800">{conflictInfo.loggedSubjectName || conflictInfo.loggedSubjectCode || "Subject"}</strong>.
+                You can review or adjust records, and clicking Save will prompt you to confirm overwriting.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsOverwriteModalOpen(true)}
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition shrink-0"
+          >
+            Review Overwrite Options
+          </button>
+        </div>
+      )}
+
+      {/* ── MAIN WORKSPACE: 8-COL ROSTER + 4-COL SUMMARY ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left: Students Roster (8 cols) */}
+        <div className="lg:col-span-8 space-y-6">
           <AttendanceTable
             students={filteredStudents}
             attendance={attendance}
+            notes={notes}
+            studentAttendanceRates={studentCumulativeRates}
             onStatusChange={handleStatusChange}
+            onNoteChange={handleNoteChange}
+            onIssueWarning={(stu) =>
+              setWarningModalStudent({
+                ...stu,
+                program_name: programs.find((p) => p.id === selectedProgram)?.name || "Course",
+                section_name: sections.find((s) => s.id === selectedSection)?.name || "Section",
+              })
+            }
             onPrint={() => setIsPrintModalOpen(true)}
           />
         </div>
 
-        <div className="col-span-3">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Summary</h2>
-              <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                {completionPercent}% done
+        {/* Right: Session Summary & Actions (4 cols) */}
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-6">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h2 className="text-sm font-extrabold text-slate-900 uppercase tracking-wider font-['Plus_Jakarta_Sans',sans-serif]">
+                Session Summary
+              </h2>
+              <div className="rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-black text-emerald-700">
+                {completionPercent}% marked
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <div className="flex items-center justify-between text-sm text-slate-600">
-                <span>Students in view</span>
-                <span className="font-semibold text-slate-900">{totalStudents}</span>
+
+            {/* Live Progress Bar & Counter */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span className="font-semibold">Students in Roster</span>
+                <span className="font-bold text-slate-900 font-['Space_Grotesk'] text-sm">{totalStudents}</span>
               </div>
-              <div className="mt-3 h-2 rounded-full bg-slate-200">
-                <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${completionPercent}%` }} />
-              </div>
-              <p className="mt-3 text-sm text-slate-600">
-                {markedCount} of {totalStudents} marked
-              </p>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-medium">
-                <div className="rounded-xl bg-emerald-50 p-2 text-emerald-700">
-                  <div className="text-base font-semibold">{presentCount}</div>
-                  <div>Present</div>
-                </div>
-                <div className="rounded-xl bg-rose-50 p-2 text-rose-700">
-                  <div className="text-base font-semibold">{absentCount}</div>
-                  <div>Absent</div>
-                </div>
-                <div className="rounded-xl bg-amber-50 p-2 text-amber-700">
-                  <div className="text-base font-semibold">{lateCount}</div>
-                  <div>Late</div>
-                </div>
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden border border-slate-200/60">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"
+                  style={{ width: `${completionPercent}%` }}
+                />
               </div>
             </div>
+
+            {/* 4 Attendance Metric Chips */}
+            <div className="grid grid-cols-2 gap-2.5 text-center pt-1">
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-200/80 p-3 text-emerald-900">
+                <div className="text-2xl font-black font-['Space_Grotesk'] text-emerald-700">{presentCount}</div>
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 mt-0.5">Present</div>
+              </div>
+              <div className="rounded-2xl bg-rose-50 border border-rose-200/80 p-3 text-rose-900">
+                <div className="text-2xl font-black font-['Space_Grotesk'] text-rose-700">{absentCount}</div>
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-rose-800 mt-0.5">Absent</div>
+              </div>
+              <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-3 text-amber-900">
+                <div className="text-2xl font-black font-['Space_Grotesk'] text-amber-700">{lateCount}</div>
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 mt-0.5">Late</div>
+              </div>
+              <div className="rounded-2xl bg-indigo-50 border border-indigo-200/80 p-3 text-indigo-900">
+                <div className="text-2xl font-black font-['Space_Grotesk'] text-indigo-700">{approvedAbsenceCount}</div>
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-800 mt-0.5">Approved</div>
+              </div>
+            </div>
+
+            {/* Session Notes Input */}
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <FileText size={13} className="text-[#6C63FF]" /> Class Session Notes
+              </label>
+              <textarea
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                placeholder="Log lesson topic covered, lab remarks, or student instructions..."
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-800 outline-none focus:bg-white focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 transition"
+              />
+            </div>
+
+            {/* Future Date Alert */}
+            {isFutureDate && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-xs font-bold text-amber-900 flex items-center gap-2">
+                <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                <span>Attendance cannot be logged for future dates. Please select today or an earlier date.</span>
+              </div>
+            )}
+
+            {/* Primary Action Button */}
             <button
               onClick={handleSave}
-              disabled={isSaving}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSaving || isFutureDate}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] px-5 py-3.5 text-xs font-extrabold text-white shadow-lg shadow-indigo-200 transition-all hover:opacity-95 hover:scale-[1.01] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Save size={16} />
-              {isSaving ? "Saving..." : "Save Attendance"}
+              <Save size={15} />
+              {isSaving ? "Saving Session Attendance..." : isFutureDate ? "Future Date Disabled" : "Save Attendance & Notes"}
             </button>
+
+            {/* Secondary Action: Print Sheet */}
             <button
               onClick={() => setIsPrintModalOpen(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition shadow-2xs"
             >
-              <Printer size={16} className="text-[#6C63FF]" />
-              Print Attendance Sheet
+              <Printer size={15} className="text-[#6C63FF]" />
+              Print Roll Sheet / Blank Roll
             </button>
-            {sessionNotice ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+
+            {/* Notice / Feedback Banners */}
+            {sessionNotice && !isFutureDate && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-800">
                 {sessionNotice}
               </div>
-            ) : null}
-            {feedback ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">
+            )}
+
+            {feedback && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800">
                 {feedback}
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
 
+      {/* Printable Sheet Modal */}
       <AttendancePrintModal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
-        programName={programs.find(p => p.id === selectedProgram)?.name || "All Programs"}
+        programName={programs.find((p) => p.id === selectedProgram)?.name || "All Programs"}
         semesterName={selectedSemester || "Current Semester"}
-        sectionName={sections.find(s => s.id === selectedSection)?.name || "Current Section"}
-        subjectName={subjects.find(s => s.id === selectedSubject)?.name || "Current Subject"}
+        sectionName={sections.find((s) => s.id === selectedSection)?.name || "Current Section"}
+        subjectName={subjects.find((s) => s.id === selectedSubject)?.name || "Current Subject"}
         periodName={selectedPeriod ? `Period ${selectedPeriod}` : "Period 1"}
         date={selectedDate}
         students={filteredStudents}
         attendance={attendance}
+        notes={notes}
+        sessionNotes={sessionNotes}
+        trainerName="Faculty Trainer"
+      />
+
+      {/* Attendance Warning Notice Modal */}
+      <AttendanceWarningModal
+        isOpen={Boolean(warningModalStudent)}
+        onClose={() => setWarningModalStudent(null)}
+        student={warningModalStudent}
+        onIssued={async (payload) => {
+          await saveWarningLetterAction({
+            ...payload,
+            institutionId,
+            renderedHtml: "",
+          })
+          setFeedback("Official compliance warning notice logged for this student.")
+        }}
+      />
+
+      {/* Attendance Conflict / Overwrite Modal */}
+      <AttendanceOverwriteModal
+        isOpen={isOverwriteModalOpen}
+        onClose={() => setIsOverwriteModalOpen(false)}
+        onConfirmOverwrite={performSave}
+        isSaving={isSaving}
+        sectionName={sections.find((s) => s.id === selectedSection)?.name || "Section"}
+        periodName={selectedPeriod ? `Period ${selectedPeriod}` : "Period 1"}
+        date={selectedDate}
+        loggedByFacultyName={conflictInfo?.loggedByFacultyName || "Another Faculty"}
+        loggedByFacultyEmail={conflictInfo?.loggedByFacultyEmail}
+        loggedSubjectName={conflictInfo?.loggedSubjectName || "Subject"}
+        loggedSubjectCode={conflictInfo?.loggedSubjectCode}
+        loggedSessionNotes={conflictInfo?.loggedSessionNotes}
       />
     </div>
   )

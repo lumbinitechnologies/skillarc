@@ -175,6 +175,7 @@ export default async function StudentAttendancePage() {
         if (entry.status === "PRESENT") existing.present += 1
         if (entry.status === "ABSENT") existing.absent += 1
         if (entry.status === "LATE") existing.late += 1
+        if (entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED") existing.present += 1
       }
 
       const effectivePresent = existing.present + existing.late
@@ -188,11 +189,12 @@ export default async function StudentAttendancePage() {
     const presentCount = attendanceEntries.filter((entry) => entry.status === "PRESENT").length
     const absentCount = attendanceEntries.filter((entry) => entry.status === "ABSENT").length
     const lateCount = attendanceEntries.filter((entry) => entry.status === "LATE").length
-    const effectivePresent = presentCount + lateCount
+    const approvedCount = attendanceEntries.filter((entry) => entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED").length
+    const effectivePresent = presentCount + lateCount + approvedCount
 
     overallSummary = {
       total: totalRecords,
-      present: presentCount,
+      present: presentCount + approvedCount,
       absent: absentCount,
       late: lateCount,
       rate: totalRecords > 0 ? Math.round((effectivePresent / totalRecords) * 100) : 0,

@@ -1,12 +1,19 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Printer, Calendar, Clock, Award, ShieldAlert, CheckCircle, BookOpen, Save, TrendingUp, BarChart3, PieChart, AlertCircle, Activity, LayoutGrid, ListTodo } from "lucide-react"
+import { Printer, Calendar, Clock, Award, ShieldAlert, CheckCircle, BookOpen, Save, TrendingUp, BarChart3, PieChart, AlertCircle, Activity, LayoutGrid, ListTodo, FileText, AlertTriangle } from "lucide-react"
 import AttendanceFilters from "@/modules/attendance/components/AttendanceFilters"
 import AttendanceTable from "@/modules/attendance/components/AttendanceTable"
 import AttendancePrintModal from "@/modules/attendance/components/AttendancePrintModal"
+import AttendanceWarningModal from "@/modules/attendance/components/AttendanceWarningModal"
 import { Button } from "@/components/ui/button"
-import { getAdminAttendanceAction, getAdminAttendanceAnalyticsAction, saveAdminAttendanceAction } from "../../faculty/attendance/actions"
+import {
+  getAdminAttendanceAction,
+  getAdminAttendanceAnalyticsAction,
+  saveAdminAttendanceAction,
+  getStudentCumulativeAttendanceAction,
+  saveWarningLetterAction,
+} from "../../faculty/attendance/actions"
 import { useToast } from "@/components/ui/use-toast"
 
 interface Props {
@@ -43,6 +50,10 @@ export default function AttendanceClient({
   )
 
   const [attendance, setAttendance] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [sessionNotes, setSessionNotes] = useState("")
+  const [studentCumulativeRates, setStudentCumulativeRates] = useState<Record<string, { rate: number; total: number; missed: number }>>({})
+  const [warningModalStudent, setWarningModalStudent] = useState<any | null>(null)
   const [markedBy, setMarkedBy] = useState<string | null>(null)
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -231,6 +242,8 @@ export default function AttendanceClient({
     async function loadAttendance() {
       if (!selectedSubject || !selectedSection || !selectedPeriod || !selectedDate) {
         setAttendance({})
+        setNotes({})
+        setSessionNotes("")
         setMarkedBy(null)
         return
       }
@@ -245,9 +258,13 @@ export default function AttendanceClient({
 
         if (res.success && res.exists) {
           setAttendance(res.records || {})
+          setNotes(res.notes || {})
+          setSessionNotes(res.sessionNotes || "")
           setMarkedBy(res.facultyName || "Unknown Faculty")
         } else {
           setAttendance({})
+          setNotes({})
+          setSessionNotes("")
           setMarkedBy(null)
         }
       } catch (err) {
@@ -257,6 +274,26 @@ export default function AttendanceClient({
 
     loadAttendance()
   }, [selectedSubject, selectedSection, selectedPeriod, selectedDate])
+
+  // Compute cumulative student attendance rates when section or program changes
+  useEffect(() => {
+    async function loadCumulativeRates() {
+      if (!selectedSection && !institutionId) return
+      try {
+        const res = await getStudentCumulativeAttendanceAction({
+          sectionId: selectedSection || undefined,
+          institutionId,
+        })
+        if (res.success) {
+          setStudentCumulativeRates(res.rates || {})
+        }
+      } catch (err) {
+        console.error("Error loading cumulative attendance:", err)
+      }
+    }
+
+    loadCumulativeRates()
+  }, [selectedSection, institutionId])
 
   // Fetch subject-section analytics for sheets view
   useEffect(() => {
@@ -296,6 +333,13 @@ export default function AttendanceClient({
     }))
   }
 
+  const handleNoteChange = (studentId: string, note: string) => {
+    setNotes((prev) => ({
+      ...prev,
+      [studentId]: note,
+    }))
+  }
+
   const handleSaveAttendance = async () => {
     if (!selectedSubject || !selectedSection || !selectedPeriod || !selectedDate) {
       toast({
@@ -314,12 +358,14 @@ export default function AttendanceClient({
         attendanceDate: selectedDate,
         period: Number(selectedPeriod),
         records: attendance,
+        notes,
+        sessionNotes,
       })
 
       if (res.success) {
         toast({
           title: "Attendance Saved",
-          description: "Attendance records have been updated successfully.",
+          description: "Attendance records and session notes have been saved.",
         })
         
         // Refresh analytics
@@ -357,6 +403,7 @@ export default function AttendanceClient({
   const presentCount = filteredStudents.filter((s) => attendance[s.id] === "Present").length
   const absentCount = filteredStudents.filter((s) => attendance[s.id] === "Absent").length
   const lateCount = filteredStudents.filter((s) => attendance[s.id] === "Late").length
+  const approvedAbsenceCount = filteredStudents.filter((s) => attendance[s.id] === "Approved Absence").length
 
   return (
     <div className="space-y-8 font-sans">
@@ -738,7 +785,17 @@ export default function AttendanceClient({
             <AttendanceTable
               students={filteredStudents}
               attendance={attendance}
+              notes={notes}
+              studentAttendanceRates={studentCumulativeRates}
               onStatusChange={handleStatusChange}
+              onNoteChange={handleNoteChange}
+              onIssueWarning={(stu) =>
+                setWarningModalStudent({
+                  ...stu,
+                  program_name: programs.find((p) => p.id === selectedProgram)?.name || "Enrolled Course",
+                  section_name: sections.find((s) => s.id === selectedSection)?.name || "Section",
+                })
+              }
               onPrint={() => setIsPrintModalOpen(true)}
             />
 
@@ -751,7 +808,7 @@ export default function AttendanceClient({
                   className="rounded-2xl bg-[#6C63FF] hover:bg-[#5b52e0] text-white font-bold text-xs px-6 py-3 shadow-md transition-all flex items-center gap-2"
                 >
                   <Save size={16} />
-                  {isSaving ? "Saving..." : "Save Attendance"}
+                  {isSaving ? "Saving..." : "Save Attendance & Notes"}
                 </Button>
               </div>
             )}
@@ -800,7 +857,28 @@ export default function AttendanceClient({
                   <span>Late</span>
                   <span className="font-bold font-['Space_Grotesk']">{lateCount}</span>
                 </div>
+                <div className="flex justify-between text-blue-600 font-medium">
+                  <span>Approved Absence</span>
+                  <span className="font-bold font-['Space_Grotesk']">{approvedAbsenceCount}</span>
+                </div>
               </div>
+            </div>
+
+            {/* Session Notes Card */}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-[#6C63FF]" />
+                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-['Plus_Jakarta_Sans']">
+                  Class Session Notes
+                </h2>
+              </div>
+              <textarea
+                value={sessionNotes}
+                onChange={(e) => setSessionNotes(e.target.value)}
+                placeholder="Log overall class notes, lab instructions, or special circumstances for this period..."
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 p-3 text-xs text-slate-800 outline-none focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 transition"
+              />
             </div>
 
             {/* Subject Analytics Card */}
@@ -837,6 +915,7 @@ export default function AttendanceClient({
         </div>
       )}
 
+      {/* Printable Sheet Modal */}
       <AttendancePrintModal
         isOpen={isPrintModalOpen}
         onClose={() => setIsPrintModalOpen(false)}
@@ -848,6 +927,27 @@ export default function AttendanceClient({
         date={selectedDate}
         students={filteredStudents}
         attendance={attendance}
+        notes={notes}
+        sessionNotes={sessionNotes}
+        trainerName={markedBy || "Institution Admin"}
+      />
+
+      {/* Attendance Warning Notice Modal */}
+      <AttendanceWarningModal
+        isOpen={Boolean(warningModalStudent)}
+        onClose={() => setWarningModalStudent(null)}
+        student={warningModalStudent}
+        onIssued={async (payload) => {
+          await saveWarningLetterAction({
+            ...payload,
+            institutionId,
+            renderedHtml: "",
+          })
+          toast({
+            title: "Warning Notice Logged",
+            description: "Official compliance warning notice recorded.",
+          })
+        }}
       />
     </div>
   )

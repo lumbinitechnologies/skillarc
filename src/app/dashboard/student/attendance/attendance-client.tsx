@@ -77,7 +77,9 @@ export default function AttendanceClient({
   const statusStyles: Record<string, { bg: string; color: string; label: string }> = {
     PRESENT: { bg: "#f0fdf4", color: "#166534", label: "Present" },
     ABSENT: { bg: "#fef2f2", color: "#991b1b", label: "Absent" },
-    LATE: { bg: "#eff6ff", color: "#1d4ed8", label: "Late" },
+    LATE: { bg: "#fffbeb", color: "#b45309", label: "Late" },
+    APPROVED_ABSENCE: { bg: "#eff6ff", color: "#1e40af", label: "Approved Absence" },
+    EXCUSED: { bg: "#eff6ff", color: "#1e40af", label: "Approved Absence" },
     NOT_MARKED: { bg: "#f5f3ff", color: "#6d28d9", label: "Pending" },
   }
 

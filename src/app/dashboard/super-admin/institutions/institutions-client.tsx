@@ -33,6 +33,7 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
   const [filterOrg, setFilterOrg] = useState("")
   const [filterActive, setFilterActive] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   async function handleEnterInstitution(instId: string) {
     try {
@@ -220,10 +221,12 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
                     {expandedId === inst.id && (
                       <tr key={`${inst.id}-expanded`} style={{ borderBottom:"1px solid #f3f4f6" }}>
                         <td colSpan={7} style={{ padding:"0 20px 16px 64px", background:"#f0fdf4" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:24, fontSize:13 }}>
-                            <div><span style={{ color:"#9ca3af" }}>Institution ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.id}</span></div>
-                            <div><span style={{ color:"#9ca3af" }}>Org ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.organization_id}</span></div>
-                            <div><span style={{ color:"#9ca3af" }}>Total Users: </span><span style={{ fontWeight:600, color:"#111827" }}>{inst.user_count}</span></div>
+                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16, fontSize:13 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+                              <div><span style={{ color:"#9ca3af" }}>Institution ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.id}</span></div>
+                              <div><span style={{ color:"#9ca3af" }}>Org ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.organization_id}</span></div>
+                              <div><span style={{ color:"#9ca3af" }}>Total Users: </span><span style={{ fontWeight:600, color:"#111827" }}>{inst.user_count}</span></div>
+                            </div>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -233,6 +236,63 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
                             >
                               Enter Institution Dashboard
                             </button>
+                          </div>
+
+                          {/* Public Admissions Portal URL */}
+                          <div style={{ marginTop:12, paddingTop:12, borderTop:"1px dashed #bbf7d0", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                              <span style={{ fontSize:12, fontWeight:700, color:"#065f46" }}>🌐 Public Admissions URL:</span>
+                              <span style={{ fontFamily:"'DM Mono',monospace", fontSize:12, background:"#ffffff", border:"1px solid #bbf7d0", padding:"3px 10px", borderRadius:6, color:"#166534" }}>
+                                {typeof window !== "undefined"
+                                  ? `${window.location.origin}/apply/${inst.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+                                  : `/apply/${inst.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                              </span>
+                            </div>
+                            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const url = `${window.location.origin}/apply/${inst.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+                                  navigator.clipboard.writeText(url)
+                                  setCopiedId(inst.id)
+                                  setTimeout(() => setCopiedId(null), 2000)
+                                }}
+                                style={{
+                                  background: copiedId === inst.id ? "#059669" : "#ffffff",
+                                  color: copiedId === inst.id ? "#ffffff" : "#065f46",
+                                  border: "1px solid #059669",
+                                  borderRadius: 6,
+                                  padding: "4px 12px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  transition: "all 0.15s"
+                                }}
+                              >
+                                {copiedId === inst.id ? "✓ Copied!" : "📋 Copy Apply URL"}
+                              </button>
+                              <a
+                                href={`/apply/${inst.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  background: "#059669",
+                                  color: "#ffffff",
+                                  textDecoration: "none",
+                                  borderRadius: 6,
+                                  padding: "4px 12px",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4
+                                }}
+                              >
+                                ↗ Open Apply Portal
+                              </a>
+                            </div>
                           </div>
                         </td>
                       </tr>

@@ -30,16 +30,21 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  const isPublicChatRoute = pathname === "/api/chatbot/public"
+  const isPublicApiRoute =
+    pathname === "/api/chatbot/public" ||
+    pathname.startsWith("/api/admissions/public-")
 
-  if (pathname.startsWith("/api/") && !isPublicChatRoute) {
+  if (pathname.startsWith("/api/")) {
+    if (isPublicApiRoute) {
+      return response
+    }
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     return response
   }
 
-  // Support both legacy `/login` and new `/auth/login` routes, plus public landing page `/`
+  // Support both legacy `/login` and new `/auth/login` routes, plus public landing page `/` and `/apply` pages
   const isAuthRoute =
     pathname === "/" ||
     pathname === "/platform" ||
@@ -47,6 +52,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/features" ||
     pathname === "/about" ||
     pathname === "/resources" ||
+    pathname === "/apply" ||
+    pathname.startsWith("/apply/") ||
     pathname === "/login" ||
     pathname === "/signup" ||
     pathname === "/auth/login" ||

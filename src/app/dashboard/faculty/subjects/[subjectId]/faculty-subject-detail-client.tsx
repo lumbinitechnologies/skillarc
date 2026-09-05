@@ -40,9 +40,12 @@ import {
   Sparkles,
   Layers,
   Sliders,
-  Star
+  Star,
+  Printer
 } from "lucide-react"
 
+import AttendancePrintModal from "@/modules/attendance/components/AttendancePrintModal"
+import GradebookPrintModal from "@/modules/gradebook/components/GradebookPrintModal"
 import {
   createAssignmentAction,
   updateAssignmentAction,
@@ -77,6 +80,7 @@ import {
   getExistingAttendanceAction,
   saveAttendanceAction
 } from "@/app/dashboard/faculty/attendance/actions"
+import AttendanceOverwriteModal from "@/modules/attendance/components/AttendanceOverwriteModal"
 type FacultyTab = "assignments" | "modules" | "syllabus" | "evaluation" | "grades" | "students" | "meetings" | "attendance" | "announcements"
 
 type FacultyWorksheetType = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
@@ -201,7 +205,18 @@ export function FacultySubjectDetailClient({
   const [selectedPeriod, setSelectedPeriod] = useState("")
   const [attendance, setAttendance] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
+  const [isGradePrintModalOpen, setIsGradePrintModalOpen] = useState(false)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
+  const [attendanceConflict, setAttendanceConflict] = useState<{
+    isConflict: boolean
+    loggedByFacultyName: string
+    loggedByFacultyEmail?: string
+    loggedSubjectName?: string
+    loggedSubjectCode?: string
+    loggedSessionNotes?: string
+  } | null>(null)
+  const [isAttendanceOverwriteModalOpen, setIsAttendanceOverwriteModalOpen] = useState(false)
 
   const [assignmentGradeColumns, setAssignmentGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>([])
   const [customGradeColumns, setCustomGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>(
@@ -408,6 +423,7 @@ export function FacultySubjectDetailClient({
         if (isActive) {
           setAttendance({})
           setSessionNotice(null)
+          setAttendanceConflict(null)
         }
         return
       }
@@ -426,10 +442,26 @@ export function FacultySubjectDetailClient({
 
       if (result.success && result.exists) {
         setAttendance(result.records ?? {})
-        setSessionNotice("Existing attendance found for this session. You can edit and save it again.")
+        if (result.isLoggedByOther) {
+          setAttendanceConflict({
+            isConflict: true,
+            loggedByFacultyName: result.loggedByFacultyName || "Another Faculty",
+            loggedByFacultyEmail: result.loggedByFacultyEmail || "",
+            loggedSubjectName: result.loggedSubjectName || "",
+            loggedSubjectCode: result.loggedSubjectCode || "",
+            loggedSessionNotes: result.sessionNotes || "",
+          })
+          setSessionNotice(
+            `Attendance for this slot was originally recorded by ${result.loggedByFacultyName || "another faculty member"}${result.loggedSubjectCode ? ` (${result.loggedSubjectCode})` : ""}. Any changes will prompt an overwrite confirmation.`
+          )
+        } else {
+          setAttendanceConflict(null)
+          setSessionNotice("Existing attendance found for this session. You can edit and save it again.")
+        }
       } else {
         setAttendance({})
         setSessionNotice(null)
+        setAttendanceConflict(null)
       }
     }
 
@@ -455,11 +487,10 @@ export function FacultySubjectDetailClient({
     setAttendance(newAttendance)
   }
 
-  const handleSaveAttendance = async () => {
-    if (!selectedSection || !selectedDate || !selectedPeriod) {
-      triggerToast("Please set section, date, and period.", "warning")
-      return
-    }
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const isFutureAttendanceDate = selectedDate > todayIso
+
+  const executeAttendanceSave = async () => {
     setIsSaving(true)
     const periodValue = parseInt(selectedPeriod, 10)
     const result = await saveAttendanceAction({
@@ -470,12 +501,33 @@ export function FacultySubjectDetailClient({
       records: attendance,
     })
     setIsSaving(false)
+    setIsAttendanceOverwriteModalOpen(false)
     if (result.success) {
+      setAttendanceConflict(null)
       triggerToast("Attendance saved successfully!", "success")
-      setSessionNotice("Existing attendance found for this session. You can edit and save it again.")
+      setSessionNotice("Attendance records saved successfully.")
     } else {
       triggerToast(result.error || "Failed to save attendance.", "warning")
     }
+  }
+
+  const handleSaveAttendance = async () => {
+    if (!selectedSection || !selectedDate || !selectedPeriod) {
+      triggerToast("Please set section, date, and period.", "warning")
+      return
+    }
+
+    if (selectedDate > todayIso) {
+      triggerToast("Attendance cannot be logged for future dates. Please select today or an earlier date.", "warning")
+      return
+    }
+
+    if (attendanceConflict?.isConflict) {
+      setIsAttendanceOverwriteModalOpen(true)
+      return
+    }
+
+    await executeAttendanceSave()
   }
 
   useEffect(() => {
@@ -1879,6 +1931,13 @@ export function FacultySubjectDetailClient({
                     </select>
                   </div>
                   <button
+                    type="button"
+                    onClick={() => setIsGradePrintModalOpen(true)}
+                    className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-sm"
+                  >
+                    <Printer size={14} className="text-[#6C63FF]" /> Print Marksheet
+                  </button>
+                  <button
                     onClick={handleAddGradeColumn}
                     className="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-all"
                   >
@@ -2785,7 +2844,48 @@ export function FacultySubjectDetailClient({
         {/* Tab 6: Attendance */}
         {activeTab === "attendance" && (
           <div className="space-y-6 text-left">
-            {sessionNotice && (
+            {/* Future Date Alert */}
+            {isFutureAttendanceDate && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs font-bold text-amber-900 flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                <span>Attendance cannot be logged for future dates. Please select today or an earlier date.</span>
+              </div>
+            )}
+
+            {/* Conflict Warning Banner */}
+            {attendanceConflict?.isConflict && !isFutureAttendanceDate && (
+              <div className="rounded-3xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in duration-200">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 bg-amber-200/70 border border-amber-300 px-2 py-0.5 rounded-full">
+                        Slot Conflict Detected
+                      </span>
+                      <span className="text-xs font-bold text-slate-800">
+                        Recorded by <strong className="text-indigo-700">{attendanceConflict.loggedByFacultyName}</strong>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Attendance for this slot was originally logged for{" "}
+                      <strong className="text-slate-800">{attendanceConflict.loggedSubjectName || attendanceConflict.loggedSubjectCode || "Subject"}</strong>.
+                      Saving will prompt you to confirm overwriting.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAttendanceOverwriteModalOpen(true)}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition shrink-0"
+                >
+                  Review Overwrite
+                </button>
+              </div>
+            )}
+
+            {sessionNotice && !isFutureAttendanceDate && !attendanceConflict?.isConflict && (
               <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-xs font-semibold text-indigo-700 flex items-center gap-2">
                 <AlertCircle size={16} />
                 {sessionNotice}
@@ -2815,7 +2915,7 @@ export function FacultySubjectDetailClient({
                         setSelectedSection(e.target.value)
                         setAttendance({})
                       }}
-                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 bg-white outline-none cursor-pointer"
+                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 bg-white outline-none cursor-pointer shadow-2xs"
                     >
                       {sections.map((sec) => (
                         <option key={sec.id} value={sec.id}>
@@ -2825,13 +2925,14 @@ export function FacultySubjectDetailClient({
                     </select>
                   </div>
 
-                  {/* Date Input */}
+                  {/* Date Input with MAX today */}
                   <div>
                     <input
                       type="date"
                       value={selectedDate}
+                      max={todayIso}
                       onChange={(e) => setSelectedDate(e.target.value)}
-                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-850 outline-none"
+                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 bg-white outline-none shadow-2xs"
                     />
                   </div>
 
@@ -2840,7 +2941,7 @@ export function FacultySubjectDetailClient({
                     <select
                       value={selectedPeriod}
                       onChange={(e) => setSelectedPeriod(e.target.value)}
-                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 bg-white outline-none cursor-pointer"
+                      className="border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 bg-white outline-none cursor-pointer shadow-2xs"
                     >
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((p) => (
                         <option key={p} value={String(p)}>
@@ -2854,20 +2955,29 @@ export function FacultySubjectDetailClient({
 
               {/* Quick Actions Row */}
               {filteredStudents.length > 0 && (
-                <div className="px-6 py-3 bg-slate-50/30 border-b border-slate-100 flex items-center justify-between">
+                <div className="px-6 py-3 bg-slate-50/30 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Actions</span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
+                      type="button"
                       onClick={handleMarkAllPresent}
                       className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 text-[10px] font-extrabold rounded-lg transition-all"
                     >
                       Mark All Present
                     </button>
                     <button
+                      type="button"
                       onClick={() => setAttendance({})}
                       className="px-3 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-650 text-[10px] font-extrabold rounded-lg transition-all"
                     >
                       Reset Marking
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPrintModalOpen(true)}
+                      className="px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[10px] font-extrabold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs"
+                    >
+                      <Printer size={12} className="text-[#6C63FF]" /> Print Roll Sheet
                     </button>
                   </div>
                 </div>
@@ -2900,22 +3010,24 @@ export function FacultySubjectDetailClient({
                           <td className="px-6 py-4 text-xs font-semibold text-slate-500 font-mono">{student.email}</td>
                           <td className="px-6 py-4 text-xs font-bold text-slate-500">{student.registration_number || "—"}</td>
                           <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
                               {[
-                                { value: "Present", color: "bg-emerald-500", activeStyle: "bg-emerald-500 text-white border-emerald-500 ring-2 ring-emerald-200 ring-offset-1" },
-                                { value: "Absent", color: "bg-rose-500", activeStyle: "bg-rose-500 text-white border-rose-500 ring-2 ring-rose-200 ring-offset-1" },
-                                { value: "Late", color: "bg-amber-500", activeStyle: "bg-amber-500 text-white border-amber-500 ring-2 ring-amber-200 ring-offset-1" },
+                                { value: "Present", color: "bg-emerald-500", activeStyle: "bg-emerald-500 text-white border-emerald-500 ring-2 ring-emerald-200" },
+                                { value: "Absent", color: "bg-rose-500", activeStyle: "bg-rose-500 text-white border-rose-500 ring-2 ring-rose-200" },
+                                { value: "Late", color: "bg-amber-500", activeStyle: "bg-amber-500 text-white border-amber-500 ring-2 ring-amber-200" },
+                                { value: "Approved Absence", color: "bg-[#6C63FF]", activeStyle: "bg-[#6C63FF] text-white border-[#6C63FF] ring-2 ring-indigo-200", label: "Approved" },
                               ].map((s) => (
                                 <button
                                   key={s.value}
+                                  type="button"
                                   onClick={() => handleStatusChange(student.id, s.value)}
-                                  className={`rounded-xl px-4 py-1.5 text-xs font-extrabold transition-all border ${
+                                  className={`rounded-xl px-3 py-1.5 text-xs font-extrabold transition-all border ${
                                     currentStatus === s.value
                                       ? s.activeStyle
                                       : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                                   }`}
                                 >
-                                  {s.value}
+                                  {s.label || s.value}
                                 </button>
                               ))}
                             </div>
@@ -2937,20 +3049,80 @@ export function FacultySubjectDetailClient({
 
               {/* Save Bar */}
               {filteredStudents.length > 0 && (
-                <div className="border-t border-slate-200 px-6 py-4 flex justify-end bg-slate-50/50">
+                <div className="border-t border-slate-200 px-6 py-4 flex items-center justify-between bg-slate-50/50">
+                  <button
+                    type="button"
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-2xs"
+                  >
+                    <Printer size={13} className="text-[#6C63FF]" />
+                    Print Roll Sheet
+                  </button>
+
                   <button
                     onClick={handleSaveAttendance}
-                    disabled={isSaving}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm"
+                    disabled={isSaving || isFutureAttendanceDate}
+                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={14} />}
-                    Save Attendance
+                    {isFutureAttendanceDate ? "Future Date Disabled" : "Save Attendance"}
                   </button>
                 </div>
               )}
             </div>
           </div>
         )}
+
+        {/* Printable Sheet Modal for Course Attendance */}
+        <AttendancePrintModal
+          isOpen={isPrintModalOpen}
+          onClose={() => setIsPrintModalOpen(false)}
+          programName="Course Program"
+          semesterName="Current Semester"
+          sectionName={sections.find((s) => s.id === selectedSection)?.name || "Current Section"}
+          subjectName={subject.name}
+          periodName={selectedPeriod ? `Period ${selectedPeriod}` : "Period 1"}
+          date={selectedDate}
+          students={filteredStudents}
+          attendance={attendance}
+          notes={{}}
+          sessionNotes=""
+          trainerName="Faculty Trainer"
+        />
+
+        {/* Attendance Conflict / Overwrite Modal */}
+        <AttendanceOverwriteModal
+          isOpen={isAttendanceOverwriteModalOpen}
+          onClose={() => setIsAttendanceOverwriteModalOpen(false)}
+          onConfirmOverwrite={executeAttendanceSave}
+          isSaving={isSaving}
+          sectionName={sections.find((s) => s.id === selectedSection)?.name || "Section"}
+          periodName={selectedPeriod ? `Period ${selectedPeriod}` : "Period 1"}
+          date={selectedDate}
+          loggedByFacultyName={attendanceConflict?.loggedByFacultyName || "Another Faculty"}
+          loggedByFacultyEmail={attendanceConflict?.loggedByFacultyEmail}
+          loggedSubjectName={attendanceConflict?.loggedSubjectName || subject.name}
+          loggedSubjectCode={attendanceConflict?.loggedSubjectCode || subject.code}
+          loggedSessionNotes={attendanceConflict?.loggedSessionNotes}
+          currentFacultyName={facultyName}
+        />
+
+        {/* Printable Marksheet Modal for Faculty Gradebook */}
+        <GradebookPrintModal
+          isOpen={isGradePrintModalOpen}
+          onClose={() => setIsGradePrintModalOpen(false)}
+          subjectName={subject.name}
+          subjectCode={subject.code}
+          sectionName={sections.find((s) => s.id === selectedGradeSection)?.name || "Default"}
+          facultyName={facultyName}
+          academicTerm="Academic Session 2026"
+          gradeWeightMode={gradeWeightMode}
+          assignmentColumns={assignmentGradeColumns}
+          customColumns={customGradeColumns}
+          students={gradebookStudents}
+          assignmentGrades={assignmentGradesByStudent}
+          customGrades={gradeValues}
+        />
       </div>
 
       {/* Schedule Meeting Modal */}
