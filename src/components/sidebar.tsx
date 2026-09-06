@@ -105,12 +105,13 @@ const roleMenus: Record<Role, MenuItem[]> = {
 
   [ROLES.STUDENT]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
-    { name: "Admissions", icon: FileSignature, path: "/dashboard/student/admissions" },
-    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/student/billing" },
+    { name: "Attendance", icon: UserCheck, path: "/dashboard/student/attendance" },
     { name: "Courses", icon: BookOpen, path: "/dashboard/student/subjects" },
     { name: "To Do Lists", icon: ListTodo, path: "/dashboard/student/todo" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/student/timetable" },
     { name: "Grades", icon: Award, path: "/dashboard/student/report-card" },
+    { name: "Admissions", icon: FileSignature, path: "/dashboard/student/admissions" },
+    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/student/billing" },
     { name: "Events", icon: Calendar, path: "/dashboard/student/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/student/placements" },
   ],
@@ -134,13 +135,13 @@ const roleLabels: Record<Role, string> = {
 
 const roleAccents: Record<Role, { bg: string; color: string }> = {
   [ROLES.SUPER_ADMIN]: { bg: "rgba(234,173,98,0.15)", color: "#EAAD62" },
-  [ROLES.ORG_ADMIN]: { bg: "rgba(139,92,246,0.15)", color: "#A78BFA" },
+  [ROLES.ORG_ADMIN]: { bg: "rgba(58,109,175,0.15)", color: "#3A6DAF" },
   [ROLES.INSTITUTION_ADMIN]: { bg: "rgba(56,189,248,0.15)", color: "#38BDF8" },
   [ROLES.HOD]: { bg: "rgba(16,185,129,0.15)", color: "#34D399" },
-  [ROLES.PROGRAM_HEAD]: { bg: "rgba(236,72,153,0.15)", color: "#F472B6" },
+  [ROLES.PROGRAM_HEAD]: { bg: "rgba(229,125,55,0.15)", color: "#E57D37" },
   [ROLES.FACULTY]: { bg: "rgba(14,165,233,0.15)", color: "#38BDF8" },
   [ROLES.STUDENT]: { bg: "rgba(229,125,55,0.15)", color: "#E57D37" },
-  [ROLES.PARENT]: { bg: "rgba(168,85,247,0.15)", color: "#C084FC" },
+  [ROLES.PARENT]: { bg: "rgba(234,173,98,0.15)", color: "#EAAD62" },
 }
 
 export default function Sidebar({ profile: initialProfile }: { profile: UserContext | null }) {
@@ -151,6 +152,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
     ? {
         name: initialProfile.name,
         role: initialProfile.role as Role,
+        profile_image_url: initialProfile.profile_image_url,
         is_timetable_builder: initialProfile.is_timetable_builder,
       }
     : null
@@ -224,7 +226,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
       ]
     }
   }
-  const accent = profile ? roleAccents[profile.role] : { bg: "#ede9fe", color: "#5b21b6" }
+  const accent = profile ? roleAccents[profile.role] : { bg: "rgba(229,125,55,0.15)", color: "#E57D37" }
   const roleLabel = profile ? roleLabels[profile.role] : "Loading..."
   const initials = profile
     ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
@@ -426,12 +428,20 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
           whileHover={{ scale: 1.03, y: -2 }}
         >
           <motion.div
-            className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md font-semibold"
+            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md font-semibold text-sm"
             whileHover={{ rotateZ: 8, scale: 1.1 }}
             whileTap={{ scale: 0.95 }}
             transition={{ type: "spring", stiffness: 250, damping: 12 }}
           >
-            {initials}
+            {profile?.profile_image_url ? (
+              <img
+                src={profile.profile_image_url}
+                alt={profile.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              initials
+            )}
           </motion.div>
           <div className="min-w-0">
             <motion.p

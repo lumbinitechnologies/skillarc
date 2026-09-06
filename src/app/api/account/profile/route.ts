@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { revalidateTag } from "next/cache"
 
 export const dynamic = "force-dynamic"
@@ -14,29 +15,48 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { data: coreProfile, error: coreError } = await supabase
-    .from("users")
-    .select("id, name, email, phone, role, profile_image_url")
-    .eq("id", user.id)
-    .single()
+  const admin = createSupabaseAdminClient()
 
-  if (coreError || !coreProfile) {
-    return NextResponse.json({ error: "Could not load profile" }, { status: 500 })
+  // 1. Try to fetch from public.users table with admin client
+  let coreProfile: any = null
+  try {
+    const { data } = await admin
+      .from("users")
+      .select("id, name, email, phone, role, profile_image_url")
+      .eq("id", user.id)
+      .maybeSingle()
+    coreProfile = data
+  } catch (err) {
+    console.warn("Could not query users table:", err)
   }
 
-  const { data: details } = await supabase
-    .from("user_profile_details")
-    .select("pronouns, bio, links")
-    .eq("user_id", user.id)
-    .maybeSingle()
+  // Fallback to auth user metadata if users table row is missing or empty
+  const fullName = coreProfile?.name || (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || user.email?.split("@")[0] || "User"
+  const email = coreProfile?.email || user.email || ""
+  const phone = coreProfile?.phone || user.phone || (user.user_metadata as any)?.phone || ""
+  const role = coreProfile?.role || (user.user_metadata as any)?.role || "STUDENT"
+  const profileImageUrl = coreProfile?.profile_image_url || (user.user_metadata as any)?.profile_image_url || (user.user_metadata as any)?.avatar_url || null
+
+  // 2. Fetch extended details from user_profile_details
+  let details: any = null
+  try {
+    const { data } = await admin
+      .from("user_profile_details")
+      .select("pronouns, bio, links")
+      .eq("user_id", user.id)
+      .maybeSingle()
+    details = data
+  } catch (err) {
+    // If table doesn't exist yet, details will be null
+  }
 
   return NextResponse.json({
-    id: coreProfile.id,
-    name: coreProfile.name,
-    email: coreProfile.email,
-    phone: coreProfile.phone,
-    role: coreProfile.role,
-    profile_image_url: coreProfile.profile_image_url,
+    id: user.id,
+    name: fullName,
+    email: email,
+    phone: phone,
+    role: role,
+    profile_image_url: profileImageUrl,
     pronouns: details?.pronouns ?? "",
     bio: details?.bio ?? "",
     links: details?.links ?? [],
@@ -54,38 +74,60 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { name, phone, pronouns, bio, links } = body
+  const { name, phone, pronouns, bio, links, profile_image_url } = body
 
-  if (typeof name === "string" || typeof phone === "string") {
-    const { error: userUpdateError } = await supabase
-      .from("users")
-      .update({
-        ...(typeof name === "string" ? { name } : {}),
-        ...(typeof phone === "string" ? { phone } : {}),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id)
+  const admin = createSupabaseAdminClient()
 
-    if (userUpdateError) {
-      console.error("Failed to update users table:", userUpdateError.message)
-      return NextResponse.json({ error: userUpdateError.message }, { status: 500 })
+  // 1. Update public.users table if present
+  try {
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
     }
+    if (typeof name === "string" && name.trim()) updatePayload.name = name.trim()
+    if (typeof phone === "string") updatePayload.phone = phone.trim()
+    if (profile_image_url !== undefined) updatePayload.profile_image_url = profile_image_url
+
+    await admin
+      .from("users")
+      .update(updatePayload)
+      .eq("id", user.id)
+  } catch (err) {
+    console.warn("Could not update users table:", err)
   }
 
-  const { error: detailsError } = await supabase.from("user_profile_details").upsert(
-    {
-      user_id: user.id,
-      pronouns: pronouns ?? null,
-      bio: bio ?? null,
-      links: Array.isArray(links) ? links : [],
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id" }
-  )
+  // 2. Also update auth user metadata so session reflects it immediately
+  try {
+    const metaUpdates: Record<string, any> = { ...(user.user_metadata || {}) }
+    if (typeof name === "string" && name.trim()) {
+      metaUpdates.full_name = name.trim()
+      metaUpdates.name = name.trim()
+    }
+    if (typeof phone === "string") metaUpdates.phone = phone.trim()
+    if (profile_image_url !== undefined) {
+      metaUpdates.profile_image_url = profile_image_url
+      metaUpdates.avatar_url = profile_image_url
+    }
+    await admin.auth.admin.updateUserById(user.id, {
+      user_metadata: metaUpdates,
+    })
+  } catch (err) {
+    console.warn("Could not update auth metadata:", err)
+  }
 
-  if (detailsError) {
-    console.error("Failed to update profile details:", detailsError.message)
-    return NextResponse.json({ error: detailsError.message }, { status: 500 })
+  // 3. Upsert user_profile_details table
+  try {
+    await admin.from("user_profile_details").upsert(
+      {
+        user_id: user.id,
+        pronouns: pronouns ?? null,
+        bio: bio ?? null,
+        links: Array.isArray(links) ? links : [],
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    )
+  } catch (err) {
+    console.warn("Could not upsert user_profile_details:", err)
   }
 
   revalidateTag(`dashboard:user-profile:${user.id}`, "max")

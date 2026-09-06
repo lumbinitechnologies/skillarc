@@ -811,3 +811,49 @@ export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: 
 
   return { success: true, stats }
 }
+
+export async function reviewLeaveApplicationAction({
+  leaveId,
+  status,
+}: {
+  leaveId: string
+  status: "APPROVED" | "REJECTED"
+}) {
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { success: false, error: "Please sign in again to review leave requests." }
+  }
+
+  const { data: leaveApp, error: fetchErr } = await supabase
+    .from("leave_applications")
+    .select("id, student_id, from_date, to_date")
+    .eq("id", leaveId)
+    .single()
+
+  if (fetchErr || !leaveApp) {
+    return { success: false, error: "Leave application not found." }
+  }
+
+  const { error: updateErr } = await supabase
+    .from("leave_applications")
+    .update({
+      status,
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", leaveId)
+
+  if (updateErr) {
+    return { success: false, error: updateErr.message }
+  }
+
+  revalidatePath("/dashboard/faculty/attendance")
+  revalidatePath("/dashboard/student/attendance")
+
+  return { success: true }
+}

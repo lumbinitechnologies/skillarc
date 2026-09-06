@@ -64,12 +64,12 @@ function StepRow({
             transition: "background 0.2s, color 0.2s",
             background:
               state === "done"
-                ? "linear-gradient(135deg, #4f46e5, #7c3aed)"
+                ? "linear-gradient(135deg, #E57D37, #EAAD62)"
                 : state === "active"
-                ? "#eef2ff"
+                ? "#fff7ed"
                 : "#f3f4f6",
-            color: state === "done" ? "#fff" : state === "active" ? "#4f46e5" : "#9ca3af",
-            border: state === "active" ? "1.5px solid #c7d2fe" : "1.5px solid transparent",
+            color: state === "done" ? "#fff" : state === "active" ? "#E57D37" : "#9ca3af",
+            border: state === "active" ? "1.5px solid #fed7aa" : "1.5px solid transparent",
           }}
         >
           {state === "done" ? <Check size={14} strokeWidth={2.5} /> : index}
@@ -82,7 +82,7 @@ function StepRow({
               minHeight: 28,
               marginTop: 4,
               borderRadius: 1,
-              background: state === "done" ? "#c7d2fe" : "#e5e7eb",
+              background: state === "done" ? "#fed7aa" : "#e5e7eb",
               transition: "background 0.2s",
             }}
           />
@@ -92,7 +92,7 @@ function StepRow({
       {/* Content */}
       <div style={{ flex: 1, paddingBottom: isLast ? 0 : 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-          <span style={{ color: state === "locked" ? "#9ca3af" : "#4f46e5", display: "flex" }}>{icon}</span>
+          <span style={{ color: state === "locked" ? "#9ca3af" : "#E57D37", display: "flex" }}>{icon}</span>
           <span
             style={{
               fontSize: 12,
@@ -157,7 +157,7 @@ function FlowSelect({
           fontWeight: 600,
           color: value ? "#111827" : "#9ca3af",
           backgroundColor: "#fff",
-          border: value ? "1.5px solid #c7d2fe" : "1.5px solid #e5e7eb",
+          border: value ? "1.5px solid #fed7aa" : "1.5px solid #e5e7eb",
           borderRadius: 11,
           fontFamily: font,
           outline: "none",
@@ -166,11 +166,11 @@ function FlowSelect({
           transition: "border-color 0.15s, box-shadow 0.15s",
         }}
         onFocus={(e) => {
-          e.currentTarget.style.borderColor = "#6366f1"
-          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.12)"
+          e.currentTarget.style.borderColor = "#E57D37"
+          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(229,125,55,0.12)"
         }}
         onBlur={(e) => {
-          e.currentTarget.style.borderColor = value ? "#c7d2fe" : "#e5e7eb"
+          e.currentTarget.style.borderColor = value ? "#fed7aa" : "#e5e7eb"
           e.currentTarget.style.boxShadow = "none"
         }}
       >
@@ -258,12 +258,12 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
             width: 38,
             height: 38,
             borderRadius: 11,
-            background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+            background: "linear-gradient(135deg, #E57D37, #EAAD62)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            boxShadow: "0 3px 8px rgba(79,70,229,0.3)",
+            boxShadow: "0 3px 8px rgba(229,125,55,0.3)",
           }}
         >
           <CalendarRange size={18} color="#fff" />
@@ -395,7 +395,7 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
               border: "1px solid #f1f1f3",
             }}
           >
-            <span style={{ color: "#4f46e5" }}>{departmentName}</span>
+            <span style={{ color: "#E57D37" }}>{departmentName}</span>
             <span style={{ color: "#d1d5db" }}>/</span>
             <span>{programName}</span>
             <span style={{ color: "#d1d5db" }}>/</span>
@@ -418,8 +418,8 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
             fontSize: 13,
             borderRadius: 11,
             fontFamily: font,
-            background: canBuild ? "linear-gradient(135deg, #4f46e5, #7c3aed)" : undefined,
-            boxShadow: canBuild ? "0 4px 12px rgba(79,70,229,0.3)" : "none",
+            background: canBuild ? "linear-gradient(135deg, #E57D37, #EAAD62)" : undefined,
+            boxShadow: canBuild ? "0 4px 12px rgba(229,125,55,0.3)" : "none",
             border: "none",
           }}
         >

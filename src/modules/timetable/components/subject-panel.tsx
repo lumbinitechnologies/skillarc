@@ -88,7 +88,7 @@ export default function SubjectPanel() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <BookOpen size={14} className="text-[#6C63FF]" />
+              <BookOpen size={14} className="text-[#E57D37]" />
               <p style={{ fontWeight: 800, fontSize: 13, color: "#0f172a", margin: 0 }}>Units of Study</p>
             </div>
             <p style={{ fontSize: 11, color: "#64748b", marginTop: 3, fontWeight: 500 }} className="truncate max-w-[210px]">
@@ -99,8 +99,8 @@ export default function SubjectPanel() {
             style={{
               fontSize: 10,
               fontWeight: 800,
-              color: "#6C63FF",
-              backgroundColor: "#ede9fe",
+              color: "#E57D37",
+              backgroundColor: "#ffedd5",
               padding: "2px 8px",
               borderRadius: 999,
             }}

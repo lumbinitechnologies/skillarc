@@ -1,14 +1,22 @@
 // src/components/events/events-portal-client.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import {
   Calendar as CalIcon, MapPin, User as UserIcon, Users, Search, Plus, Grid, List, CheckCircle2,
-  ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame
+  ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame, Camera, Image as ImageIcon,
+  UploadCloud, Trash2, Download, Maximize2, Sparkles, Loader2, ZoomIn, Eye, AlertCircle
 } from "lucide-react";
 import { Card, Badge, Button, Input, Select, SectionHeader, EmptyState, Skeleton } from "@/components/placements-ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
+
+export interface GalleryImage {
+  url: string;
+  caption?: string;
+  uploaded_at?: string;
+  uploaded_by?: string;
+}
 
 interface EventItem {
   id: string;
@@ -27,7 +35,20 @@ interface EventItem {
   student_coord_phone?: string;
   tags: string[];
   registeredUsers: string[];
+  image_url?: string | null;
+  gallery_images?: GalleryImage[];
 }
+
+const PRESET_BANNERS = [
+  { label: "Hackathon & Tech", url: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Conference & Stage", url: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Workshop & AI", url: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Cultural Fest", url: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Sports & Athletics", url: "https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Guest Seminar", url: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Robotics Expo", url: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=1200&q=80" },
+  { label: "Graduation Gala", url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80" },
+];
 
 const TIME_OPTIONS = [
   "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
@@ -91,8 +112,8 @@ const DEPT_NAMES: Record<string, string> = {
 };
 
 const DEPT_COLOR_HEX: Record<string, string> = {
-  "computer-science": "#6C63FF",
-  "mathematics": "#8B5CF6",
+  "computer-science": "#E57D37",
+  "mathematics": "#3A6DAF",
   "physics": "#FFB020",
   "chemistry": "#F04438",
   "biology": "#00C2A8",
@@ -121,6 +142,7 @@ export default function EventsPortalClient() {
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [form, setForm] = useState({
     name: "",
     department: "",
@@ -135,7 +157,21 @@ export default function EventsPortalClient() {
     capacity: "100",
     description: "",
     tags: "",
+    image_url: "",
   });
+
+  // Gallery Upload Modal State
+  const [showGalleryModal, setShowGalleryModal] = useState(false);
+  const [galleryUploadFiles, setGalleryUploadFiles] = useState<File[]>([]);
+  const [galleryCaption, setGalleryCaption] = useState("");
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const galleryFileInputRef = useRef<HTMLInputElement | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Lightbox Image Viewer State
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [deletingGalleryUrl, setDeletingGalleryUrl] = useState<string | null>(null);
 
   // Dynamic Departments from DB
   const [colgDepts, setColgDepts] = useState<{ id: string; name: string }[]>([]);
@@ -147,9 +183,9 @@ export default function EventsPortalClient() {
 
   const getDeptColor = (deptId: string) => {
     if (DEPT_COLOR_HEX[deptId]) return DEPT_COLOR_HEX[deptId];
-    const colors = ["#6C63FF", "#8B5CF6", "#00C2A8", "#FFB020", "#F04438", "#06b6d4", "#ec4899", "#3b82f6"];
+    const colors = ["#E57D37", "#3A6DAF", "#00C2A8", "#FFB020", "#F04438", "#06b6d4", "#EAAD62", "#3b82f6"];
     const idx = colgDepts.findIndex(d => d.id === deptId);
-    return idx !== -1 ? colors[idx % colors.length] : "#6C63FF";
+    return idx !== -1 ? colors[idx % colors.length] : "#E57D37";
   };
 
   // Delete Confirmation States
@@ -251,31 +287,94 @@ export default function EventsPortalClient() {
     fetchCollegeDepts();
   }, [institutionId]);
 
-  // Fetch Events from Supabase Database
+  // Fetch Events from Supabase Database with resilient fallbacks
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("events")
-        .select(`
-          id,
-          title,
-          description,
-          event_date,
-          venue,
-          created_by,
-          event_registrations (
-            user_id
-          )
-        `);
+      let data: any[] | null = null;
+      let primaryError: any = null;
 
-      if (institutionId) {
-        query = query.eq("institution_id", institutionId);
+      // Tier 1: Query with all extended columns (image_url, gallery_images, event_registrations)
+      try {
+        let query = supabase
+          .from("events")
+          .select(`
+            id,
+            title,
+            description,
+            event_date,
+            venue,
+            created_by,
+            image_url,
+            gallery_images,
+            event_registrations (
+              user_id
+            )
+          `);
+
+        if (institutionId) {
+          query = query.eq("institution_id", institutionId);
+        }
+
+        const res = await query.order("event_date", { ascending: true });
+        if (res.error) {
+          primaryError = res.error;
+        } else {
+          data = res.data;
+        }
+      } catch (err) {
+        primaryError = err;
       }
 
-      const { data, error } = await query.order("event_date", { ascending: true });
+      // Tier 2: Fallback query without image_url/gallery_images columns (if migration not yet run)
+      if (primaryError || !data) {
+        try {
+          let fbQuery = supabase
+            .from("events")
+            .select(`
+              id,
+              title,
+              description,
+              event_date,
+              venue,
+              created_by,
+              event_registrations (
+                user_id
+              )
+            `);
 
-      if (error) throw error;
+          if (institutionId) {
+            fbQuery = fbQuery.eq("institution_id", institutionId);
+          }
+
+          const fbRes = await fbQuery.order("event_date", { ascending: true });
+          if (!fbRes.error) {
+            data = fbRes.data;
+          } else {
+            // Tier 3: Bare query without relations
+            let bareQuery = supabase.from("events").select("id, title, description, event_date, venue, created_by");
+            if (institutionId) {
+              bareQuery = bareQuery.eq("institution_id", institutionId);
+            }
+            const bareRes = await bareQuery.order("event_date", { ascending: true });
+            if (!bareRes.error) {
+              data = bareRes.data;
+            } else {
+              // Tier 4: Select all without filters
+              const simpleRes = await supabase.from("events").select("*");
+              if (!simpleRes.error) {
+                data = simpleRes.data;
+              } else {
+                console.warn("Could not query events table:", simpleRes.error?.message || simpleRes.error);
+                setEvents([]);
+                return;
+              }
+            }
+          }
+        } catch (tierErr) {
+          console.warn("Fallback query encountered error:", tierErr);
+        }
+      }
 
       const mapped: EventItem[] = (data || []).map((e: any) => {
         let descText = e.description || "";
@@ -286,6 +385,8 @@ export default function EventsPortalClient() {
         let staffPhone = "";
         let studCoord = "";
         let studPhone = "";
+        let coverImg = e.image_url || null;
+        let galleryImgs: GalleryImage[] = Array.isArray(e.gallery_images) ? e.gallery_images : [];
         
         try {
           const json = JSON.parse(e.description);
@@ -298,15 +399,30 @@ export default function EventsPortalClient() {
             staffPhone = json.staff_coord_phone || "";
             studCoord = json.student_coord || "";
             studPhone = json.student_coord_phone || "";
+            if (!coverImg && json.image_url) {
+              coverImg = json.image_url;
+            }
+            if (galleryImgs.length === 0 && Array.isArray(json.gallery_images)) {
+              galleryImgs = json.gallery_images;
+            }
           }
         } catch {
           // Plain text fallback
         }
 
+        // Normalize gallery format if strings were stored
+        galleryImgs = galleryImgs.map((g: any) => {
+          if (typeof g === "string") {
+            return { url: g, uploaded_at: new Date().toISOString() };
+          }
+          return g;
+        });
+
         let dateVal = "2026-07-01";
         let timeVal = "12:00 PM";
-        if (e.event_date) {
-          const parts = e.event_date.split("T");
+        const rawDate = e.event_date || e.start_time || e.date;
+        if (rawDate) {
+          const parts = rawDate.split("T");
           dateVal = parts[0] || "2026-07-01";
           if (parts[1]) {
             const time24 = parts[1].slice(0, 5);
@@ -314,7 +430,9 @@ export default function EventsPortalClient() {
           }
         }
 
-        const registeredUsers = e.event_registrations?.map((r: any) => r.user_id) || [];
+        const registeredUsers = Array.isArray(e.event_registrations)
+          ? e.event_registrations.map((r: any) => r.user_id)
+          : [];
 
         return {
           id: e.id,
@@ -322,7 +440,7 @@ export default function EventsPortalClient() {
           department: deptName,
           date: dateVal,
           time: timeVal,
-          location: e.venue || "Campus Hall",
+          location: e.venue || e.location || "Campus Hall",
           description: descText,
           capacity: 100,
           filled: registeredUsers.length,
@@ -333,12 +451,14 @@ export default function EventsPortalClient() {
           student_coord_phone: studPhone,
           tags: tagsList,
           registeredUsers,
+          image_url: coverImg,
+          gallery_images: galleryImgs,
         };
       });
 
       setEvents(mapped);
-    } catch (err) {
-      console.error("Error fetching events:", err);
+    } catch (err: any) {
+      console.error("Error fetching events:", err?.message || err);
     } finally {
       setLoading(false);
     }
@@ -350,7 +470,7 @@ export default function EventsPortalClient() {
     }
   }, [profileLoaded]);
 
-  const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head"].includes(userRole?.toLowerCase());
+  const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"].includes(userRole?.toLowerCase());
 
   // Timeline Helper
   const getTimelineStatus = (dateStr: string) => {
@@ -445,6 +565,119 @@ export default function EventsPortalClient() {
     setTimeout(() => setToastMessage(""), 3000);
   };
 
+  // Upload Cover Image via File Picker
+  const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds 10MB limit.");
+      return;
+    }
+
+    setUploadingCover(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "cover");
+      if (editingEventId) {
+        formData.append("event_id", editingEventId);
+      }
+
+      const res = await fetch("/api/events/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to upload cover image");
+      }
+
+      setForm(prev => ({ ...prev, image_url: data.url }));
+      triggerToast("Cover banner uploaded!");
+    } catch (err: any) {
+      console.error("Cover upload error:", err);
+      alert(err.message || "Failed to upload image.");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  // Upload Gallery Images to Event
+  const handleGalleryUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEvent || galleryUploadFiles.length === 0) return;
+
+    setUploadingGallery(true);
+    try {
+      for (const file of galleryUploadFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("event_id", selectedEvent.id);
+        formData.append("type", "gallery");
+        if (galleryCaption.trim()) {
+          formData.append("caption", galleryCaption.trim());
+        }
+
+        const res = await fetch("/api/events/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to upload some gallery photos");
+        }
+      }
+
+      triggerToast(`${galleryUploadFiles.length} photo${galleryUploadFiles.length > 1 ? "s" : ""} added to event gallery!`);
+      setGalleryUploadFiles([]);
+      setGalleryCaption("");
+      setShowGalleryModal(false);
+      fetchEvents();
+    } catch (err: any) {
+      console.error("Gallery upload error:", err);
+      alert(err.message || "Error uploading photos.");
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  // Delete Gallery Image
+  const handleDeleteGalleryImage = async (imgUrl: string) => {
+    if (!selectedEvent) return;
+    if (!confirm("Are you sure you want to remove this photo from the gallery?")) return;
+
+    setDeletingGalleryUrl(imgUrl);
+    try {
+      const res = await fetch("/api/events/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: selectedEvent.id,
+          image_url: imgUrl,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete photo");
+      }
+
+      triggerToast("Photo removed from gallery");
+      if (lightboxOpen) {
+        setLightboxOpen(false);
+      }
+      fetchEvents();
+    } catch (err: any) {
+      console.error("Delete photo error:", err);
+      alert(err.message || "Failed to delete photo.");
+    } finally {
+      setDeletingGalleryUrl(null);
+    }
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.date || !form.time || !userId) return;
@@ -454,7 +687,7 @@ export default function EventsPortalClient() {
     const eventDateStr = `${form.date}T${time24}:00`;
     const selectedDate = new Date(eventDateStr);
     const now = new Date();
-    if (selectedDate < now) {
+    if (selectedDate < now && !isEditing) {
       alert("Event date and time cannot be in the past.");
       return;
     }
@@ -468,15 +701,17 @@ export default function EventsPortalClient() {
       staff_coord_phone: form.staff_coord_phone,
       student_coord: form.student_coord,
       student_coord_phone: form.student_coord_phone,
+      image_url: form.image_url || null,
     });
 
-    const payload = {
+    const payload: any = {
       title: form.name,
       description: descPayload,
       event_date: eventDateStr,
       venue: form.location || "Campus Hall",
       created_by: userId,
       institution_id: institutionId,
+      image_url: form.image_url || null,
     };
 
     try {
@@ -486,14 +721,29 @@ export default function EventsPortalClient() {
           .update(payload)
           .eq("id", editingEventId);
 
-        if (error) throw error;
+        if (error) {
+          // Fallback if column image_url doesn't exist yet on Supabase DB
+          delete payload.image_url;
+          const { error: err2 } = await supabase
+            .from("events")
+            .update(payload)
+            .eq("id", editingEventId);
+          if (err2) throw err2;
+        }
         triggerToast("Event successfully updated");
       } else {
         const { error } = await supabase
           .from("events")
           .insert([payload]);
 
-        if (error) throw error;
+        if (error) {
+          // Fallback if column image_url doesn't exist yet on Supabase DB
+          delete payload.image_url;
+          const { error: err2 } = await supabase
+            .from("events")
+            .insert([payload]);
+          if (err2) throw err2;
+        }
         triggerToast("Event successfully scheduled");
       }
 
@@ -515,6 +765,7 @@ export default function EventsPortalClient() {
         capacity: "100",
         description: "",
         tags: "",
+        image_url: "",
       });
     } catch (err) {
       console.error("Error saving event:", err);
@@ -574,16 +825,19 @@ export default function EventsPortalClient() {
     calendarDays.push(new Date(year, month, i));
   }
 
+  // Active gallery list for selected event
+  const currentGallery = selectedEvent?.gallery_images || [];
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
       <SectionHeader
-        title="Department Events Portal"
-        subtitle="Explore and schedule academic conferences, bootcamps, and lectures"
+        title="Department Events & Gallery Portal"
+        subtitle="Explore academic conferences, bootcamps, fests, and relive memories in photo galleries"
         action={
           isCoordinator && (
             <Button
               variant="primary"
-              className="text-xs"
+              className="text-xs flex items-center gap-1.5 shadow-md shadow-amber-200"
               onClick={() => {
                 setForm({
                   name: "",
@@ -599,13 +853,14 @@ export default function EventsPortalClient() {
                   capacity: "100",
                   description: "",
                   tags: "",
+                  image_url: "",
                 });
                 setIsEditing(false);
                 setEditingEventId(null);
                 setShowForm(true);
               }}
             >
-              <Plus size={14} /> Schedule Event
+              <Plus size={15} /> Schedule Event
             </Button>
           )
         }
@@ -625,14 +880,14 @@ export default function EventsPortalClient() {
                 }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer ${
                   timelineTab === "active"
-                    ? "bg-white text-[#6C63FF] shadow-sm font-black scale-[1.02]"
+                    ? "bg-white text-[#E57D37] shadow-sm font-black scale-[1.02]"
                     : "text-slate-500 hover:text-slate-900"
                 }`}
               >
                 <Flame size={14} className={timelineTab === "active" ? "text-amber-500 fill-amber-500" : "text-slate-400"} />
                 <span>Upcoming & Live</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  timelineTab === "active" ? "bg-[#6C63FF]/10 text-[#6C63FF]" : "bg-slate-200/60 text-slate-500"
+                  timelineTab === "active" ? "bg-[#E57D37]/10 text-[#E57D37]" : "bg-slate-200/60 text-slate-500"
                 }`}>
                   {activeCount}
                 </span>
@@ -651,7 +906,7 @@ export default function EventsPortalClient() {
                 }`}
               >
                 <CheckCircle2 size={14} className={timelineTab === "completed" ? "text-emerald-500" : "text-slate-400"} />
-                <span>Completed Events</span>
+                <span>Completed & Gallery</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                   timelineTab === "completed" ? "bg-slate-900 text-white" : "bg-slate-200/60 text-slate-500"
                 }`}>
@@ -670,7 +925,7 @@ export default function EventsPortalClient() {
               <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <Input
                 className="pl-10 text-xs"
-                placeholder={timelineTab === "active" ? "Search upcoming & live events..." : "Search completed events..."}
+                placeholder={timelineTab === "active" ? "Search upcoming & live events..." : "Search completed events and photo galleries..."}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
@@ -687,7 +942,7 @@ export default function EventsPortalClient() {
               {selectedDateStr && (
                 <button
                   onClick={() => setSelectedDateStr(null)}
-                  className="bg-[#6C63FF]/10 text-[#6C63FF] border border-[#6C63FF]/20 px-3 py-2 rounded-2xl text-[10px] font-bold hover:bg-[#6C63FF]/15 transition-all cursor-pointer"
+                  className="bg-[#E57D37]/10 text-[#E57D37] border border-[#E57D37]/20 px-3 py-2 rounded-2xl text-[10px] font-bold hover:bg-[#E57D37]/15 transition-all cursor-pointer"
                 >
                   Date: {selectedDateStr} ✕
                 </button>
@@ -696,13 +951,15 @@ export default function EventsPortalClient() {
               <div className="flex bg-slate-50 p-1 rounded-2xl border border-slate-100/80">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "grid" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "grid" ? "bg-white text-[#E57D37] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  title="Grid View"
                 >
                   <Grid size={14} />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "list" ? "bg-white text-[#6C63FF] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  className={`p-2 rounded-xl transition-all duration-200 cursor-pointer ${viewMode === "list" ? "bg-white text-[#E57D37] shadow-sm font-bold" : "text-slate-400 hover:text-slate-650"}`}
+                  title="List View"
                 >
                   <List size={14} />
                 </button>
@@ -712,7 +969,7 @@ export default function EventsPortalClient() {
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-48" />)}
+              {Array(6).fill(0).map((_, i) => <Skeleton key={i} className="h-56 rounded-3xl" />)}
             </div>
           ) : filteredEvents.length === 0 ? (
             <EmptyState 
@@ -723,40 +980,67 @@ export default function EventsPortalClient() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredEvents.map((item) => {
                 const status = getTimelineStatus(item.date);
+                const hasGallery = item.gallery_images && item.gallery_images.length > 0;
                 return (
                   <div
                     key={item.id}
                     onClick={() => setSelectedEventId(item.id)}
-                    className="group block relative bg-white rounded-3xl border border-slate-100 shadow-[0_2px_8px_rgba(15,23,42,0.02)] overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(108,99,255,0.06)] hover:border-indigo-100 flex flex-col justify-between"
+                    className="group block relative bg-white rounded-3xl border border-slate-100 shadow-[0_2px_8px_rgba(15,23,42,0.02)] overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(229,125,55,0.08)] hover:border-amber-100 flex flex-col justify-between"
                   >
+                    {/* Cover Banner with Image or Gradient */}
                     <div
-                      className="h-28 flex items-end p-4 relative"
-                      style={{
-                        background: `linear-gradient(135deg, ${getDeptColor(item.department)}ee, ${getDeptColor(item.department)}aa)`,
-                      }}
+                      className="h-36 relative overflow-hidden flex flex-col justify-between p-4 bg-slate-900"
                     >
-                      <div className="absolute top-3 right-3 bg-white/95 text-slate-850 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border border-slate-100 shadow-sm">
-                        {status === "today" ? "Today" : status === "past" ? "Closed" : "Upcoming"}
+                      {item.image_url ? (
+                        <>
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-black/30" />
+                        </>
+                      ) : (
+                        <div
+                          className="absolute inset-0 opacity-95"
+                          style={{
+                            background: `linear-gradient(135deg, ${getDeptColor(item.department)}ee, ${getDeptColor(item.department)}88)`,
+                          }}
+                        />
+                      )}
+
+                      <div className="relative z-10 flex items-center justify-between w-full">
+                        <Badge variant="neutral" className="bg-black/50 text-white backdrop-blur-md border-none text-[10px] font-bold">
+                          {getDeptName(item.department)}
+                        </Badge>
+                        <div className="bg-white/95 text-slate-850 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border border-white/20 shadow-sm backdrop-blur-md">
+                          {status === "today" ? "🔥 Today" : status === "past" ? "Completed" : "Upcoming"}
+                        </div>
                       </div>
-                      <Badge variant="neutral" className="bg-black/30 text-white border-none text-[10px] font-bold">
-                        {getDeptName(item.department)}
-                      </Badge>
+
+                      <div className="relative z-10 flex items-center justify-between">
+                        {hasGallery && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E57D37]/90 text-white backdrop-blur-md text-[10px] font-black shadow-sm">
+                            <Camera size={12} /> {item.gallery_images?.length} Photos
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                       <div>
-                        <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-[#6C63FF] transition-colors duration-250 line-clamp-2">{item.name}</h4>
+                        <h4 className="font-bold text-slate-900 text-sm leading-snug group-hover:text-[#E57D37] transition-colors duration-250 line-clamp-2">{item.name}</h4>
                         <div className="space-y-1.5 text-xs text-slate-500 font-semibold mt-3">
-                          <p className="flex items-center gap-2"><CalIcon size={13} className="text-[#6C63FF]/70" /> {item.date}</p>
-                          <p className="flex items-center gap-2"><Clock size={13} className="text-[#6C63FF]/70" /> {item.time}</p>
-                          <p className="flex items-center gap-2"><MapPin size={13} className="text-[#6C63FF]/70" /> {item.location}</p>
+                          <p className="flex items-center gap-2"><CalIcon size={13} className="text-[#E57D37]/70" /> {item.date}</p>
+                          <p className="flex items-center gap-2"><Clock size={13} className="text-[#E57D37]/70" /> {item.time}</p>
+                          <p className="flex items-center gap-2"><MapPin size={13} className="text-[#E57D37]/70" /> {item.location}</p>
                         </div>
                       </div>
 
                       <div className="border-t border-slate-50 pt-4 flex items-center justify-between text-xs text-slate-500 mt-auto">
-                        <span className="font-bold text-slate-650 truncate max-w-[120px]">{item.organizer}</span>
-                        <span className="font-['Space_Grotesk'] font-bold text-[#6C63FF] bg-[#6C63FF]/5 border border-[#6C63FF]/15 px-2 py-0.5 rounded-md">
-                          {item.capacity - item.filled} seats left
+                        <span className="font-bold text-slate-655 truncate max-w-[120px]">{item.organizer}</span>
+                        <span className="font-['Space_Grotesk'] font-bold text-[#E57D37] bg-[#E57D37]/5 border border-[#E57D37]/15 px-2 py-0.5 rounded-md">
+                          {status === "past" ? `${item.filled} attended` : `${item.capacity - item.filled} seats left`}
                         </span>
                       </div>
                     </div>
@@ -768,24 +1052,40 @@ export default function EventsPortalClient() {
             <div className="space-y-3">
               {filteredEvents.map((item) => {
                 const status = getTimelineStatus(item.date);
+                const hasGallery = item.gallery_images && item.gallery_images.length > 0;
                 return (
                   <div
                     key={item.id}
                     onClick={() => setSelectedEventId(item.id)}
-                    className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:shadow-[0_12px_30px_rgba(15,23,42,0.03)] hover:border-slate-200 transition-all duration-200"
+                    className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:shadow-[0_12px_30px_rgba(15,23,42,0.04)] hover:border-amber-100 transition-all duration-200"
                   >
-                    <div
-                      className="w-2 h-10 rounded-full shrink-0"
-                      style={{ backgroundColor: getDeptColor(item.department) }}
-                    />
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 shadow-sm"
+                      />
+                    ) : (
+                      <div
+                        className="w-2 h-10 rounded-full shrink-0"
+                        style={{ backgroundColor: getDeptColor(item.department) }}
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-slate-800 text-sm truncate">{item.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-800 text-sm truncate">{item.name}</h4>
+                        {hasGallery && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[10px] font-black shrink-0">
+                            <Camera size={11} /> {item.gallery_images?.length}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-400 font-semibold mt-0.5">
                         {getDeptName(item.department)} · {item.date} at {item.time} · {item.location}
                       </p>
                     </div>
                     <Badge variant={status === "today" ? "warning" : status === "past" ? "neutral" : "success"}>
-                      {status}
+                      {status === "today" ? "Today" : status === "past" ? "Completed" : "Upcoming"}
                     </Badge>
                   </div>
                 );
@@ -796,12 +1096,12 @@ export default function EventsPortalClient() {
 
         {/* Right Calendar */}
         <div className="space-y-6">
-          <Card className="p-5">
+          <Card className="p-5 shadow-sm border-slate-100 rounded-3xl">
             <div className="flex justify-between items-center mb-4">
               <span className="text-xs font-black tracking-wider text-slate-900 uppercase">{monthNames[month]} {year}</span>
               <div className="flex gap-1">
-                <button onClick={prevMonth} className="p-1 hover:bg-slate-50 border border-slate-100/50 rounded-lg text-slate-550"><ChevronLeft size={14} /></button>
-                <button onClick={nextMonth} className="p-1 hover:bg-slate-50 border border-slate-100/50 rounded-lg text-slate-550"><ChevronRight size={14} /></button>
+                <button onClick={prevMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors"><ChevronLeft size={14} /></button>
+                <button onClick={nextMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors"><ChevronRight size={14} /></button>
               </div>
             </div>
 
@@ -839,13 +1139,13 @@ export default function EventsPortalClient() {
                     }}
                     className={`h-8 w-8 rounded-full flex flex-col items-center justify-center font-['Space_Grotesk'] font-bold mx-auto relative transition-all duration-200 cursor-pointer ${
                       isSelected
-                        ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
+                        ? "bg-[#E57D37] text-white shadow-md shadow-amber-100"
                         : "hover:bg-slate-50 text-slate-700"
                     }`}
                   >
                     <span>{dayNum}</span>
                     {hasEvents && !isSelected && (
-                      <span className="absolute bottom-1 w-1 h-1 bg-[#6C63FF] rounded-full" />
+                      <span className="absolute bottom-1 w-1 h-1 bg-[#E57D37] rounded-full" />
                     )}
                   </button>
                 );
@@ -853,13 +1153,14 @@ export default function EventsPortalClient() {
             </div>
           </Card>
 
-          <Card className="p-5 bg-slate-50/50 border-slate-100">
-            <h4 className="font-black text-[10px] text-slate-400 mb-3 uppercase tracking-wider">Instructions</h4>
-            <ul className="text-xs font-semibold text-slate-500 space-y-2 list-disc list-inside">
-              <li>Click calendar days to filter by date.</li>
-              <li>Select any event card to view details.</li>
-              <li>Register online to reserve seats.</li>
-            </ul>
+          <Card className="p-5 bg-gradient-to-br from-amber-50/50 via-white to-orange-50/30 border-amber-100/60 rounded-3xl space-y-3">
+            <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+              <Sparkles size={15} className="text-[#E57D37]" />
+              <span>Events & Photo Memories</span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              Upload rich cover banners during creation, and add photo albums to completed events so students and faculty can relive key moments.
+            </p>
           </Card>
         </div>
       </div>
@@ -884,14 +1185,33 @@ export default function EventsPortalClient() {
                 </button>
               </div>
 
+              {/* Cover Banner in Drawer */}
               <div
-                className="h-44 w-full rounded-3xl mb-6 flex flex-col justify-end p-5 relative overflow-hidden"
-                style={{
-                  background: `linear-gradient(135deg, ${getDeptColor(selectedEvent.department)}ee, ${getDeptColor(selectedEvent.department)}77)`,
-                }}
+                className="h-48 w-full rounded-3xl mb-6 relative overflow-hidden flex flex-col justify-end p-5 shadow-inner"
               >
-                <div className="text-white text-xs font-bold drop-shadow-sm flex items-center gap-1.5">
-                  <MapPin size={14} /> {selectedEvent.location}
+                {selectedEvent.image_url ? (
+                  <>
+                    <img
+                      src={selectedEvent.image_url}
+                      alt={selectedEvent.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/30 to-black/20" />
+                  </>
+                ) : (
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      background: `linear-gradient(135deg, ${getDeptColor(selectedEvent.department)}ee, ${getDeptColor(selectedEvent.department)}77)`,
+                    }}
+                  />
+                )}
+
+                <div className="relative z-10 text-white text-xs font-bold drop-shadow-sm flex items-center justify-between">
+                  <span className="flex items-center gap-1.5"><MapPin size={14} /> {selectedEvent.location}</span>
+                  <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    {selectedEvent.date}
+                  </span>
                 </div>
               </div>
 
@@ -939,19 +1259,106 @@ export default function EventsPortalClient() {
                 <div className="space-y-2.5 border-t border-slate-100 pt-5">
                   <div className="flex justify-between text-xs font-bold text-slate-655">
                     <span>Seats Reservation</span>
-                    <span className="font-['Space_Grotesk'] text-[#6C63FF]">{selectedEvent.filled} / {selectedEvent.capacity} filled</span>
+                    <span className="font-['Space_Grotesk'] text-[#E57D37]">{selectedEvent.filled} / {selectedEvent.capacity} filled</span>
                   </div>
                   <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6]" style={{ width: `${(selectedEvent.filled / selectedEvent.capacity) * 100}%` }} />
+                    <div className="h-full bg-gradient-to-r from-[#E57D37] to-[#EAAD62]" style={{ width: `${(selectedEvent.filled / selectedEvent.capacity) * 100}%` }} />
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 pt-2">
                   {selectedEvent.tags.map((tag) => (
                     <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 text-slate-600 text-[10px] font-bold border border-slate-150">
-                      <Tag size={10} className="text-[#6C63FF]/70" /> {tag}
+                      <Tag size={10} className="text-[#E57D37]/70" /> {tag}
                     </span>
                   ))}
+                </div>
+
+                {/* 🌟 EVENT PHOTO GALLERY SECTION 🌟 */}
+                <div className="border-t border-slate-100 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                        <Camera size={15} className="text-[#E57D37]" />
+                        <span>Event Memories & Photo Gallery</span>
+                        <span className="bg-[#E57D37]/10 text-[#E57D37] text-[10px] px-2 py-0.5 rounded-full font-black">
+                          {currentGallery.length}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                        {currentGallery.length > 0 ? "Click any photo to view full-screen lightbox" : "Photos captured during this event"}
+                      </p>
+                    </div>
+
+                    {isCoordinator && (
+                      <Button
+                        variant="secondary"
+                        className="text-xs py-1.5 px-3 flex items-center gap-1.5 border-amber-200 text-amber-800 bg-amber-50/50 hover:bg-amber-100/60"
+                        onClick={() => {
+                          setGalleryUploadFiles([]);
+                          setGalleryCaption("");
+                          setShowGalleryModal(true);
+                        }}
+                      >
+                        <Plus size={13} /> Add Photos
+                      </Button>
+                    )}
+                  </div>
+
+                  {currentGallery.length === 0 ? (
+                    <div className="border-2 border-dashed border-slate-200 rounded-3xl p-6 text-center space-y-3 bg-slate-50/50">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-[#E57D37] flex items-center justify-center mx-auto shadow-sm">
+                        <ImageIcon size={22} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">No event photos uploaded yet</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Coordinators and faculty can upload event pictures, awards, and highlights.
+                        </p>
+                      </div>
+                      {isCoordinator && (
+                        <Button
+                          variant="primary"
+                          className="text-xs py-1.5 px-3"
+                          onClick={() => setShowGalleryModal(true)}
+                        >
+                          <Camera size={14} className="mr-1.5" /> Upload Event Photos
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {currentGallery.map((img, idx) => (
+                        <div
+                          key={img.url + idx}
+                          onClick={() => {
+                            setLightboxIndex(idx);
+                            setLightboxOpen(true);
+                          }}
+                          className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-100 border border-slate-200/80 cursor-pointer shadow-sm hover:shadow-md transition-all duration-200"
+                        >
+                          <img
+                            src={img.url}
+                            alt={img.caption || `Event photo ${idx + 1}`}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5">
+                            <div className="flex justify-end">
+                              <span className="p-1 rounded-lg bg-black/40 text-white backdrop-blur-md">
+                                <ZoomIn size={12} />
+                              </span>
+                            </div>
+                            {img.caption && (
+                              <p className="text-[10px] text-white font-semibold line-clamp-2 drop-shadow">
+                                {img.caption}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -992,6 +1399,7 @@ export default function EventsPortalClient() {
                           capacity: String(selectedEvent.capacity),
                           description: selectedEvent.description,
                           tags: selectedEvent.tags.join(", "),
+                          image_url: selectedEvent.image_url || "",
                         });
                         setIsEditing(true);
                         setEditingEventId(selectedEvent.id);
@@ -1018,13 +1426,201 @@ export default function EventsPortalClient() {
         </div>
       )}
 
-      {/* Form Scheduling Modal */}
+      {/* 📸 GALLERY PHOTO UPLOAD MODAL */}
+      {showGalleryModal && selectedEvent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[75] flex items-center justify-center p-4" onClick={() => setShowGalleryModal(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-2xl bg-amber-50 text-[#E57D37] flex items-center justify-center">
+                  <Camera size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Add Photos to Event Gallery</h3>
+                  <p className="text-xs text-slate-500 font-medium">{selectedEvent.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowGalleryModal(false)} className="p-1.5 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-700">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleGalleryUpload} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2">Select Photos (Max 10MB each)</label>
+                <input
+                  ref={galleryFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={e => {
+                    const files = Array.from(e.target.files || []);
+                    setGalleryUploadFiles(files);
+                  }}
+                />
+
+                <div
+                  onClick={() => galleryFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-amber-200 bg-amber-50/30 hover:bg-amber-50/60 rounded-2xl p-6 text-center cursor-pointer transition-colors space-y-2"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-white text-[#E57D37] shadow-sm flex items-center justify-center mx-auto">
+                    <UploadCloud size={24} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">Click or browse to choose photos</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">JPG, PNG, WebP, GIF accepted</p>
+                  </div>
+                </div>
+
+                {galleryUploadFiles.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {galleryUploadFiles.map((f, i) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-800 text-xs font-semibold">
+                        <ImageIcon size={12} className="text-[#E57D37]" />
+                        <span className="truncate max-w-[140px]">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setGalleryUploadFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-slate-400 hover:text-red-500 ml-1"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Album Caption / Notes (Optional)</label>
+                <Input
+                  placeholder="e.g. Winners felicitated at the annual tech symposium"
+                  value={galleryCaption}
+                  onChange={e => setGalleryCaption(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+                <Button type="button" variant="secondary" onClick={() => setShowGalleryModal(false)} disabled={uploadingGallery}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={galleryUploadFiles.length === 0 || uploadingGallery} className="flex items-center gap-1.5">
+                  {uploadingGallery ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Uploading ({galleryUploadFiles.length})...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud size={14} /> Upload {galleryUploadFiles.length > 0 ? `(${galleryUploadFiles.length})` : ""}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🔍 LIGHTBOX FULLSCREEN IMAGE VIEWER */}
+      {lightboxOpen && selectedEvent && currentGallery.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/95 backdrop-blur-md z-[90] flex flex-col justify-between p-4 sm:p-8 animate-in fade-in duration-200"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Top Bar */}
+          <div className="flex items-center justify-between text-white z-10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 rounded-full bg-white/10 text-white text-xs font-bold font-['Space_Grotesk']">
+                {lightboxIndex + 1} / {currentGallery.length}
+              </span>
+              <span className="text-sm font-bold text-slate-200 truncate max-w-sm hidden sm:inline">
+                {selectedEvent.name}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href={currentGallery[lightboxIndex]?.url}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                title="Open/Download Original Image"
+              >
+                <Download size={16} />
+              </a>
+
+              {isCoordinator && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteGalleryImage(currentGallery[lightboxIndex]?.url)}
+                  disabled={deletingGalleryUrl === currentGallery[lightboxIndex]?.url}
+                  className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-200 transition-colors"
+                  title="Delete Image"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(false)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Main Photo Center */}
+          <div className="relative flex-1 flex items-center justify-center my-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {currentGallery.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(prev => (prev > 0 ? prev - 1 : currentGallery.length - 1))}
+                className="absolute left-2 sm:left-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20"
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
+
+            <img
+              src={currentGallery[lightboxIndex]?.url}
+              alt={currentGallery[lightboxIndex]?.caption || `Photo ${lightboxIndex + 1}`}
+              className="max-h-[75vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl"
+            />
+
+            {currentGallery.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setLightboxIndex(prev => (prev < currentGallery.length - 1 ? prev + 1 : 0))}
+                className="absolute right-2 sm:right-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20"
+              >
+                <ChevronRight size={22} />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Caption */}
+          <div className="text-center text-white z-10 max-w-xl mx-auto" onClick={e => e.stopPropagation()}>
+            {currentGallery[lightboxIndex]?.caption && (
+              <p className="text-sm font-semibold bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl text-slate-100">
+                {currentGallery[lightboxIndex]?.caption}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Form Scheduling & Editing Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-3xl w-full max-w-xl max-h-[90vh] overflow-y-auto p-8 flex flex-col justify-between shadow-2xl border border-slate-100/60 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2">
-                <CalIcon className="text-[#6C63FF]" size={18} />
+                <CalIcon className="text-[#E57D37]" size={18} />
                 <h3 className="font-black text-slate-900 text-lg font-['Plus_Jakarta_Sans']">
                   {isEditing ? "Edit Department Event" : "Schedule Department Event"}
                 </h3>
@@ -1036,6 +1632,84 @@ export default function EventsPortalClient() {
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Event Title *</label>
                 <Input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              </div>
+
+              {/* Cover Image Uploader & Presets */}
+              <div className="space-y-2 p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                  Event Cover Poster / Banner Image
+                </label>
+
+                {form.image_url ? (
+                  <div className="relative rounded-2xl overflow-hidden h-32 border border-slate-200 group">
+                    <img src={form.image_url} alt="Cover preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => coverFileInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 shadow-sm"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm(p => ({ ...p, image_url: "" }))}
+                        className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-sm"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <input
+                      ref={coverFileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleCoverFileUpload}
+                    />
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={uploadingCover}
+                        onClick={() => coverFileInputRef.current?.click()}
+                        className="flex-1 py-3 px-4 rounded-xl border border-dashed border-amber-300 bg-white hover:bg-amber-50/40 text-xs font-bold text-amber-800 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      >
+                        {uploadingCover ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" /> Uploading Cover...
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud size={15} /> Upload Custom Poster
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Or Choose Quick Preset Banner:</span>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {PRESET_BANNERS.map(b => (
+                          <button
+                            key={b.url}
+                            type="button"
+                            onClick={() => setForm(p => ({ ...p, image_url: b.url }))}
+                            className="relative h-12 rounded-xl overflow-hidden border border-slate-200 hover:border-[#E57D37] hover:scale-105 transition-all text-left"
+                            title={b.label}
+                          >
+                            <img src={b.url} alt={b.label} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/40 flex items-end p-1">
+                              <span className="text-[8px] font-black text-white leading-none truncate">{b.label}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1113,9 +1787,14 @@ export default function EventsPortalClient() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Tags (comma separated)</label>
+                <Input placeholder="Tech, Hackathon, Coding, Web3" value={form.tags} onChange={e => setForm(p => ({ ...p, tags: e.target.value }))} />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Description & Agenda</label>
                 <textarea
-                  className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#6C63FF] focus:ring-2 focus:ring-[#6C63FF]/10 transition-all"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-semibold focus:outline-none focus:border-[#E57D37] focus:ring-2 focus:ring-[#E57D37]/10 transition-all"
                   rows={3} value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                 />
               </div>
@@ -1152,7 +1831,7 @@ export default function EventsPortalClient() {
                   type="button"
                   onClick={() => setPickerMode("hours")}
                   className={`transition-colors duration-150 ${
-                    pickerMode === "hours" ? "text-[#6C63FF]" : "text-slate-400 hover:text-slate-650"
+                    pickerMode === "hours" ? "text-[#E57D37]" : "text-slate-400 hover:text-slate-650"
                   }`}
                 >
                   {String(selectedHour).padStart(2, "0")}
@@ -1162,7 +1841,7 @@ export default function EventsPortalClient() {
                   type="button"
                   onClick={() => setPickerMode("minutes")}
                   className={`transition-colors duration-150 ${
-                    pickerMode === "minutes" ? "text-[#6C63FF]" : "text-slate-400 hover:text-slate-650"
+                    pickerMode === "minutes" ? "text-[#E57D37]" : "text-slate-400 hover:text-slate-650"
                   }`}
                 >
                   {String(selectedMinute).padStart(2, "0")}
@@ -1174,7 +1853,7 @@ export default function EventsPortalClient() {
             {/* Clock Dial Face */}
             <div className="w-[200px] h-[200px] bg-slate-50 border border-slate-100 rounded-full relative mx-auto my-2 shadow-inner">
               {/* Center pivot dot */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#6C63FF] z-20" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#E57D37] z-20" />
 
               {/* Hand pointer line */}
               {(() => {
@@ -1183,7 +1862,7 @@ export default function EventsPortalClient() {
                   : (selectedMinute / 5) * 30;
                 return (
                   <div 
-                    className="absolute bottom-1/2 left-1/2 w-[2px] bg-[#6C63FF]/70 origin-bottom z-10 pointer-events-none transition-transform duration-200"
+                    className="absolute bottom-1/2 left-1/2 w-[2px] bg-[#E57D37]/70 origin-bottom z-10 pointer-events-none transition-transform duration-200"
                     style={{
                       height: "76px",
                       marginLeft: "-1px",
@@ -1206,7 +1885,7 @@ export default function EventsPortalClient() {
                     onClick={() => handleSelectClockVal(item.val)}
                     className={`absolute w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black tracking-tighter transition-all duration-150 z-20 ${
                       isSelected 
-                        ? "bg-[#6C63FF] text-white font-black scale-110 shadow-md shadow-indigo-150" 
+                        ? "bg-[#E57D37] text-white font-black scale-110 shadow-md shadow-amber-150" 
                         : "text-slate-500 hover:bg-slate-200/60 hover:text-slate-900"
                     }`}
                   >
@@ -1223,7 +1902,7 @@ export default function EventsPortalClient() {
                 onClick={() => setSelectedTimeAmPm("AM")}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                   selectedTimeAmPm === "AM" 
-                    ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100" 
+                    ? "bg-[#E57D37] text-white shadow-md shadow-amber-100" 
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -1234,7 +1913,7 @@ export default function EventsPortalClient() {
                 onClick={() => setSelectedTimeAmPm("PM")}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
                   selectedTimeAmPm === "PM" 
-                    ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100" 
+                    ? "bg-[#E57D37] text-white shadow-md shadow-amber-100" 
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
@@ -1254,7 +1933,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={saveClockPickerTime}
-                className="flex-1 py-2.5 text-xs font-bold rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white hover:opacity-95 transition-all shadow-md shadow-indigo-100 cursor-pointer"
+                className="flex-1 py-2.5 text-xs font-bold rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white hover:opacity-95 transition-all shadow-md shadow-amber-100 cursor-pointer"
               >
                 OK
               </button>
@@ -1264,7 +1943,7 @@ export default function EventsPortalClient() {
       )}
 
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-[60] animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="fixed top-6 right-6 z-[95] animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="bg-emerald-50/95 border border-emerald-200 text-emerald-900 text-xs font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 backdrop-blur-md">
             <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
               <CheckCircle2 size={14} />

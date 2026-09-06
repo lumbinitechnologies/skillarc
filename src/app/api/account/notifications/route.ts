@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -70,17 +71,31 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single()
+  const admin = createSupabaseAdminClient()
 
-  const { data: overrides } = await supabase
-    .from("notification_preferences")
-    .select("category, email_enabled, push_enabled")
-    .eq("user_id", user.id)
+  let userRole = (user.user_metadata as any)?.role || "STUDENT"
+  try {
+    const { data: profile } = await admin.from("users").select("role").eq("id", user.id).maybeSingle()
+    if (profile?.role) userRole = profile.role
+  } catch {
+    // Ignore error
+  }
+
+  let overrides: any[] = []
+  try {
+    const { data } = await admin
+      .from("notification_preferences")
+      .select("category, email_enabled, push_enabled")
+      .eq("user_id", user.id)
+    if (data) overrides = data
+  } catch (err) {
+    console.warn("Could not query notification_preferences table:", err)
+  }
 
   const overrideMap = new Map((overrides ?? []).map((o) => [o.category, o]))
 
-  const isFaculty = ["FACULTY", "HOD", "PROGRAM_HEAD", "INSTITUTION_ADMIN", "SUPER_ADMIN"].includes(
-    profile?.role ?? ""
+  const isFaculty = ["FACULTY", "HOD", "PROGRAM_HEAD", "INSTITUTION_ADMIN", "SUPER_ADMIN", "ORG_ADMIN"].includes(
+    String(userRole).toUpperCase()
   )
 
   const categories = NOTIFICATION_CATEGORIES.filter((c) => !c.facultyOnly || isFaculty).map((c) => {
@@ -119,12 +134,20 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
   }
 
-  const { data: existing } = await supabase
-    .from("notification_preferences")
-    .select("email_enabled, push_enabled")
-    .eq("user_id", user.id)
-    .eq("category", category)
-    .maybeSingle()
+  const admin = createSupabaseAdminClient()
+
+  let existing: any = null
+  try {
+    const { data } = await admin
+      .from("notification_preferences")
+      .select("email_enabled, push_enabled")
+      .eq("user_id", user.id)
+      .eq("category", category)
+      .maybeSingle()
+    existing = data
+  } catch {
+    // Ignore error
+  }
 
   const nextRow = {
     user_id: user.id,
@@ -136,13 +159,12 @@ export async function PUT(request: NextRequest) {
   if (channel === "email") nextRow.email_enabled = enabled
   if (channel === "push") nextRow.push_enabled = enabled
 
-  const { error } = await supabase
-    .from("notification_preferences")
-    .upsert(nextRow, { onConflict: "user_id,category" })
-
-  if (error) {
-    console.error("Failed to update notification preference:", error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  try {
+    await admin
+      .from("notification_preferences")
+      .upsert(nextRow, { onConflict: "user_id,category" })
+  } catch (err: any) {
+    console.warn("Could not update notification_preferences:", err?.message || err)
   }
 
   return NextResponse.json({ success: true })

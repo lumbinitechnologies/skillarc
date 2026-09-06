@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
-import { ROLES } from "@/constants/roles"
 import { StudentAssignmentSolveClient } from "./student-assignment-solve-client"
 
 export const dynamic = "force-dynamic"
@@ -10,11 +9,20 @@ interface PageProps {
   params: Promise<{
     subjectId: string
     assignmentId: string
-  }>
+  }> | {
+    subjectId: string
+    assignmentId: string
+  }
 }
 
 export default async function StudentAssignmentPage({ params }: PageProps) {
-  const { subjectId, assignmentId } = await params
+  const resolvedParams = await Promise.resolve(params)
+  const { subjectId, assignmentId } = resolvedParams || {}
+
+  if (!assignmentId) {
+    redirect(subjectId ? `/dashboard/student/subjects/${subjectId}` : "/dashboard/student")
+  }
+
   const supabase = await createSupabaseServerClient()
   const {
     data: { user },
@@ -28,19 +36,19 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
     .from("users")
     .select("id, name, role")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
-  if (!profile || profile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (!profile) redirect("/dashboard")
 
   // 1. Fetch Assignment Info
   const { data: assignment } = await adminClient
     .from("assignments")
     .select("*")
     .eq("id", assignmentId)
-    .single()
+    .maybeSingle()
 
   if (!assignment) {
-    redirect(`/dashboard/student/subjects/${subjectId}`)
+    redirect(subjectId ? `/dashboard/student/subjects/${subjectId}` : "/dashboard/student")
   }
 
   // 2. Fetch Student's Submission for this assignment
@@ -51,11 +59,13 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
     .eq("student_id", user.id)
     .maybeSingle()
 
+  const finalSubjectId = assignment.subject_id || subjectId || ""
+
   return (
     <StudentAssignmentSolveClient
       studentId={user.id}
-      studentName={profile.name}
-      subjectId={subjectId}
+      studentName={profile.name || "Student"}
+      subjectId={finalSubjectId}
       assignment={assignment}
       initialSubmission={submission}
     />

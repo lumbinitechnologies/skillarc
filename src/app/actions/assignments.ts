@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { detectAIContent } from "@/lib/ai-detector"
+import { dispatchNotification, dispatchBatchNotifications } from "@/lib/notification-service"
 
 export async function createAssignmentAction(data: {
   subject_id: string
@@ -49,17 +50,17 @@ export async function createAssignmentAction(data: {
         .in("section_id", data.section_ids)
 
       if (studentsList && studentsList.length > 0) {
-        const notifications = studentsList.map(st => ({
-          user_id: st.id,
-          title: "📚 New Assignment Assigned",
-          message: `A new assignment "${data.title}" has been assigned for your class.`,
-          is_read: false,
-        }))
-
-        await supabase.from("notifications").insert(notifications)
+        const studentIds = studentsList.map(st => st.id)
+        await dispatchBatchNotifications(
+          studentIds,
+          "due_date",
+          "📚 New Assignment Assigned",
+          `A new assignment "${data.title}" has been assigned for your class.`,
+          `/dashboard/student/subjects/${data.subject_id}`
+        )
       }
     } catch (notifErr) {
-      console.error("Failed to insert assignment notifications for students:", notifErr)
+      console.error("Failed to dispatch assignment notifications for students:", notifErr)
     }
   }
 
@@ -179,15 +180,16 @@ export async function gradeSubmissionAction(
       if (student?.id) {
         const assignmentTitle = (sub as any).assignments?.title || "Assignment"
         const maxScore = (sub as any).assignments?.max_score || 100
-        await supabase.from("notifications").insert({
-          user_id: student.id,
+        await dispatchNotification({
+          userId: student.id,
+          category: "grading",
           title: "📝 Assignment Graded",
           message: `Your submission for "${assignmentTitle}" has been graded: ${grade}/${maxScore}.`,
-          is_read: false,
+          link: `/dashboard/student/subjects/${subjectId}`,
         })
       }
     } catch (notifErr) {
-      console.error("Failed to insert grade notification:", notifErr)
+      console.error("Failed to dispatch grade notification:", notifErr)
     }
   }
 
@@ -209,6 +211,24 @@ export async function submitAssignmentAction(data: {
   subject_id: string
 }) {
   const supabase = await createSupabaseServerClient()
+
+  // 1. Fetch assignment details to enforce due date and fetch faculty info
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select("id, title, faculty_id, due_date")
+    .eq("id", data.assignment_id)
+    .maybeSingle()
+
+  // 2. Strict due date validation: block submissions if deadline has passed
+  if (assignment?.due_date) {
+    const dueDate = new Date(assignment.due_date)
+    if (!isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()) {
+      return {
+        success: false,
+        error: "Submissions closed: The deadline for this assignment/quiz has passed.",
+      }
+    }
+  }
 
   // Upsert or insert submission
   const { data: existing } = await supabase
@@ -284,16 +304,17 @@ export async function submitAssignmentAction(data: {
 
       if (faculty?.user_id) {
         const studentName = (studentUser as any)?.users?.name || "A student"
-        await supabase.from("notifications").insert({
-          user_id: faculty.user_id,
+        await dispatchNotification({
+          userId: faculty.user_id,
+          category: "submissions",
           title: "📥 New Submission Received",
           message: `${studentName} submitted their solution for "${assignment.title}".`,
-          is_read: false,
+          link: `/dashboard/faculty/subjects/${data.subject_id}`,
         })
       }
     }
   } catch (notifErr) {
-    console.error("Failed to insert submission notification:", notifErr)
+    console.error("Failed to dispatch submission notification:", notifErr)
   }
 
   revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)

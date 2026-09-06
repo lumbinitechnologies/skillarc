@@ -20,48 +20,38 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
     ? {
         name: initialProfile.name,
         role: initialProfile.role,
+        profile_image_url: initialProfile.profile_image_url,
       }
     : null
-
-  const profileRoutes: Record<Role, string> = {
-    [ROLES.SUPER_ADMIN]: "/dashboard/super-admin",
-    [ROLES.ORG_ADMIN]: "/dashboard/org-admin",
-    [ROLES.INSTITUTION_ADMIN]: "/dashboard/institution-admin",
-    [ROLES.HOD]: "/dashboard/hod",
-    [ROLES.PROGRAM_HEAD]: "/dashboard/program-head",
-    [ROLES.FACULTY]: "/dashboard/faculty/profile",
-    [ROLES.STUDENT]: "/dashboard/student",
-    [ROLES.PARENT]: "/dashboard/parent",
-  }
-
-  const settingsRoutes: Record<Role, string> = {
-    [ROLES.SUPER_ADMIN]: "/dashboard/super-admin/settings",
-    [ROLES.ORG_ADMIN]: "/dashboard/org-admin",
-    [ROLES.INSTITUTION_ADMIN]: "/dashboard/institution-admin",
-    [ROLES.HOD]: "/dashboard/hod",
-    [ROLES.PROGRAM_HEAD]: "/dashboard/program-head",
-    [ROLES.FACULTY]: "/dashboard/faculty/profile",
-    [ROLES.STUDENT]: "/dashboard/student",
-    [ROLES.PARENT]: "/dashboard/parent",
-  }
-
-  const profilePath = profile ? profileRoutes[profile.role as Role] ?? "/dashboard" : "/dashboard"
-  const settingsPath = profile ? settingsRoutes[profile.role as Role] ?? profilePath : "/dashboard"
 
   const [notifications, setNotifications] = useState<any[]>([])
 
   useEffect(() => {
     async function loadNotifications(userId: string) {
       try {
-        const { data } = await supabase
+        let items: any[] | null = null
+        const res = await supabase
           .from("notifications")
-          .select("id, title, message, is_read, created_at")
+          .select("id, title, message, link, is_read, created_at")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
-          .limit(6)
+          .limit(10)
 
-        if (data) {
-          setNotifications(data)
+        // Fallback if link column is not added to notifications table yet
+        if (res.error && (res.error.code === "42703" || res.error.message?.includes("link"))) {
+          const fallback = await supabase
+            .from("notifications")
+            .select("id, title, message, is_read, created_at")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+          items = (fallback.data as any[]) || []
+        } else if (res.data) {
+          items = res.data as any[]
+        }
+
+        if (items) {
+          setNotifications(items)
         }
       } catch (err) {
         console.error("Failed to load notifications:", err)
@@ -70,6 +60,29 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
 
     if (initialProfile?.id) {
       loadNotifications(initialProfile.id)
+
+      // Realtime subscription for incoming notifications
+      const channel = supabase
+        .channel(`public:notifications:${initialProfile.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${initialProfile.id}`,
+          },
+          (payload) => {
+            if (payload.new) {
+              setNotifications((prev) => [payload.new, ...prev.slice(0, 9)])
+            }
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
   }, [initialProfile?.id])
 
@@ -93,7 +106,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
     window.location.replace("/auth/login")
   }
 
-  async function markAsRead(id: string) {
+  async function markAsRead(id: string, link?: string) {
     try {
       await supabase
         .from("notifications")
@@ -104,21 +117,54 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
     } catch (err) {
       console.error("Failed to mark notification read:", err)
     }
+
+    if (link) {
+      setNotifOpen(false)
+      router.push(link)
+    }
+  }
+
+  async function markAllAsRead() {
+    if (!initialProfile?.id) return
+    try {
+      await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("user_id", initialProfile.id)
+      
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    } catch (err) {
+      console.error("Failed to mark all read:", err)
+    }
   }
 
   function fmtTime(dateStr: string) {
+    if (!dateStr) return ""
     try {
-      const diffMs = Date.now() - new Date(dateStr).getTime()
+      // Normalize UTC timestamp string if stored without timezone indicator in DB
+      const normalized =
+        dateStr.includes("Z") || dateStr.includes("+") || /-\d\d:\d\d$/.test(dateStr)
+          ? dateStr
+          : `${dateStr}Z`
+      const date = new Date(normalized)
+      const diffMs = Date.now() - date.getTime()
+      if (isNaN(diffMs)) return ""
+
       const diffMin = Math.floor(diffMs / 60000)
       if (diffMin < 1) return "Just now"
       if (diffMin < 60) return `${diffMin}m ago`
       const diffHr = Math.floor(diffMin / 60)
       if (diffHr < 24) return `${diffHr}h ago`
-      return new Date(dateStr).toLocaleDateString()
+      const diffDays = Math.floor(diffHr / 24)
+      if (diffDays === 1) return "Yesterday"
+      if (diffDays < 7) return `${diffDays}d ago`
+      return date.toLocaleDateString()
     } catch {
       return ""
     }
   }
+
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
   return (
     <header className="sticky top-0 z-20 border-b border-gray-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
@@ -164,41 +210,80 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
               className={`relative inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-100 ${notifOpen ? "ring-1 ring-gray-300" : ""}`}
             >
               <Bell size={16} />
-              {notifications.some(n => !n.is_read) && (
+              {unreadCount > 0 && (
                 <>
-                  <span className="absolute right-2 top-2 inline-flex h-2.5 w-2.5 rounded-full bg-[#E57D37] opacity-90 shadow-[0_0_0_4px_rgba(229,125,55,0.18)] animate-ping" />
-                  <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[#E57D37]" />
+                  <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E57D37] px-1 text-[9px] font-black text-white shadow-sm">
+                    {unreadCount}
+                  </span>
                 </>
               )}
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full z-30 mt-3 min-w-[90vw] sm:min-w-[320px] max-w-[360px] overflow-hidden rounded-[20px] border border-gray-200 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]">
-                <div className="border-b border-gray-200 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-900">Notifications</p>
+              <div className="absolute right-0 top-full z-30 mt-3 min-w-[90vw] sm:min-w-[340px] max-w-[380px] overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-[0_16px_40px_rgba(0,0,0,0.14)]">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 bg-slate-50/50">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-gray-900">Notifications</p>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-[#E57D37]/10 px-2 py-0.5 text-[10px] font-black text-[#E57D37]">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={markAllAsRead}
+                      className="text-[11px] font-bold text-[#E57D37] hover:underline cursor-pointer"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
                 </div>
-                <div className="flex flex-col max-h-[360px] overflow-y-auto">
+
+                <div className="flex flex-col max-h-[380px] overflow-y-auto divide-y divide-gray-100">
                   {notifications.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-xs text-gray-500">No notifications yet.</div>
+                    <div className="px-4 py-10 text-center text-xs font-medium text-gray-400">
+                      No notifications yet.
+                    </div>
                   ) : (
                     notifications.map((notification) => (
                       <button
                         key={notification.id}
                         type="button"
-                        onClick={() => markAsRead(notification.id)}
-                        className={`flex w-full items-start gap-3 px-4 py-3 text-left text-sm transition ${!notification.is_read ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"}`}
+                        onClick={() => markAsRead(notification.id, notification.link)}
+                        className={`flex w-full items-start gap-3 px-4 py-3.5 text-left text-sm transition cursor-pointer ${
+                          !notification.is_read ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-gray-50"
+                        }`}
                       >
-                        {!notification.is_read && <span className="mt-1.5 inline-flex h-2 w-2 shrink-0 rounded-full bg-[#E57D37] opacity-90" />}
-                        <div className="min-w-0">
-                          <p className="font-semibold text-gray-900 text-xs">{notification.title}</p>
-                          <p className="text-xs text-gray-600 mt-0.5 leading-normal">{notification.message}</p>
-                          <p className="mt-1 text-[10px] text-gray-500">{fmtTime(notification.created_at)}</p>
+                        <div className="mt-1 flex h-2 w-2 shrink-0 items-center justify-center">
+                          {!notification.is_read ? (
+                            <span className="h-2 w-2 rounded-full bg-[#E57D37]" />
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-slate-300" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-gray-900 text-xs leading-snug">{notification.title}</p>
+                          <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{notification.message}</p>
+                          <p className="mt-1 text-[10px] font-semibold text-gray-400">{fmtTime(notification.created_at)}</p>
                         </div>
                       </button>
                     ))
                   )}
-                  <button type="button" className="w-full border-t border-gray-200 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.24em] text-[#E57D37] transition hover:bg-gray-50">
-                    View all notifications
+                </div>
+
+                <div className="border-t border-gray-100 bg-slate-50/50 p-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotifOpen(false)
+                      router.push("/dashboard/account/notifications")
+                    }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold text-[#E57D37] hover:bg-white transition-all cursor-pointer"
+                  >
+                    <Settings size={13} />
+                    Notification Settings
                   </button>
                 </div>
               </div>
@@ -214,8 +299,23 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
               }}
               className={`inline-flex items-center gap-1.5 sm:gap-3 rounded-[16px] border border-gray-200 bg-white p-1 sm:px-3 sm:py-2 transition hover:bg-gray-100 ${dropdownOpen ? "ring-1 ring-gray-300" : ""}`}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md">
-                {profile ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase() : "U"}
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md font-semibold text-sm">
+                {profile?.profile_image_url ? (
+                  <img
+                    src={profile.profile_image_url}
+                    alt={profile.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : profile ? (
+                  profile.name
+                    .split(" ")
+                    .map((w) => w[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()
+                ) : (
+                  "U"
+                )}
               </div>
               <div className="hidden sm:block min-w-0 text-left">
                 <p className="truncate text-sm font-semibold text-gray-900">{profile ? profile.name : "Loading..."}</p>
@@ -229,24 +329,24 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                 <button
                   type="button"
                   onClick={() => {
-                    router.push(profilePath)
+                    router.push("/dashboard/account/profile")
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-editorial-orange/5"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                 >
-                  <User size={14} className="text-gray-600" />
-                  My Profile
+                  <User size={15} className="text-gray-600" />
+                  My Account & Profile
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    router.push(settingsPath)
+                    router.push("/dashboard/account/settings")
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-editorial-orange/5"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                 >
-                  <Settings size={14} className="text-gray-600" />
-                  Settings
+                  <Settings size={15} className="text-gray-600" />
+                  Account Settings
                 </button>
                 <button
                   type="button"
@@ -254,18 +354,18 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                     router.push("/dashboard/change-password")
                     setDropdownOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-editorial-orange/5"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 transition hover:bg-gray-50"
                 >
-                  <KeyRound size={14} className="text-editorial-orange" />
+                  <KeyRound size={15} className="text-[#E57D37]" />
                   Change Password
                 </button>
-                <div className="border-t border-editorial-blue/30" />
+                <div className="border-t border-gray-100" />
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-400 transition hover:bg-rose-500/10"
+                  className="flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-rose-500 transition hover:bg-rose-50"
                 >
-                  <LogOut size={14} className="text-rose-400" />
+                  <LogOut size={15} className="text-rose-500" />
                   Log out
                 </button>
               </div>

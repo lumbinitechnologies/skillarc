@@ -70,8 +70,16 @@ export function FacultyList({
             <TableRow key={f.id} className="hover:bg-slate-50/70">
               <TableCell className="px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF]">
-                    <GraduationCap className="h-5 w-5" />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-indigo-50 text-[#6C63FF] border border-indigo-100/60 font-bold text-sm">
+                    {f.profile_image_url ? (
+                      <img
+                        src={f.profile_image_url}
+                        alt={f.name || "Faculty"}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <GraduationCap className="h-5 w-5" />
+                    )}
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-1.5">

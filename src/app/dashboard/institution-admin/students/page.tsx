@@ -40,7 +40,7 @@ export default async function StudentsPage() {
   const { data: userRecords = [] } = studentIds.length > 0
     ? await adminClient
         .from("users")
-        .select("id, name, email, role, organization_id, created_at, is_active")
+        .select("id, name, email, role, organization_id, created_at, is_active, profile_image_url")
         .in("id", studentIds)
     : { data: [] }
 

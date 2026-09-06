@@ -24,14 +24,14 @@ Instead of plain white, use a soft mesh gradient background that is barely visib
 Blur everything together so it looks almost invisible.
 
 ### Color Palette
-- **Primary**: Modern Indigo (`#6C63FF`) - Buttons, active menus, progress, links, charts.
-- **Secondary**: Purple (`#8B5CF6`) - Hover states, AI features, accent gradients.
-- **Accent**: Mint (`#00C2A8`) - Success, completed lessons, attendance, analytics.
-- **Warning**: Gold/Orange (`#FFB020`) - Assignments, deadlines.
-- **Error**: Red (`#F04438`) - Missing submissions, failed quizzes.
-- **Background**: Soft Gray/Blue (`#F8FAFC`) - Never pure white.
+- **Primary**: Warm Terracotta (`#E57D37`) - Buttons, active menus, progress, links, brand accents.
+- **Secondary**: Deep Navy / Slate (`#14234B`, `#3A6DAF`) - Dark accents, headers, contrast elements.
+- **Accent**: Mint / Emerald (`#10B981`) - Success, completed lessons, attendance, analytics.
+- **Warning**: Warm Gold / Amber (`#EAAD62`, `#FFB020`) - Deadlines, alerts.
+- **Error**: Crimson Red (`#F04438`) - Missing submissions, failed quizzes.
+- **Background**: Soft Slate / Gray (`#F8FAFC`) - Bright, airy background.
 - **Cards**: Pure White (`#FFFFFF`).
-- **Heading Text**: Dark Gray (`#111827`).
+- **Heading Text**: Dark Slate (`#111827`).
 - **Body Text**: Slate Gray (`#6B7280`).
 
 ---
@@ -52,8 +52,8 @@ Everything else stays solid.
 ## 🏠 Dashboard Layout
 - **Greeting**: Personal and time-dependent (e.g. "Good Morning, Nikhil 👋 Let's continue building your future.")
 - **Search Bar**: Centered at the top, large, rounded, glass effect, placeholder: "Search courses, faculty, students...", keyboard shortcut `⌘ K`.
-- **Sidebar**: Very clean, white background, logo at top (S SkillArc in purple gradient).
-- **Active Navigation Indicator**: Purple pill with a 4px indicator on the left.
+- **Sidebar**: Very clean, white background, logo at top (SkillArc).
+- **Active Navigation Indicator**: Terracotta orange pill with a 4px indicator on the left (`#E57D37`).
 
 ---
 

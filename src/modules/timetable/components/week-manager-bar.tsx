@@ -235,7 +235,7 @@ export default function WeekManagerBar() {
               width: 32,
               height: 32,
               borderRadius: 10,
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              background: "linear-gradient(135deg, #E57D37, #EAAD62)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -254,8 +254,8 @@ export default function WeekManagerBar() {
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
-                  color: "#6366f1",
-                  backgroundColor: "#eef2ff",
+                  color: "#E57D37",
+                  backgroundColor: "#fff7ed",
                   padding: "2px 8px",
                   borderRadius: 99,
                   textTransform: "uppercase",
@@ -336,9 +336,9 @@ export default function WeekManagerBar() {
                 borderRadius: 8,
                 fontSize: 12,
                 fontWeight: 600,
-                color: "#6366f1",
-                backgroundColor: "#eef2ff",
-                border: "1px solid #c7d2fe",
+                color: "#E57D37",
+                backgroundColor: "#fff7ed",
+                border: "1px solid #fed7aa",
                 cursor: "pointer",
                 fontFamily: font,
               }}
@@ -359,10 +359,10 @@ export default function WeekManagerBar() {
               fontSize: 12,
               fontWeight: 700,
               color: "#ffffff",
-              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              background: "linear-gradient(135deg, #E57D37, #EAAD62)",
               border: "none",
               cursor: "pointer",
-              boxShadow: "0 2px 8px rgba(99, 102, 241, 0.25)",
+              boxShadow: "0 2px 8px rgba(229, 125, 55, 0.25)",
               fontFamily: font,
             }}
           >
@@ -414,8 +414,8 @@ export default function WeekManagerBar() {
                     flexShrink: 0,
                     padding: "8px 14px",
                     borderRadius: 10,
-                    border: isSelected ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
-                    backgroundColor: isSelected ? "#eef2ff" : "#ffffff",
+                    border: isSelected ? "1.5px solid #E57D37" : "1px solid #e2e8f0",
+                    backgroundColor: isSelected ? "#fff7ed" : "#ffffff",
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: "column",
@@ -423,7 +423,7 @@ export default function WeekManagerBar() {
                     gap: 3,
                     transition: "all 0.15s ease",
                     fontFamily: font,
-                    boxShadow: isSelected ? "0 2px 8px rgba(99, 102, 241, 0.15)" : "none",
+                    boxShadow: isSelected ? "0 2px 8px rgba(229, 125, 55, 0.15)" : "none",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -431,7 +431,7 @@ export default function WeekManagerBar() {
                       style={{
                         fontSize: 12,
                         fontWeight: isSelected ? 800 : 600,
-                        color: isSelected ? "#4338ca" : "#1e293b",
+                        color: isSelected ? "#c2410c" : "#1e293b",
                       }}
                     >
                       {w.title || `Week ${w.week_number}`}
@@ -442,7 +442,7 @@ export default function WeekManagerBar() {
                           width: 6,
                           height: 6,
                           borderRadius: "50%",
-                          backgroundColor: "#6366f1",
+                          backgroundColor: "#E57D37",
                         }}
                       />
                     )}
@@ -450,7 +450,7 @@ export default function WeekManagerBar() {
                   <span
                     style={{
                       fontSize: 10,
-                      color: isSelected ? "#6366f1" : "#64748b",
+                      color: isSelected ? "#E57D37" : "#64748b",
                       fontWeight: 500,
                     }}
                   >
@@ -506,7 +506,7 @@ export default function WeekManagerBar() {
                       }}
                       style={{
                         fontSize: 11,
-                        color: "#6366f1",
+                        color: "#E57D37",
                         background: "none",
                         border: "none",
                         cursor: "pointer",
@@ -553,7 +553,7 @@ export default function WeekManagerBar() {
                         padding: "3px 10px",
                         fontSize: 11,
                         fontWeight: 700,
-                        backgroundColor: "#6366f1",
+                        backgroundColor: "#E57D37",
                         color: "#fff",
                         border: "none",
                         borderRadius: 6,
@@ -764,7 +764,7 @@ export default function WeekManagerBar() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: "#ffffff",
-                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    background: "linear-gradient(135deg, #E57D37, #EAAD62)",
                     border: "none",
                     cursor: isSaving ? "not-allowed" : "pointer",
                     opacity: isSaving ? 0.7 : 1,
@@ -919,7 +919,7 @@ export default function WeekManagerBar() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: "#ffffff",
-                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    background: "linear-gradient(135deg, #E57D37, #EAAD62)",
                     border: "none",
                     cursor: isSaving ? "not-allowed" : "pointer",
                     opacity: isSaving ? 0.7 : 1,
@@ -1035,7 +1035,7 @@ export default function WeekManagerBar() {
                     fontSize: 13,
                     fontWeight: 700,
                     color: "#ffffff",
-                    background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    background: "linear-gradient(135deg, #E57D37, #EAAD62)",
                     border: "none",
                     cursor: isSaving ? "not-allowed" : "pointer",
                     opacity: isSaving ? 0.7 : 1,
