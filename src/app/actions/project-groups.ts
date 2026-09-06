@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import https from "https"
 
+const PROJECT_PUBLISHER_ROLES = ["FACULTY", "HOD", "PROGRAM_HEAD"] as const
+
 export async function createProjectWithGroupsAction(data: {
   title: string
   description: string
@@ -18,26 +20,56 @@ export async function createProjectWithGroupsAction(data: {
 }) {
   const supabase = await createSupabaseServerClient()
 
-  // 1. Insert Project (with fallback if subject_id column doesn't exist)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: "You must be signed in to publish project teams." }
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile || !PROJECT_PUBLISHER_ROLES.includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
+    return { success: false, error: "You are not allowed to publish project teams." }
+  }
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("faculty_subjects")
+    .select("id")
+    .eq("faculty_id", user.id)
+    .eq("subject_id", data.subject_id)
+    .limit(1)
+    .maybeSingle()
+
+  if (assignmentError || !assignment) {
+    return { success: false, error: "You are not assigned to this subject." }
+  }
+
+  // Never trust a caller-supplied faculty_id from the client.
+  const facultyId = user.id
+
+  // 1. Insert Project. Older deployments do not have subject_id on projects.
   let projectRes = await supabase
     .from("projects")
     .insert({
       title: data.title,
       description: data.description,
-      faculty_id: data.faculty_id,
+      faculty_id: facultyId,
       subject_id: data.subject_id,
     })
     .select("id")
     .single()
 
-  if (projectRes.error && projectRes.error.code === "42703") {
+  if (projectRes.error && ["42703", "PGRST204"].includes(projectRes.error.code || "")) {
     // Retry without subject_id column
     projectRes = await supabase
       .from("projects")
       .insert({
         title: data.title,
         description: data.description,
-        faculty_id: data.faculty_id,
+        faculty_id: facultyId,
       })
       .select("id")
       .single()
