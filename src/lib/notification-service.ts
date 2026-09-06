@@ -28,13 +28,22 @@ function getResendClient() {
 }
 
 function getFromEmail() {
-  return (
+  const raw =
     process.env.NOTIFICATION_FROM_EMAIL ||
     process.env.RESEND_FROM_EMAIL ||
     process.env.EMAIL_FROM ||
     process.env.FROM_EMAIL ||
     "SkillArc <onboarding@resend.dev>"
-  )
+
+  // Clean and strip any literal surrounding quotes, escaped quotes, or trailing whitespace
+  let clean = raw.trim().replace(/^[\s"'\\]+|[\s"'\\]+$/g, "").trim()
+  
+  // If only email is provided (e.g. admin@lumbinitechnologies.com), wrap with SkillArc name
+  if (!clean.includes("<") && clean.includes("@")) {
+    clean = `SkillArc <${clean}>`
+  }
+
+  return clean || "SkillArc <onboarding@resend.dev>"
 }
 
 export interface DispatchResult {
