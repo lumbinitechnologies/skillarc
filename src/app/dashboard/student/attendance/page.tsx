@@ -201,6 +201,13 @@ export default async function StudentAttendancePage() {
     }
   }
 
+  // Fetch the student's submitted leave applications
+  const { data: leaveApplications = [] } = await supabase
+    .from("leave_applications")
+    .select("id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
+    .eq("student_id", context.id)
+    .order("created_at", { ascending: false })
+
   return (
     <AttendanceClient
       student={{
@@ -222,6 +229,7 @@ export default async function StudentAttendancePage() {
       attendanceEntries={attendanceEntries}
       subjectSummaries={subjectSummaries}
       overallSummary={overallSummary}
+      initialLeaveApplications={leaveApplications ?? []}
     />
   )
 }

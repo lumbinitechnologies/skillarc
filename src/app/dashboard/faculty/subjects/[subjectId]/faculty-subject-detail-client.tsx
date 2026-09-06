@@ -703,6 +703,7 @@ export function FacultySubjectDetailClient({
         return {
           ...s,
           studentName: student?.name || "Unknown Student",
+          studentProfileImageUrl: student?.profile_image_url || null,
           rollNo: student?.email?.split("@")[0].toUpperCase() || "N/A",
           sectionName: student ? (sectionMap.get(student.section_id) || "N/A") : "N/A"
         }
@@ -718,6 +719,7 @@ export function FacultySubjectDetailClient({
       .map(s => ({
         id: s.id,
         name: s.name,
+        profile_image_url: s.profile_image_url || null,
         rollNo: s.email?.split("@")[0].toUpperCase() || "N/A",
         sectionName: sectionMap.get(s.section_id) || "N/A"
       }))
@@ -2176,8 +2178,16 @@ export function FacultySubjectDetailClient({
                           <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
-                                  {student.name.split(" ").map((n: string) => n[0]).join("")}
+                                <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
+                                  {student.profile_image_url ? (
+                                    <img
+                                      src={student.profile_image_url}
+                                      alt={student.name}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    student.name.split(" ").map((n: string) => n[0]).join("")
+                                  )}
                                 </div>
                                 <span className="font-bold text-slate-800 text-xs">{student.name}</span>
                               </div>
@@ -3001,8 +3011,16 @@ export function FacultySubjectDetailClient({
                         <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
-                                {student.name.substring(0, 2).toUpperCase()}
+                              <div className="w-8 h-8 shrink-0 overflow-hidden rounded-full bg-indigo-100 text-indigo-600 font-bold text-xs flex items-center justify-center">
+                                {student.profile_image_url ? (
+                                  <img
+                                    src={student.profile_image_url}
+                                    alt={student.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  student.name.substring(0, 2).toUpperCase()
+                                )}
                               </div>
                               <span className="font-bold text-slate-800 text-xs">{student.name}</span>
                             </div>

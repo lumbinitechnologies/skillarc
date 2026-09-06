@@ -14,6 +14,7 @@ export type Student = {
   dob?: string | null
   gender?: string | null
   phone?: string | null
+  profile_image_url?: string | null
   is_active?: boolean
   department_id?: string | null
 }

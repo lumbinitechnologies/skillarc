@@ -179,7 +179,7 @@ export function StudentSubjectDetailClient({
     const sub = submissions.find(s => s.assignment_id === item.id)
     if (!sub) {
       if (item.due_date && new Date(item.due_date).getTime() < Date.now()) {
-        return { label: "Missing", bg: "bg-red-50 border-red-100/50 text-[#F04438]", icon: <AlertCircle size={12} /> }
+        return { label: "Past Due / Closed", bg: "bg-rose-50 border-rose-200 text-rose-700 font-extrabold", icon: <AlertCircle size={12} /> }
       }
       return { label: "Pending", bg: "bg-amber-50 border-amber-100/50 text-[#FFB020]", icon: <Clock size={12} /> }
     }

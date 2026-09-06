@@ -95,7 +95,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
       const sIds = studentRecords.map((s: any) => s.id)
       const { data: userRecords } = await supabase
         .from("users")
-        .select("id, name, email")
+        .select("id, name, email, profile_image_url")
         .in("id", sIds)
         .order("name")
 
@@ -105,6 +105,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
           id: st.id,
           name: u?.name || "Unknown",
           email: u?.email || "",
+          profile_image_url: u?.profile_image_url || null,
           section_id: st.section_id,
           registration_number: st.registration_number,
         }

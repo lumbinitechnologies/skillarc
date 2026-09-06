@@ -7,19 +7,19 @@ import { Video, MapPin, AlertTriangle, ExternalLink } from "lucide-react"
 
 const COLORS: Record<string, { bg: string; border: string; text: string; sub: string }> = {
   DAA:       { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#3b82f6" },
-  DCN:       { bg: "#ede9fe", border: "#ddd6fe", text: "#3b0764", sub: "#7c3aed" },
+  DCN:       { bg: "#f0fdf4", border: "#bbf7d0", text: "#14532d", sub: "#16a34a" },
   WT:        { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
   TOC:       { bg: "#ffedd5", border: "#fed7aa", text: "#7c2d12", sub: "#ea580c" },
   "OE I":    { bg: "#d1fae5", border: "#a7f3d0", text: "#064e3b", sub: "#10b981" },
-  "P&T":     { bg: "#fce7f3", border: "#fbcfe8", text: "#831843", sub: "#ec4899" },
+  "P&T":     { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
   TDPCL:     { bg: "#ccfbf1", border: "#99f6e4", text: "#134e4a", sub: "#14b8a6" },
-  BSBHRM613: { bg: "#ede9fe", border: "#c4b5fd", text: "#3730a3", sub: "#6366f1" },
-  BSBLDR811: { bg: "#e0e7ff", border: "#c7d2fe", text: "#1e1b4b", sub: "#4f46e5" },
+  BSBHRM613: { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
+  BSBLDR811: { bg: "#e0f2fe", border: "#bae6fd", text: "#0369a1", sub: "#0284c7" },
   TAELED803: { bg: "#ccfbf1", border: "#99f6e4", text: "#115e59", sub: "#0d9488" },
   BSBHRM611: { bg: "#fef3c7", border: "#fde68a", text: "#78350f", sub: "#d97706" },
   BSBINS603: { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#2563eb" },
   BSBLDR601: { bg: "#ffedd5", border: "#fed7aa", text: "#7c2d12", sub: "#ea580c" },
-  BSBLDR812: { bg: "#fce7f3", border: "#fbcfe8", text: "#831843", sub: "#db2777" },
+  BSBLDR812: { bg: "#ffedd5", border: "#fed7aa", text: "#7c2d12", sub: "#ea580c" },
   BSBSTR801: { bg: "#d1fae5", border: "#a7f3d0", text: "#064e3b", sub: "#059669" },
 }
 
@@ -245,7 +245,7 @@ export default function TimetableCell({ day, period }: { day: string; period: st
       ) : (
         <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           {isOver && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#6366f1" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#E57D37" }}>
               Drop Subject
             </span>
           )}

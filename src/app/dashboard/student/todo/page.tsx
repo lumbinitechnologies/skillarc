@@ -46,10 +46,10 @@ function getDueDateStatus(dueDate: string | null) {
   const diffMs = due.getTime() - now.getTime()
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffDays < 0) return { label: "Overdue", color: "text-red-600 bg-red-50 border border-red-200" }
-  if (diffDays === 0) return { label: "Due Today", color: "text-orange-600 bg-orange-50 border border-orange-200" }
-  if (diffDays === 1) return { label: "Due Tomorrow", color: "text-orange-500 bg-orange-50 border border-orange-200" }
-  if (diffDays <= 3) return { label: `Due in ${diffDays} days`, color: "text-amber-600 bg-amber-50 border border-amber-200" }
+  if (diffDays < 0 || due.getTime() < now.getTime()) return { label: "Past Due • Closed", color: "text-rose-700 bg-rose-50 border border-rose-300 font-extrabold" }
+  if (diffDays === 0) return { label: "Due Today", color: "text-orange-600 bg-orange-50 border border-orange-200 font-bold" }
+  if (diffDays === 1) return { label: "Due Tomorrow", color: "text-orange-500 bg-orange-50 border border-orange-200 font-bold" }
+  if (diffDays <= 3) return { label: `Due in ${diffDays} days`, color: "text-amber-600 bg-amber-50 border border-amber-200 font-bold" }
   return { label: `Due ${due.toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`, color: "text-slate-600 bg-slate-50 border border-slate-200" }
 }
 

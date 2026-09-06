@@ -198,13 +198,29 @@ export default function AttendanceTable({
                 {/* Student Info */}
                 <div className="flex items-start sm:items-center gap-3.5 min-w-0">
                   <div
-                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl ${
                       isAtRisk
                         ? "bg-rose-100 text-rose-700 border border-rose-200"
                         : "bg-indigo-50 text-[#6C63FF] border border-indigo-100"
                     }`}
                   >
-                    <UserRound size={19} />
+                    {student.profile_image_url ? (
+                      <img
+                        src={student.profile_image_url}
+                        alt={student.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="font-['Space_Grotesk'] text-xs font-extrabold uppercase">
+                        {student.name
+                          ? student.name
+                              .split(" ")
+                              .map((w: string) => w[0])
+                              .join("")
+                              .slice(0, 2)
+                          : "S"}
+                      </span>
+                    )}
                   </div>
 
                   <div className="min-w-0 space-y-1">

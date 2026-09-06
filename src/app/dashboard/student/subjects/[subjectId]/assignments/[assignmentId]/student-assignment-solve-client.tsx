@@ -22,7 +22,17 @@ import {
   Book,
   FileCheck,
   Paperclip,
-  CheckCircle
+  CheckCircle,
+  Shield,
+  ShieldAlert,
+  Maximize,
+  Lock,
+  AlertOctagon,
+  Sparkles,
+  Check,
+  ChevronRight,
+  Eye,
+  RotateCcw
 } from "lucide-react"
 
 import { submitAssignmentAction } from "@/app/actions/assignments"
@@ -75,6 +85,11 @@ export function StudentAssignmentSolveClient({
   const [submission, setSubmission] = useState<any | null>(initialSubmission)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Due date cutoff calculation
+  const isPastDueDate = Boolean(
+    assignment.due_date && new Date(assignment.due_date).getTime() < Date.now()
+  )
+
   // In-app UI Toast and Confirm States
   const [toast, setToast] = useState<ToastState | null>(null)
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(null)
@@ -98,6 +113,11 @@ export function StudentAssignmentSolveClient({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const uploadFileToSupabase = async (file: File) => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this assignment has passed.", "error")
+      return
+    }
+
     setIsUploadingFile(true)
     setFileName(file.name)
     try {
@@ -117,7 +137,6 @@ export function StudentAssignmentSolveClient({
       showToast("File uploaded successfully!", "success")
     } catch (err: any) {
       console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
-      // Fallback
       setFileUrl(`https://mock-lms-storage.local/${studentId}/${Date.now()}_${file.name}`)
       showToast("File attached successfully.", "info")
     } finally {
@@ -128,12 +147,20 @@ export function StudentAssignmentSolveClient({
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline has passed.", "error")
+      return
+    }
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       uploadFileToSupabase(e.dataTransfer.files[0])
     }
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline has passed.", "error")
+      return
+    }
     if (e.target.files && e.target.files[0]) {
       uploadFileToSupabase(e.target.files[0])
     }
@@ -151,11 +178,25 @@ export function StudentAssignmentSolveClient({
     "Ready to run test cases..."
   ])
 
-  // Quiz states
+  // Quiz states & Anti-Cheat Proctoring States
   const [quizAnswers, setQuizAnswers] = useState<number[]>(() => {
     if (initialSubmission?.quiz_answers) return initialSubmission.quiz_answers
     return Array(assignment.questions?.length || 0).fill(-1)
   })
+  const quizAnswersRef = useRef<number[]>(quizAnswers)
+  useEffect(() => {
+    quizAnswersRef.current = quizAnswers
+  }, [quizAnswers])
+
+  const [isQuizStarted, setIsQuizStarted] = useState(() => Boolean(initialSubmission))
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [violationCount, setViolationCount] = useState(0)
+  const [isViolationModalOpen, setIsViolationModalOpen] = useState(false)
+  const [violationReason, setViolationReason] = useState("")
+  const [isExitedFullscreenModalOpen, setIsExitedFullscreenModalOpen] = useState(false)
+  const lastViolationTimeRef = useRef<number>(0)
+  const MAX_VIOLATIONS = 3
+
   const [quizTimeLeft, setQuizTimeLeft] = useState<number | null>(() => {
     if (initialSubmission) return null
     if (assignment.type === "Quiz" && assignment.questions?.length) {
@@ -165,25 +206,203 @@ export function StudentAssignmentSolveClient({
     return null
   })
 
+  const violationCountRef = useRef(0)
+
   // Timer loop for quiz
   useEffect(() => {
-    if (quizTimeLeft === null || quizTimeLeft <= 0 || submission) return
+    if (!isQuizStarted || quizTimeLeft === null || quizTimeLeft <= 0 || submission) return
     const timer = setInterval(() => {
       setQuizTimeLeft(prev => {
         if (prev === null) return null
         if (prev <= 1) {
           clearInterval(timer)
-          // Auto submit
-          handleAutoSubmitQuiz()
+          setTimeout(() => {
+            handleAutoSubmitQuiz("Time is up! Your quiz has been auto-submitted and graded.")
+          }, 0)
           return 0
         }
         return prev - 1
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [quizTimeLeft, submission])
+  }, [isQuizStarted, quizTimeLeft, submission])
 
-  const performQuizSubmit = async (answersToSubmit: number[], isAuto = false) => {
+  // Fullscreen Request Helper
+  const requestExamFullscreen = async () => {
+    try {
+      const elem = document.documentElement as any
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen()
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen()
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen()
+      }
+      setIsFullscreen(true)
+      setIsExitedFullscreenModalOpen(false)
+    } catch (err) {
+      console.warn("Fullscreen request error:", err)
+      showToast("Please allow fullscreen mode to take this secure exam.", "warning")
+    }
+  }
+
+  // Record Violation Function (Tab switch / App blur / Fullscreen exit)
+  const recordViolation = (reason: string) => {
+    if (!isQuizStarted || submission || isSubmitting) return
+
+    const now = Date.now()
+    if (now - lastViolationTimeRef.current < 1500) return
+    lastViolationTimeRef.current = now
+
+    const nextCount = violationCountRef.current + 1
+    violationCountRef.current = nextCount
+    setViolationCount(nextCount)
+
+    if (nextCount >= MAX_VIOLATIONS) {
+      setIsViolationModalOpen(false)
+      setIsExitedFullscreenModalOpen(false)
+      showToast("⚠️ Security Breach: 3 violations recorded. Your exam is being automatically submitted.", "error")
+      setTimeout(() => {
+        performQuizSubmit(quizAnswersRef.current, true, "Exam terminated: Auto-submitted due to 3 security violations (switched tabs / applications).")
+      }, 0)
+    } else {
+      setViolationReason(reason)
+      setIsViolationModalOpen(true)
+    }
+  }
+
+  // 1. Fullscreen Change Listener
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const onFullscreenChange = () => {
+      const inFull = Boolean(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      )
+      setIsFullscreen(inFull)
+      if (!inFull && !submission) {
+        setIsExitedFullscreenModalOpen(true)
+        recordViolation("Exited Fullscreen mode during an active exam.")
+      }
+    }
+
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange)
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange)
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 2. Tab Visibility & Window Focus (Blur) Monitor
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordViolation("Switched to another tab or minimized browser window.")
+      }
+    }
+
+    const handleWindowBlur = () => {
+      // Focus left the browser window (user opened another app or clicked outside)
+      recordViolation("Focus lost from exam window (switched to another desktop application).")
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("blur", handleWindowBlur)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("blur", handleWindowBlur)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 3. Prevent Keyboard Shortcuts & DevTools
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey
+
+      // Block F12, DevTools (Ctrl/Cmd+Shift+I, J, C), View Source (Ctrl/Cmd+U)
+      if (
+        e.key === "F12" ||
+        (isCtrlOrCmd && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key)) ||
+        (isCtrlOrCmd && ["u", "U"].includes(e.key))
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Developer tools and inspect shortcuts are disabled during exams.", "warning")
+        return
+      }
+
+      // Block New Tab (Ctrl/Cmd+T), New Window (Ctrl/Cmd+N), Close Tab (Ctrl/Cmd+W)
+      if (isCtrlOrCmd && ["t", "T", "n", "N", "w", "W"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Opening new tabs or windows is blocked during exams.", "warning")
+        return
+      }
+
+      // Block Print (Ctrl/Cmd+P), Save (Ctrl/Cmd+S)
+      if (isCtrlOrCmd && ["p", "P", "s", "S"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Printing and saving are disabled during exams.", "warning")
+        return
+      }
+
+      // Block Copy / Paste / Cut (Ctrl/Cmd + C, V, X)
+      if (isCtrlOrCmd && ["c", "C", "v", "V", "x", "X"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Copying and pasting are disabled during exams.", "warning")
+        return
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 4. BeforeUnload Listener
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = "Are you sure you want to leave? Your exam progress will be lost or submitted."
+      return e.returnValue
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [assignment.type, isQuizStarted, submission])
+
+  // Start Quiz Handler
+  const handleStartQuiz = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions are closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+    await requestExamFullscreen()
+    setIsQuizStarted(true)
+    showToast("🛡️ Secure Lockdown Mode activated. All tabs and external apps must remain closed.", "info")
+  }
+
+  const performQuizSubmit = async (answersToSubmit: number[], isAuto = false, customFeedback?: string) => {
+    if (isPastDueDate && !submission) {
+      showToast("Submissions closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+
     let score = 0
     const questions = assignment.questions || []
     answersToSubmit.forEach((ans, idx) => {
@@ -199,7 +418,7 @@ export function StudentAssignmentSolveClient({
       code_content: null,
       language: null,
       grade: score,
-      feedback: "Auto-graded Quiz submission.",
+      feedback: customFeedback || "Auto-graded Quiz submission.",
       status: "graded",
       subject_id: subjectId,
     })
@@ -214,13 +433,26 @@ export function StudentAssignmentSolveClient({
         code_content: null,
         language: null,
         grade: score,
-        feedback: "Auto-graded Quiz submission.",
+        feedback: customFeedback || "Auto-graded Quiz submission.",
         status: "graded",
         submitted_at: new Date().toISOString(),
       }
       setSubmission(newSub)
       setQuizTimeLeft(null)
-      if (isAuto) {
+      setIsQuizStarted(false)
+
+      // Exit fullscreen if active
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try {
+          document.exitFullscreen()
+        } catch {
+          // ignore
+        }
+      }
+
+      if (customFeedback) {
+        showToast(customFeedback, "info")
+      } else if (isAuto) {
         showToast("Time is up! Your quiz has been auto-submitted and graded.", "info")
       } else {
         showToast(`🎉 Quiz submitted successfully! Score: ${score}/${questions.length}`, "success")
@@ -231,11 +463,16 @@ export function StudentAssignmentSolveClient({
     }
   }
 
-  const handleAutoSubmitQuiz = async () => {
-    performQuizSubmit(quizAnswers, true)
+  const handleAutoSubmitQuiz = async (msg = "Time is up! Your quiz has been auto-submitted and graded.") => {
+    performQuizSubmit(quizAnswersRef.current, true, msg)
   }
 
   const handleManualSubmitQuiz = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+
     if (quizAnswers.includes(-1)) {
       setConfirmModal({
         isOpen: true,
@@ -258,6 +495,11 @@ export function StudentAssignmentSolveClient({
   // Standard Upload submission handler
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this assignment has passed.", "error")
+      return
+    }
+
     if (!fileUrl.trim() && !textAnswer.trim()) {
       showToast("Please provide a text response or attach a file URL.", "warning")
       return
@@ -307,7 +549,6 @@ export function StudentAssignmentSolveClient({
     setTimeout(() => {
       const cases = assignment.test_cases || []
       const results = cases.map((tc: any, idx: number) => {
-        // mock compiler result
         const passed = Math.random() > 0.1
         return {
           passed,
@@ -329,6 +570,11 @@ export function StudentAssignmentSolveClient({
   }
 
   const performCodeSubmit = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this coding assignment has passed.", "error")
+      return
+    }
+
     setIsSubmitting(true)
     const res = await submitAssignmentAction({
       assignment_id: assignment.id,
@@ -366,6 +612,11 @@ export function StudentAssignmentSolveClient({
   }
 
   const handleSubmitCode = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this coding assignment has passed.", "error")
+      return
+    }
+
     setConfirmModal({
       isOpen: true,
       title: "Submit Code Solution?",
@@ -393,7 +644,7 @@ export function StudentAssignmentSolveClient({
   const TypeIcon = activeType.icon
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans relative">
+    <div className={`min-h-screen bg-slate-50 flex flex-col font-sans relative ${assignment.type === "Quiz" && isQuizStarted && !submission ? "select-none" : ""}`}>
       {/* In-App Floating Toast Notification */}
       {toast && (
         <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -440,7 +691,7 @@ export function StudentAssignmentSolveClient({
 
       {/* In-App Confirmation Modal Dialog */}
       {confirmModal && confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-left">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
@@ -480,12 +731,103 @@ export function StudentAssignmentSolveClient({
         </div>
       )}
 
+      {/* Security Violation Modal (Anti-Cheat Strike) */}
+      {isViolationModalOpen && !submission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-rose-950/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-rose-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 border border-rose-200 shadow-sm">
+                <ShieldAlert size={28} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-800 bg-rose-100 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                    Security Violation Detected
+                  </span>
+                  <span className="text-xs font-extrabold text-rose-600 font-mono">
+                    Strike {violationCount} / {MAX_VIOLATIONS}
+                  </span>
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-lg mt-1 font-['Plus_Jakarta_Sans']">
+                  Exam Proctoring Warning
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Focus was lost from the active exam window.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 text-xs text-rose-950 space-y-2">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertOctagon size={14} className="text-rose-600 shrink-0" />
+                <span>Violation Triggered:</span>
+              </div>
+              <p className="text-rose-800 italic">"{violationReason}"</p>
+              <p className="font-semibold text-rose-900 pt-1 border-t border-rose-200/60">
+                All external browser tabs, background applications, Discord, ChatGPT, IDEs, and notes must remain closed.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 flex items-center gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                {MAX_VIOLATIONS - violationCount > 0
+                  ? `Warning: Reaching ${MAX_VIOLATIONS} strikes will immediately auto-submit and lock your exam.`
+                  : "Maximum strikes reached. Auto-submitting quiz..."}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsViolationModalOpen(false)
+                  requestExamFullscreen()
+                }}
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-extrabold rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <Check size={14} /> I Understand & Return to Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Required Modal */}
+      {isExitedFullscreenModalOpen && !submission && !isViolationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-amber-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-14 h-14 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-sm">
+              <Maximize size={28} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-lg font-['Plus_Jakarta_Sans']">
+                Fullscreen Mode Required
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                You have exited fullscreen. To preserve academic integrity, this exam must be taken in active full-screen mode.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={requestExamFullscreen}
+              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 text-white font-extrabold rounded-2xl text-xs shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Maximize size={15} /> Return to Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
         <div className="flex items-center gap-3">
-          <Link href={`/dashboard/student/subjects/${subjectId}`} className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition-all mr-1">
-            <ArrowLeft size={18} />
-          </Link>
+          {(!isQuizStarted || Boolean(submission)) && (
+            <Link href={`/dashboard/student/subjects/${subjectId}`} className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition-all mr-1">
+              <ArrowLeft size={18} />
+            </Link>
+          )}
           <div className={`w-8 h-8 rounded-lg ${activeType.bg} ${activeType.color} flex items-center justify-center flex-shrink-0`}>
             <TypeIcon size={16} />
           </div>
@@ -497,22 +839,51 @@ export function StudentAssignmentSolveClient({
           </div>
         </div>
 
-        {/* Timer / Status */}
+        {/* Timer / Proctoring Status / Submission Pill */}
         <div className="flex items-center gap-3">
-          {assignment.type === "Quiz" && quizTimeLeft !== null && !submission && (
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono ${
-              quizTimeLeft < 60 ? "bg-red-50 text-red-600 animate-pulse border border-red-200" : "bg-slate-100 text-slate-600"
-            }`}>
-              <Clock size={14} />
-              {formatTimer(quizTimeLeft)}
-            </div>
+          {/* Active Quiz Proctoring HUD */}
+          {assignment.type === "Quiz" && isQuizStarted && !submission && (
+            <>
+              {/* Lockdown Pill */}
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Lockdown Active</span>
+              </div>
+
+              {/* Strikes Counter */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono border ${
+                violationCount === 0
+                  ? "bg-slate-50 border-slate-200 text-slate-700"
+                  : violationCount === 1
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
+              }`}>
+                <ShieldAlert size={14} />
+                <span>Strikes: {violationCount}/{MAX_VIOLATIONS}</span>
+              </div>
+
+              {/* Timer */}
+              {quizTimeLeft !== null && (
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono ${
+                  quizTimeLeft < 60 ? "bg-red-50 text-red-600 animate-pulse border border-red-200" : "bg-slate-100 text-slate-700"
+                }`}>
+                  <Clock size={14} />
+                  {formatTimer(quizTimeLeft)}
+                </div>
+              )}
+            </>
           )}
+
           {submission ? (
             <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
               <CheckCircle2 size={14} /> Submitted
             </span>
+          ) : isPastDueDate ? (
+            <span className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1">
+              <AlertOctagon size={13} /> Submissions Closed
+            </span>
           ) : (
-            assignment.type !== "Material" && (
+            assignment.type !== "Material" && !isQuizStarted && (
               <span className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold px-3 py-1.5 rounded-xl">
                 Status: Pending
               </span>
@@ -564,11 +935,148 @@ export function StudentAssignmentSolveClient({
             )}
           </div>
         </div>
+      ) : assignment.type === "Quiz" && !submission && !isQuizStarted ? (
+        // Pre-Quiz Proctoring & Security Briefing Screen
+        <div className="flex-1 max-w-4xl w-full mx-auto p-6 sm:p-10 space-y-6">
+          {/* Past Due Banner if expired */}
+          {isPastDueDate && (
+            <div className="rounded-3xl border border-rose-300 bg-rose-50 p-5 text-rose-950 flex items-start gap-4 shadow-sm">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                <AlertOctagon size={22} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-sm">Quiz Deadline Passed</h3>
+                <p className="text-xs text-rose-800 leading-relaxed">
+                  The deadline for this quiz was <strong>{formatDueDate(assignment.due_date)}</strong>. Submissions are permanently closed and new attempts cannot be started.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Proctoring Card */}
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-[#6C63FF] flex items-center justify-center shrink-0 shadow-sm">
+                  <Brain size={28} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
+                      Proctored Exam
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 font-mono">
+                      {assignment.questions?.length || 0} Questions • 10 Minutes
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1 font-['Plus_Jakarta_Sans']">
+                    {assignment.title}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Max Score</span>
+                <span className="text-2xl font-black text-slate-900 font-['Space_Grotesk']">{assignment.max_score || assignment.questions?.length || 100}</span>
+              </div>
+            </div>
+
+            {/* Exam Description */}
+            <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              {assignment.description || "Answer all questions below. Your answers will be automatically evaluated upon submission."}
+            </div>
+
+            {/* 4 Proctoring Rules Grid */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Shield size={15} className="text-[#6C63FF]" /> Strict Exam Proctoring Guidelines
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Maximize size={15} className="text-indigo-600" />
+                    <span>1. Forced Fullscreen Mode</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    The quiz must be completed in full-screen mode. Exiting fullscreen triggers a security strike.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <ShieldAlert size={15} className="text-amber-600" />
+                    <span>2. Zero Tab & App Switching</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Switching browser tabs or opening external applications (Discord, ChatGPT, IDE, Notes) is strictly monitored.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <AlertOctagon size={15} className="text-rose-600" />
+                    <span>3. 3-Strike Auto-Submission</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Reaching 3 security strikes will terminate the exam immediately and submit your current answers.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Lock size={15} className="text-teal-600" />
+                    <span>4. Keys & Clipboard Locked</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Copying questions, pasting text, right-click inspect, and browser shortcuts are disabled during the session.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Launch Quiz Action */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-xs text-slate-500">
+                Ensure you have a stable connection and all background apps are closed before starting.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleStartQuiz}
+                disabled={isPastDueDate}
+                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-[#6C63FF] via-indigo-600 to-[#8B5CF6] hover:opacity-95 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+              >
+                {isPastDueDate ? (
+                  <>
+                    <AlertOctagon size={15} /> Submissions Closed
+                  </>
+                ) : (
+                  <>
+                    <Maximize size={15} /> Enter Fullscreen & Start Quiz
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
-        // Submission Interactive layouts
+        // Interactive Solve Layout (Standard, Coding, or Active Quiz)
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left panel: Worksheet description */}
-          <div className="w-full md:w-1/2 p-8 border-r border-slate-200 overflow-y-auto bg-slate-50 space-y-6">
+          <div className="w-full md:w-1/2 p-6 sm:p-8 border-r border-slate-200 overflow-y-auto bg-slate-50 space-y-6 text-left">
+            {/* Past Due Warning Banner */}
+            {isPastDueDate && !submission && (
+              <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-xs font-bold text-rose-900 flex items-start gap-3">
+                <AlertOctagon size={18} className="text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="block font-black">Submission Deadline Passed</span>
+                  <p className="font-normal text-rose-700 mt-0.5">
+                    The due date for this assignment was {formatDueDate(assignment.due_date)}. Submissions are closed.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
               <h2 className="font-extrabold text-slate-800 text-base border-b pb-3">Coursework Instructions</h2>
               <div className="text-slate-600 text-xs font-normal leading-relaxed whitespace-pre-wrap">
@@ -621,7 +1129,7 @@ export function StudentAssignmentSolveClient({
           </div>
 
           {/* Right panel: Solve Input */}
-          <div className="w-full md:w-1/2 p-8 overflow-y-auto bg-white">
+          <div className="w-full md:w-1/2 p-6 sm:p-8 overflow-y-auto bg-white text-left">
             {submission && assignment.type !== "Quiz" ? (
               // Already submitted standard or coding
               <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 min-h-[320px] space-y-4">
@@ -659,11 +1167,21 @@ export function StudentAssignmentSolveClient({
                 )}
               </div>
             ) : assignment.type === "Quiz" ? (
-              // Quiz Solving
+              // Quiz Solving & Results
               <div className="space-y-6">
-                <h2 className="font-extrabold text-slate-800 text-base">Solve Quiz</h2>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="font-extrabold text-slate-800 text-base font-['Plus_Jakarta_Sans']">
+                    {submission ? "Quiz Evaluation Results" : "Live Quiz Assessment"}
+                  </h2>
+                  {!submission && (
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-xl">
+                      {quizAnswers.filter(a => a !== -1).length} of {assignment.questions?.length || 0} Answered
+                    </span>
+                  )}
+                </div>
+
                 {submission ? (
-                  // Quiz Graded / Completed
+                  // Quiz Graded / Completed Key View
                   <div className="space-y-4">
                     <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl text-center">
                       <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
@@ -702,7 +1220,7 @@ export function StudentAssignmentSolveClient({
                     </div>
                   </div>
                 ) : (
-                  // Active Quiz Solver
+                  // Active Proctored Quiz Solver
                   <div className="space-y-6">
                     {assignment.questions?.map((q: any, qi: number) => (
                       <div key={qi} className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm space-y-3">
@@ -717,11 +1235,13 @@ export function StudentAssignmentSolveClient({
                                 key={oi}
                                 type="button"
                                 onClick={() => {
+                                  if (isPastDueDate) return
                                   const updated = [...quizAnswers]
                                   updated[qi] = oi
                                   setQuizAnswers(updated)
                                 }}
-                                className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl border flex items-center justify-between transition-all ${
+                                disabled={isPastDueDate}
+                                className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl border flex items-center justify-between transition-all disabled:opacity-50 ${
                                   isSelected
                                     ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm"
                                     : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100/80"
@@ -737,17 +1257,24 @@ export function StudentAssignmentSolveClient({
                         </div>
                       </div>
                     ))}
+
                     <button
                       onClick={handleManualSubmitQuiz}
-                      disabled={isSubmitting}
-                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                      disabled={isSubmitting || isPastDueDate}
+                      className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all cursor-pointer"
                     >
                       {isSubmitting ? (
                         <>
                           <Loader2 size={14} className="animate-spin" /> Submitting Quiz...
                         </>
+                      ) : isPastDueDate ? (
+                        <>
+                          <AlertOctagon size={14} /> Submissions Closed (Past Due)
+                        </>
                       ) : (
-                        "Submit Answers"
+                        <>
+                          <Send size={14} /> Submit Exam Answers
+                        </>
                       )}
                     </button>
                   </div>
@@ -767,7 +1294,8 @@ export function StudentAssignmentSolveClient({
                           setCode(LANG_TEMPLATES[l.id] || "")
                           setTestResults(null)
                         }}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                        disabled={isPastDueDate}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all disabled:opacity-50 ${
                           lang === l.id
                             ? "bg-slate-800 border-slate-800 text-white"
                             : "bg-white border-slate-200 text-slate-500"
@@ -784,14 +1312,15 @@ export function StudentAssignmentSolveClient({
                   <textarea
                     value={code}
                     onChange={e => setCode(e.target.value)}
+                    disabled={isPastDueDate}
                     spellCheck={false}
-                    className="flex-1 bg-slate-900 text-green-400 p-4 font-mono text-xs leading-relaxed resize-none focus:outline-none"
+                    className="flex-1 bg-slate-900 text-green-400 p-4 font-mono text-xs leading-relaxed resize-none focus:outline-none disabled:opacity-75"
                     style={{ tabSize: 4 }}
                   />
                   <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex items-center justify-end gap-2 flex-shrink-0">
                     <button
                       onClick={handleRunCode}
-                      disabled={isRunningCode}
+                      disabled={isRunningCode || isPastDueDate}
                       className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
                     >
                       {isRunningCode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="white" />}
@@ -799,12 +1328,16 @@ export function StudentAssignmentSolveClient({
                     </button>
                     <button
                       onClick={handleSubmitCode}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || isPastDueDate}
                       className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
                     >
                       {isSubmitting ? (
                         <>
                           <Loader2 size={12} className="animate-spin" /> Submitting...
+                        </>
+                      ) : isPastDueDate ? (
+                        <>
+                          <AlertOctagon size={12} /> Submissions Closed
                         </>
                       ) : (
                         <>
@@ -837,32 +1370,38 @@ export function StudentAssignmentSolveClient({
                     rows={4}
                     value={textAnswer}
                     onChange={e => setTextAnswer(e.target.value)}
-                    placeholder="Type your answer here..."
-                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl p-4 text-xs text-slate-800"
+                    disabled={isPastDueDate}
+                    placeholder={isPastDueDate ? "Submissions closed: Deadline passed." : "Type your answer here..."}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl p-4 text-xs text-slate-800 disabled:opacity-50 disabled:bg-slate-50"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Upload Attachment</label>
                   <div
-                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragOver={e => { e.preventDefault(); if (!isPastDueDate) setDragOver(true); }}
                     onDragLeave={() => setDragOver(false)}
                     onDrop={handleFileDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all ${
-                      dragOver
-                        ? "border-indigo-500 bg-indigo-50 scale-[1.01]"
-                        : "border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30"
+                    onClick={() => { if (!isPastDueDate) fileInputRef.current?.click(); }}
+                    className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                      isPastDueDate
+                        ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
+                        : dragOver
+                        ? "border-indigo-500 bg-indigo-50 scale-[1.01] cursor-pointer"
+                        : "border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer"
                     }`}
                   >
                     <Paperclip className={`w-6 h-6 mx-auto mb-2 transition-colors ${dragOver ? "text-indigo-500" : "text-slate-300"}`} />
                     <p className="text-xs text-slate-500 font-bold">
-                      {dragOver ? "Drop file to attach" : "Drag & drop files here"}
+                      {isPastDueDate ? "Uploads disabled (Deadline passed)" : dragOver ? "Drop file to attach" : "Drag & drop files here"}
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-1">or click to browse from files</p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {isPastDueDate ? "Submission closed" : "or click to browse from files"}
+                    </p>
                     <input
                       ref={fileInputRef}
                       type="file"
+                      disabled={isPastDueDate}
                       className="hidden"
                       onChange={handleFileSelect}
                     />
@@ -883,13 +1422,15 @@ export function StudentAssignmentSolveClient({
                           ? fileUrl.substring(fileUrl.lastIndexOf("/") + 1)
                           : fileUrl}
                       </span>
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); setFileUrl(""); setFileName(""); }}
-                        className="text-indigo-300 hover:text-red-500 transition-colors p-0.5 rounded"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      {!isPastDueDate && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setFileUrl(""); setFileName(""); }}
+                          className="text-indigo-300 hover:text-red-500 transition-colors p-0.5 rounded"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -900,18 +1441,23 @@ export function StudentAssignmentSolveClient({
                     type="url"
                     value={fileUrl}
                     onChange={e => setFileUrl(e.target.value)}
-                    placeholder="https://docs.google.com/document/d/... or github.com/..."
-                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-xs text-slate-800"
+                    disabled={isPastDueDate}
+                    placeholder={isPastDueDate ? "Submissions closed" : "https://docs.google.com/document/d/... or github.com/..."}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-xs text-slate-800 disabled:opacity-50 disabled:bg-slate-50"
                   />
                 </div>
                 <button
                   type="submit"
-                  disabled={isSubmitting || isUploadingFile}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                  disabled={isSubmitting || isUploadingFile || isPastDueDate}
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
                       <Loader2 size={14} className="animate-spin" /> Submitting Solution...
+                    </>
+                  ) : isPastDueDate ? (
+                    <>
+                      <AlertOctagon size={14} /> Submissions Closed (Past Due)
                     </>
                   ) : (
                     <>

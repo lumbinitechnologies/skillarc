@@ -70,14 +70,20 @@ export default async function AttendancePage() {
   const { data: userRecords = [] } = studentIds.length
     ? await supabase
         .from("users")
-        .select("id, name, email, role")
+        .select("id, name, email, role, profile_image_url")
         .in("id", studentIds)
     : { data: [] }
 
   // Merge student + user data
   const students = (studentRecords ?? []).map((s: any) => {
     const user = (userRecords ?? []).find((u: any) => u.id === s.id)
-    return { ...s, name: user?.name || "Unknown", email: user?.email || "", role: user?.role || "" }
+    return {
+      ...s,
+      name: user?.name || "Unknown",
+      email: user?.email || "",
+      role: user?.role || "",
+      profile_image_url: user?.profile_image_url || null,
+    }
   })
 
   // Filter by section if faculty teaches specific sections
@@ -85,6 +91,28 @@ export default async function AttendancePage() {
   if (sectionIds.length) {
     filteredStudents = students.filter((s: any) => sectionIds.includes(s.section_id))
   }
+
+  // Fetch leave applications for this institution
+  const { data: rawLeaves = [] } = await supabase
+    .from("leave_applications")
+    .select("id, student_id, section_id, advisor_id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
+    .eq("institution_id", institutionId)
+    .order("created_at", { ascending: false })
+
+  const studentMap = new Map(students.map((s: any) => [s.id, s]))
+  const sectionMap = new Map((sections ?? []).map((sec: any) => [sec.id, sec.name]))
+
+  const leaveApplications = (rawLeaves ?? []).map((leave: any) => {
+    const st = studentMap.get(leave.student_id)
+    return {
+      ...leave,
+      studentName: st?.name || "Student",
+      studentEmail: st?.email || "",
+      studentProfileImageUrl: st?.profile_image_url || null,
+      registrationNumber: st?.registration_number || "—",
+      sectionName: sectionMap.get(leave.section_id) || "—",
+    }
+  })
 
   return (
     <AttendanceClient
@@ -94,6 +122,7 @@ export default async function AttendancePage() {
       sections={sections ?? []}
       subjects={subjects ?? []}
       students={filteredStudents ?? []}
+      initialLeaveApplications={leaveApplications ?? []}
     />
   )
 }

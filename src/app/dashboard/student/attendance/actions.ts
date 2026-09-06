@@ -1,5 +1,6 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 
 export async function submitLeaveApplicationAction({
@@ -47,11 +48,18 @@ export async function submitLeaveApplicationAction({
     status: "PENDING",
   }
 
-  const { error } = await supabase.from("leave_applications").insert(payload)
+  const { data, error } = await supabase
+    .from("leave_applications")
+    .insert(payload)
+    .select()
+    .single()
 
   if (error) {
     return { success: false, error: error.message }
   }
 
-  return { success: true }
+  revalidatePath("/dashboard/student/attendance")
+  revalidatePath("/dashboard/faculty/attendance")
+
+  return { success: true, application: data }
 }

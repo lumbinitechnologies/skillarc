@@ -27,7 +27,7 @@ export default async function AccountLayout({
   if (!profile) redirect("/auth/login")
 
   const role = profile.role as (typeof ROLES)[keyof typeof ROLES]
-  const accent = roleAccents[role] ?? { bg: "#ede9fe", color: "#5b21b6" }
+  const accent = roleAccents[role] ?? { bg: "#ffedd5", color: "#c2410c" }
   const roleLabel = roleLabels[role] ?? role
 
   return (

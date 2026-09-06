@@ -61,7 +61,7 @@ export default async function AttendancePage() {
   const { data: userRecords = [] } = studentIds.length
     ? await supabase
         .from("users")
-        .select("id, name, email, role")
+        .select("id, name, email, role, profile_image_url")
         .in("id", studentIds)
     : { data: [] }
 
@@ -72,6 +72,7 @@ export default async function AttendancePage() {
       name: user?.name || "Unknown Student",
       email: user?.email || "",
       role: user?.role || "STUDENT",
+      profile_image_url: user?.profile_image_url || null,
     }
   })
 

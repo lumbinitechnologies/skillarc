@@ -82,7 +82,7 @@ export default async function DashboardPage() {
     profile.section_id
       ? supabase
           .from("attendance_records")
-          .select("status, attendance_sessions!inner(section_id)")
+          .select("status, attendance_sessions!inner(section_id, subject_id)")
           .eq("student_id", context.id)
           .eq("attendance_sessions.section_id", profile.section_id)
       : Promise.resolve({ data: [] }),
@@ -91,7 +91,7 @@ export default async function DashboardPage() {
   const institution = institutionRes.data
   const section = sectionRes.data
   let timetableRows = timetableRes.data ?? []
-  const attendanceRecords = attendanceRes.data ?? []
+  const attendanceRecords = (attendanceRes.data ?? []) as any[]
 
   // If active week has no slots assigned yet, fallback to default template slots
   if (timetableRows.length === 0 && activeWeekId && profile.section_id) {
@@ -183,12 +183,39 @@ export default async function DashboardPage() {
     facultyMap.set(faculty.id, faculty.name)
   })
 
-  const formattedSubjects = (subjectRows ?? []).map((subject: any) => ({
-    id: subject.id,
-    name: subject.name,
-    code: subject.code,
-    facultyName: facultyMap.get((timetableRows ?? []).find((slot: any) => slot.subject_id === subject.id)?.faculty_id) ?? "Faculty pending",
-  }))
+  // Per-subject attendance calculations
+  const subjectAttendanceMap = new Map<string, { present: number; absent: number; late: number; total: number }>()
+  attendanceRecords.forEach((record: any) => {
+    const subId = record.attendance_sessions?.subject_id
+    if (!subId) return
+    const cur = subjectAttendanceMap.get(subId) || { present: 0, absent: 0, late: 0, total: 0 }
+    if (record.status !== "NOT_MARKED") {
+      cur.total += 1
+      if (record.status === "PRESENT" || record.status === "APPROVED_ABSENCE" || record.status === "EXCUSED") {
+        cur.present += 1
+      } else if (record.status === "ABSENT") {
+        cur.absent += 1
+      } else if (record.status === "LATE") {
+        cur.late += 1
+      }
+    }
+    subjectAttendanceMap.set(subId, cur)
+  })
+
+  const formattedSubjects = (subjectRows ?? []).map((subject: any) => {
+    const subAtt = subjectAttendanceMap.get(subject.id) || { present: 0, absent: 0, late: 0, total: 0 }
+    const effectivePresent = subAtt.present + subAtt.late
+    const rate = subAtt.total > 0 ? Math.round((effectivePresent / subAtt.total) * 100) : 0
+    return {
+      id: subject.id,
+      name: subject.name,
+      code: subject.code,
+      facultyName: facultyMap.get((timetableRows ?? []).find((slot: any) => slot.subject_id === subject.id)?.faculty_id) ?? "Faculty pending",
+      attendanceRate: rate,
+      attendedClasses: effectivePresent,
+      totalClasses: subAtt.total,
+    }
+  })
 
   const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" })
   const subjectMap = new Map((subjectRows ?? []).map((subject: any) => [subject.id, subject]))
@@ -204,11 +231,20 @@ export default async function DashboardPage() {
   const todaySchedule = schedule.filter((slot) => slot.day === todayName)
   const upcomingSchedule = schedule.filter((slot) => slot.day !== todayName).slice(0, 4)
 
-  const totalAttendance = attendanceRecords?.length ?? 0
-  const presentCount = (attendanceRecords ?? []).filter((record: any) => record.status === "PRESENT").length
+  const totalAttendance = attendanceRecords?.filter((r: any) => r.status !== "NOT_MARKED").length ?? 0
+  const presentCount = (attendanceRecords ?? []).filter((record: any) => record.status === "PRESENT" || record.status === "APPROVED_ABSENCE" || record.status === "EXCUSED").length
   const absentCount = (attendanceRecords ?? []).filter((record: any) => record.status === "ABSENT").length
   const lateCount = (attendanceRecords ?? []).filter((record: any) => record.status === "LATE").length
-  const attendanceRate = totalAttendance > 0 ? Math.round((presentCount / totalAttendance) * 100) : 0
+  const effectivePresent = presentCount + lateCount
+  const attendanceRate = totalAttendance > 0 ? Math.round((effectivePresent / totalAttendance) * 100) : 0
+
+  // 75% Criteria calculations
+  const safeBuffer = attendanceRate >= 75 && totalAttendance > 0
+    ? Math.max(0, Math.floor((effectivePresent - 0.75 * totalAttendance) / 0.75))
+    : 0
+  const requiredClasses = attendanceRate < 75 && totalAttendance > 0
+    ? Math.max(0, Math.ceil((0.75 * totalAttendance - effectivePresent) / 0.25))
+    : 0
 
   return (
     <StudentPage
@@ -232,6 +268,8 @@ export default async function DashboardPage() {
         present: presentCount,
         absent: absentCount,
         late: lateCount,
+        safeBuffer,
+        requiredClasses,
       }}
     />
   )

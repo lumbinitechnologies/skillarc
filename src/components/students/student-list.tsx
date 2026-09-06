@@ -169,8 +169,16 @@ export function StudentList({
 
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] text-white font-semibold shrink-0 shadow-sm shadow-indigo-100">
-                        {student.name?.charAt(0)}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] text-white font-semibold shadow-sm shadow-indigo-100 text-sm">
+                        {student.profile_image_url ? (
+                          <img
+                            src={student.profile_image_url}
+                            alt={student.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          student.name?.charAt(0) || "S"
+                        )}
                       </div>
                       <div>
                         <p className="font-medium">{student.name}</p>

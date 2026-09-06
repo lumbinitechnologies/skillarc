@@ -79,7 +79,7 @@ export default function SubjectCard({ subject }: { subject: any }) {
 
       {/* Faculty */}
       {subject.faculty_name && (
-        <p style={{ fontSize: 10.5, color: "#6C63FF", marginBottom: 6, fontWeight: 600 }}>
+        <p style={{ fontSize: 10.5, color: "#E57D37", marginBottom: 6, fontWeight: 600 }}>
           👨‍🏫 {subject.faculty_name}
         </p>
       )}

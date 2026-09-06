@@ -30,7 +30,7 @@ const CARD_CONFIG: Record<string, {
     ),
   },
   "Completion Rate": {
-    bg: "#ede9fe", border: "#ddd6fe", iconBg: "#7c3aed", barColor: "#7c3aed", trendColor: "#6d28d9",
+    bg: "#ffedd5", border: "#fed7aa", iconBg: "#ea580c", barColor: "#ea580c", trendColor: "#c2410c",
     icon: (
       <svg width="16" height="16" fill="none" stroke="#fff" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />

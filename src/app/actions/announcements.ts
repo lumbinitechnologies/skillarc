@@ -2,6 +2,7 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { revalidatePath } from "next/cache"
+import { dispatchBatchNotifications } from "@/lib/notification-service"
 
 export async function getSubjectAnnouncementsAction(subjectId: string) {
   const supabase = createSupabaseAdminClient()
@@ -90,17 +91,17 @@ export async function createSubjectAnnouncementAction(data: {
       .in("section_id", data.section_ids || [])
 
     if (studentsList && studentsList.length > 0) {
-      const notifications = studentsList.map((st: any) => ({
-        user_id: st.id,
-        title: "📢 New Announcement",
-        message: `A new announcement "${data.title}" has been posted for your class.`,
-        is_read: false,
-      }))
-
-      await supabase.from("notifications").insert(notifications)
+      const studentIds = studentsList.map((st: any) => st.id)
+      await dispatchBatchNotifications(
+        studentIds,
+        "announcements",
+        "📢 New Course Announcement",
+        `A new announcement "${data.title}" has been posted for your class.`,
+        `/dashboard/student/subjects/${data.subject_id}`
+      )
     }
   } catch (notifErr) {
-    console.error("Failed to insert announcement notifications:", notifErr)
+    console.error("Failed to dispatch announcement notifications:", notifErr)
   }
 
   revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)

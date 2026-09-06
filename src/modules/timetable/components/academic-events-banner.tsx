@@ -34,14 +34,14 @@ export default function AcademicEventsBanner({
         const bgClass = isHoliday
           ? "bg-gradient-to-r from-rose-50 via-white to-rose-50/40 border-rose-200/80 text-rose-900"
           : isBreak
-          ? "bg-gradient-to-r from-purple-50 via-white to-purple-50/40 border-purple-200/80 text-purple-900"
-          : "bg-gradient-to-r from-indigo-50 via-white to-indigo-50/40 border-indigo-200/80 text-indigo-900"
+          ? "bg-gradient-to-r from-amber-50 via-white to-amber-50/40 border-amber-200/80 text-amber-900"
+          : "bg-gradient-to-r from-sky-50 via-white to-sky-50/40 border-sky-200/80 text-sky-900"
 
         const badgeClass = isHoliday
           ? "bg-rose-100 text-rose-700 border-rose-200"
           : isBreak
-          ? "bg-purple-100 text-purple-700 border-purple-200"
-          : "bg-indigo-100 text-indigo-700 border-indigo-200"
+          ? "bg-amber-100 text-amber-700 border-amber-200"
+          : "bg-sky-100 text-sky-700 border-sky-200"
 
         const emoji = isHoliday ? "🇦🇺" : isBreak ? "🏖️" : "📅"
 

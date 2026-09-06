@@ -36,7 +36,7 @@ export default function ClashInspectorModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 backdrop-blur-xs p-4 animate-in fade-in duration-200">
       <div className="relative flex max-h-[85vh] w-full max-w-2xl flex-col rounded-3xl bg-white shadow-2xl border border-slate-100 overflow-hidden font-sans">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 bg-gradient-to-r from-slate-50 via-white to-purple-50/30">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 bg-gradient-to-r from-slate-50 via-white to-amber-50/30">
           <div className="flex items-center gap-3">
             <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
               clashes.length > 0 ? "bg-amber-100 text-amber-600 shadow-sm" : "bg-emerald-100 text-emerald-600 shadow-sm"
@@ -83,7 +83,7 @@ export default function ClashInspectorModal({
             onClick={() => setFilter("TRAINER_DOUBLE_BOOKED")}
             className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
               filter === "TRAINER_DOUBLE_BOOKED"
-                ? "bg-[#6C63FF] text-white shadow-xs"
+                ? "bg-[#E57D37] text-white shadow-xs"
                 : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -93,7 +93,7 @@ export default function ClashInspectorModal({
             onClick={() => setFilter("ROOM_OVERLAP")}
             className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
               filter === "ROOM_OVERLAP"
-                ? "bg-[#8B5CF6] text-white shadow-xs"
+                ? "bg-[#3A6DAF] text-white shadow-xs"
                 : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
             }`}
           >
@@ -131,14 +131,14 @@ export default function ClashInspectorModal({
                 clash.type === "TRAINER_DOUBLE_BOOKED"
                   ? "bg-rose-50 border-rose-200 text-rose-700"
                   : clash.type === "ROOM_OVERLAP"
-                  ? "bg-purple-50 border-purple-200 text-purple-700"
+                  ? "bg-sky-50 border-sky-200 text-sky-700"
                   : "bg-amber-50 border-amber-200 text-amber-700"
 
               const icon =
                 clash.type === "TRAINER_DOUBLE_BOOKED" ? (
                   <Users size={16} className="text-rose-600 shrink-0" />
                 ) : clash.type === "ROOM_OVERLAP" ? (
-                  <DoorClosed size={16} className="text-purple-600 shrink-0" />
+                  <DoorClosed size={16} className="text-sky-600 shrink-0" />
                 ) : (
                   <Layers size={16} className="text-amber-600 shrink-0" />
                 )
@@ -188,7 +188,7 @@ export default function ClashInspectorModal({
                           >
                             <div className="flex items-center justify-between font-semibold text-slate-800">
                               <span>{slot.subject_code}</span>
-                              <span className="text-[11px] text-indigo-600 font-medium">
+                              <span className="text-[11px] text-[#E57D37] font-medium">
                                 {slot.section_name}
                               </span>
                             </div>
@@ -214,8 +214,8 @@ export default function ClashInspectorModal({
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/70 px-6 py-4">
           <div className="text-xs text-slate-500">
             {isScanning ? (
-              <span className="flex items-center gap-1.5 text-indigo-600">
-                <span className="h-2 w-2 rounded-full bg-indigo-600 animate-ping" /> Scanning schedule...
+              <span className="flex items-center gap-1.5 text-[#E57D37]">
+                <span className="h-2 w-2 rounded-full bg-[#E57D37] animate-ping" /> Scanning schedule...
               </span>
             ) : (
               <span>Last scanned: Live</span>

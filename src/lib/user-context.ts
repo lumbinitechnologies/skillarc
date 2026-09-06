@@ -12,6 +12,7 @@ export type UserContext = {
   name: string
   email: string
   phone: string | null
+  profile_image_url?: string | null
   is_active: boolean
   is_timetable_builder: boolean
   isImpersonating: boolean
@@ -20,6 +21,7 @@ export type UserContext = {
     role: string
     name: string
     email: string
+    profile_image_url?: string | null
     organization_id: string | null
     institution_id: string | null
     department_id?: string | null
@@ -42,7 +44,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
 
   const { data: actualProfile, error: profileError } = await supabase
     .from("users")
-    .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active")
+    .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url")
     .eq("id", userId)
     .single()
 
@@ -80,7 +82,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     const targetProfileData = impUserId
       ? await supabase
           .from("users")
-          .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active")
+          .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url")
           .eq("id", impUserId)
           .single()
       : { data: null, error: null }
@@ -96,6 +98,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       name: targetProfile?.name ?? actualProfile.name ?? "",
       email: targetProfile?.email ?? actualProfile.email ?? "",
       phone: targetProfile?.phone ?? actualProfile.phone ?? null,
+      profile_image_url: targetProfile?.profile_image_url ?? actualProfile.profile_image_url ?? null,
       is_active: targetProfile?.is_active ?? true,
       is_timetable_builder: isTimetableBuilder,
       isImpersonating: true,
@@ -104,6 +107,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
         role: actualProfile.role,
         name: actualProfile.name ?? "",
         email: actualProfile.email ?? "",
+        profile_image_url: actualProfile.profile_image_url ?? null,
         organization_id: actualProfile.organization_id,
         institution_id: actualProfile.institution_id,
         department_id: actualProfile.department_id,
@@ -121,6 +125,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     name: actualProfile.name ?? "",
     email: actualProfile.email ?? "",
     phone: actualProfile.phone ?? null,
+    profile_image_url: actualProfile.profile_image_url ?? null,
     is_active: actualProfile.is_active ?? true,
     is_timetable_builder: isTimetableBuilder,
     isImpersonating: false,
@@ -129,6 +134,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       role: actualProfile.role,
       name: actualProfile.name ?? "",
       email: actualProfile.email ?? "",
+      profile_image_url: actualProfile.profile_image_url ?? null,
       organization_id: actualProfile.organization_id,
       institution_id: actualProfile.institution_id,
       department_id: actualProfile.department_id,
