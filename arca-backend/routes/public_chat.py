@@ -1,14 +1,16 @@
+import hashlib
 import json
 import logging
-import threading
-import time
+from urllib import request as urllib_request
+from urllib.error import URLError
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from auth.dependencies import require_gateway_request
+from database.db import settings
 from models.schemas import PublicChatRequest
-from rag.gemini_client import generate_public_answer_stream
+from rag.groq_client import generate_public_answer_stream
 from rag.public_faq import faq_context
 
 router = APIRouter(prefix="/api/public-chat", tags=["public-chat"])
@@ -16,8 +18,6 @@ logger = logging.getLogger("arca.public_chat")
 
 _RATE_LIMIT = 20
 _WINDOW_SECONDS = 60
-_rate_lock = threading.Lock()
-_rate_windows: dict[str, tuple[float, int]] = {}
 
 
 def _client_key(request: Request) -> str:
@@ -27,15 +27,39 @@ def _client_key(request: Request) -> str:
 
 
 def _check_rate_limit(request: Request) -> None:
-    now = time.monotonic()
-    key = _client_key(request)
-    with _rate_lock:
-        window_start, count = _rate_windows.get(key, (now, 0))
-        if now - window_start >= _WINDOW_SECONDS:
-            window_start, count = now, 0
-        if count >= _RATE_LIMIT:
-            raise HTTPException(status_code=429, detail="PUBLIC_CHAT_RATE_LIMITED")
-        _rate_windows[key] = (window_start, count + 1)
+    """Use shared Redis when configured; the Next gateway remains the edge guard."""
+    if not settings.UPSTASH_REDIS_REST_URL or not settings.UPSTASH_REDIS_REST_TOKEN:
+        return
+
+    identity = hashlib.sha256(_client_key(request).encode("utf-8")).hexdigest()
+    redis_key = f"skillarc:public-chat:{identity}"
+    payload = json.dumps([
+        ["INCR", redis_key],
+        ["EXPIRE", redis_key, _WINDOW_SECONDS],
+        ["TTL", redis_key],
+    ]).encode("utf-8")
+    redis_request = urllib_request.Request(
+        f"{settings.UPSTASH_REDIS_REST_URL.rstrip('/')}/pipeline",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {settings.UPSTASH_REDIS_REST_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(redis_request, timeout=2) as response:
+            if response.status >= 300:
+                return
+            values = json.loads(response.read().decode("utf-8"))
+    except (OSError, URLError, ValueError):
+        # The gateway limiter still protects the public route when Redis is
+        # temporarily unavailable. Do not make the backend an outage source.
+        return
+
+    count = int(values[0].get("result", _RATE_LIMIT + 1)) if values else _RATE_LIMIT + 1
+    if count > _RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="PUBLIC_CHAT_RATE_LIMITED")
 
 
 @router.post("/ask/stream")

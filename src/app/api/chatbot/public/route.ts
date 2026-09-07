@@ -1,11 +1,10 @@
 import { createArcaPublicBackendHeaders } from "@/lib/arca-backend"
 import { arcaGatewayErrorResponse } from "@/lib/arca-gateway-errors"
+import { rateLimit } from "@/lib/assistant/rate-limit"
 import { NextRequest, NextResponse } from "next/server"
 
 const BACKEND_URL = process.env.EDURAG_BACKEND_URL || "http://localhost:8000"
 const MAX_QUESTION_LENGTH = 4000
-const RATE_LIMIT = 20
-const RATE_WINDOW_MS = 60_000
 
 const streamHeaders = {
   "Content-Type": "text/event-stream; charset=utf-8",
@@ -14,29 +13,16 @@ const streamHeaders = {
   "X-Accel-Buffering": "no",
 }
 
-const rateWindows = new Map<string, { resetAt: number; count: number }>()
-
 function clientKey(request: NextRequest): string {
   const forwarded = request.headers.get("x-forwarded-for")
   return (forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown").slice(0, 128)
 }
 
-function isRateLimited(key: string): boolean {
-  const now = Date.now()
-  const current = rateWindows.get(key)
-  if (!current || current.resetAt <= now) {
-    rateWindows.set(key, { resetAt: now + RATE_WINDOW_MS, count: 1 })
-    return false
-  }
-  if (current.count >= RATE_LIMIT) return true
-  current.count += 1
-  return false
-}
-
 export async function POST(request: NextRequest) {
   try {
     const key = clientKey(request)
-    if (isRateLimited(key)) {
+    const limit = await rateLimit(`guest:${key}:public`)
+    if (!limit.allowed) {
       return NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 })
     }
 
@@ -70,7 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "The assistant returned an empty stream." }, { status: 502 })
     }
 
-    return new Response(response.body, { status: 200, headers: streamHeaders })
+    return new Response(response.body, { status: 200, headers: { ...streamHeaders, "X-Arca-Deprecated": "true" } })
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === "AbortError") {
       return new Response(null, { status: 499 })
