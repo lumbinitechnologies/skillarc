@@ -8,9 +8,7 @@ export const dynamic = "force-dynamic"
 interface PageProps {
   params: Promise<{
     quizId: string
-  }> | {
-    quizId: string
-  }
+  }>
 }
 
 export default async function DirectStudentSingularQuizPage({ params }: PageProps) {

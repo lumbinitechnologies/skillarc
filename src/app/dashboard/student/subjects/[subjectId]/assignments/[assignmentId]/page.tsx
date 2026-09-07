@@ -9,10 +9,7 @@ interface PageProps {
   params: Promise<{
     subjectId: string
     assignmentId: string
-  }> | {
-    subjectId: string
-    assignmentId: string
-  }
+  }>
 }
 
 export default async function StudentAssignmentPage({ params }: PageProps) {
