@@ -17,7 +17,6 @@ langchain==0.2.6
 langchain-community==0.2.6
 langchain-core==0.2.11
 langchain-huggingface==0.0.3
-langchain-google-genai==1.0.7
 
 # Vector store
 chromadb==0.5.3
@@ -25,8 +24,7 @@ chromadb==0.5.3
 # Embeddings
 sentence-transformers==3.0.1
 
-# Google Gemini
-google-generativeai==0.7.1
+# LLM provider
 groq>=1.6.0
 
 # Document processing

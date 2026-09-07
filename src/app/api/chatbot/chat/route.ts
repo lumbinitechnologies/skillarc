@@ -20,13 +20,18 @@ const streamHeaders = {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentLength = Number(request.headers.get("content-length") ?? 0)
+    if (contentLength > 128_000) return NextResponse.json({ error: "Assistant request is too large." }, { status: 413 })
+
     const profile = await getCurrentUserContext()
     if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { question, session_id } = await request.json()
-    if (!question || typeof question !== "string" || !question.trim()) {
+    const body = await request.json().catch(() => null)
+    const question = body && typeof body === "object" && !Array.isArray(body) && "question" in body ? body.question : null
+    const session_id = body && typeof body === "object" && !Array.isArray(body) && "session_id" in body ? body.session_id : null
+    if (typeof question !== "string" || !question.trim() || question.length > 4000 || (session_id !== null && (typeof session_id !== "string" || session_id.length > 128))) {
       return NextResponse.json({ error: "Question is required" }, { status: 400 })
     }
 
@@ -59,7 +64,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "The assistant returned an empty stream." }, { status: 502 })
     }
 
-    return new Response(response.body, { status: 200, headers: streamHeaders })
+    return new Response(response.body, { status: 200, headers: { ...streamHeaders, "X-Arca-Deprecated": "true" } })
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === "AbortError") {
       return new Response(null, { status: 499 })
