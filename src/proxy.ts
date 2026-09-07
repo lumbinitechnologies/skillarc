@@ -32,6 +32,7 @@ export async function proxy(request: NextRequest) {
 
   const isPublicApiRoute =
     pathname === "/api/chatbot/public" ||
+    pathname === "/api/assistant/public" ||
     pathname.startsWith("/api/admissions/public-")
 
   if (pathname.startsWith("/api/")) {
