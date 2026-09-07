@@ -17,6 +17,7 @@ import {
   MOCK_COMPANIES, MOCK_DRIVES, MOCK_STUDENTS, buildAnalytics, Student, Company, Drive
 } from "@/lib/placements-mock";
 import { predictPlacementProbability, PredictionResult } from "@/lib/placements-predictor";
+import { requestTypedAssistantTask } from "@/lib/assistant/client";
 
 type TabType = "overview" | "students" | "companies" | "drives" | "interview" | "comms" | "predictor";
 
@@ -781,12 +782,7 @@ function OverviewTabView({ analytics }: { analytics: any }) {
     if (!aiQuery.trim()) return;
     setAiL(true);
     try {
-      const r = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: `Analytics Data: ${JSON.stringify(analytics.kpi)}\nUser Question: ${aiQuery}` }),
-      });
-      const j = await r.json();
+      const j = await requestTypedAssistantTask("placement_analytics", `Analytics Data: ${JSON.stringify(analytics.kpi)}\nUser Question: ${aiQuery}`);
       setAiA(j.text);
     } catch {
       setAiA("AI connection error. Check API setup.");
@@ -998,14 +994,7 @@ function CompaniesTabView({
     if (!aiQ.trim() || !selected) return;
     setAiL(true);
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Recruiter: ${selected}\nRecruiting Stats: ${JSON.stringify(selectedStats || {})}\nStudent Query: ${aiQ}`
-        }),
-      });
-      const data = await response.json();
+      const data = await requestTypedAssistantTask("placement_analytics", `Recruiter: ${selected}\nRecruiting Stats: ${JSON.stringify(selectedStats || {})}\nStudent Query: ${aiQ}`);
       setAiA(data.text);
     } catch {
       setAiA("AI connection error. Check API credentials.");
@@ -1303,13 +1292,8 @@ function InterviewTabView() {
   async function startInterview() {
     setLoad(true);
     try {
-      const r = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: `You are an expert interviewer. Formulate ONE high-end interview question in a technical capacity for a ${difficulty} level ${role}. Give only the question text.` })
-      });
-      const data = await r.json();
-      setQuestion(data.text);
+      const data = await requestTypedAssistantTask("interview_question", `Formulate ONE high-end interview question in a technical capacity for a ${difficulty} level ${role}.`);
+      setQuestion(data.data?.question ?? data.text);
       setPhase("active");
     } catch {
       alert("AI failed to prepare question.");
@@ -1322,18 +1306,11 @@ function InterviewTabView() {
     if (!answer.trim()) return;
     setLoad(true);
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Interviewer Question: "${question}"\nCandidate Spoken Response: "${answer}"\n\nEvaluate response, output a rating score in form "Score: X/10", list strengths/weaknesses and verdict.`
-        }),
-      });
-      const data = await response.json();
-      setFeedback(data.text);
-      const scoreMatch = data.text.match(/Score:\s*(\d+)/i) || data.text.match(/(\d+)\/10/);
-      const val = scoreMatch ? parseInt(scoreMatch[1]) : 7;
-      setLogs(p => [...p, { question, answer, feedback: data.text, score: val }]);
+      const data = await requestTypedAssistantTask("interview_answer_evaluation", `Interviewer Question: "${question}"\nCandidate Spoken Response: "${answer}"`);
+      const evaluation = data.data;
+      const feedback = evaluation ? `Score: ${evaluation.score}/10\n\nStrengths:\n- ${evaluation.strengths.join("\n- ")}\n\nWeaknesses:\n- ${evaluation.weaknesses.join("\n- ")}\n\nImprovements:\n- ${evaluation.improvements.join("\n- ")}\n\nVerdict:\n${evaluation.verdict}` : data.text;
+      setFeedback(feedback);
+      setLogs(p => [...p, { question, answer, feedback, score: evaluation?.score ?? 0 }]);
     } catch {
       alert("Failed to evaluate response.");
     } finally {
@@ -1346,15 +1323,8 @@ function InterviewTabView() {
     setAnswer("");
     setFeedback("");
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Provide the next interview question for a ${difficulty} ${role} role. Make it relevant to standard corporate processes. Only give the question text.`
-        }),
-      });
-      const data = await response.json();
-      setQuestion(data.text);
+      const data = await requestTypedAssistantTask("interview_question", `Provide the next interview question for a ${difficulty} ${role} role. Make it relevant to standard corporate processes.`);
+      setQuestion(data.data?.question ?? data.text);
     } catch {
       alert("Failed to load question.");
     } finally {
@@ -1369,14 +1339,7 @@ function InterviewTabView() {
       setCamOn(false);
     }
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Interview Logs: ${JSON.stringify(logs)}\nTarget Role: ${role}\nDifficulty: ${difficulty}\n\nCompile a comprehensive performance summary, overall score out of 10, list strengths, areas to improve, and a customized 30-day preparation plan.`
-        }),
-      });
-      const data = await response.json();
+      const data = await requestTypedAssistantTask("interview_report", `Interview Logs: ${JSON.stringify(logs)}\nTarget Role: ${role}\nDifficulty: ${difficulty}\n\nCompile a comprehensive performance summary, overall score out of 10, list strengths, areas to improve, and a customized 30-day preparation plan.`);
       setReport(data.text);
       setPhase("report");
     } catch {
@@ -1622,14 +1585,7 @@ function CommsTabView() {
     if (!text.trim()) return;
     setAiL(true);
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: `Evaluate interview spoken response communication quality: "${text}". Summarize strictly under Strengths, Weaknesses, Specific Improvements, Verdict.`
-        }),
-      });
-      const data = await response.json();
+      const data = await requestTypedAssistantTask("communication_feedback", `Evaluate interview spoken response communication quality: "${text}". Summarize strictly under Strengths, Weaknesses, Specific Improvements, Verdict.`);
       setAiFb(data.text);
     } catch {
       setAiFb("Connection failure to AI evaluator.");
@@ -1860,13 +1816,8 @@ function PredictorTabView({
               if (!prediction) return;
               setAiExplanation("");
               try {
-                const res = await fetch("/api/ai/chat", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ prompt: `Explain this placement prediction and provide tailored improvement steps. Inputs: sgpa=${sgpa}, backlogs=${backlogs}, attendance=${attendance}, skills=${skillsTags.join(", ")}, score=${prediction.probability}` }),
-                });
-                const j = await res.json();
-                setAiExplanation(j.text || j.answer || "AI explanation unavailable.");
+                const j = await requestTypedAssistantTask("placement_prediction_explanation", `Explain this placement prediction and provide tailored improvement steps. Inputs: sgpa=${sgpa}, backlogs=${backlogs}, attendance=${attendance}, skills=${skillsTags.join(", ")}, score=${prediction.probability}`);
+                setAiExplanation(j.data?.summary ? `${j.data.summary}\n\nFactors:\n- ${j.data.factors.join("\n- ")}\n\nCaveats:\n- ${j.data.caveats.join("\n- ")}` : j.text || "AI explanation unavailable.");
               } catch (err) {
                 setAiExplanation("AI request failed.");
               }
