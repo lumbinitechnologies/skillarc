@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { Users, Power, Play } from "lucide-react"
+import { Users, Power, Play, X, Sparkles } from "lucide-react"
 
 interface BreakoutRoomsProps {
   onToast: (msg: string, type: "info" | "success" | "warning" | "error") => void
@@ -15,7 +15,7 @@ export default function BreakoutRooms({ onToast, onClose }: BreakoutRoomsProps) 
 
   const handleStartBreakout = () => {
     setIsActive(true)
-    onToast(`Breakout Rooms started successfully: ${roomCount} rooms for ${duration} minutes.`, "success")
+    onToast(`Breakout Rooms started: ${roomCount} rooms for ${duration} minutes.`, "success")
   }
 
   const handleStopBreakout = () => {
@@ -27,15 +27,15 @@ export default function BreakoutRooms({ onToast, onClose }: BreakoutRoomsProps) 
     <div className="flex flex-col h-full bg-slate-900 border-l border-white/10 text-white font-sans text-left">
       <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
         <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-          <Users size={16} className="text-indigo-400" />
+          <Users size={16} className="text-[#E57D37]" />
           Breakout Rooms
         </h3>
         <button
           onClick={onClose}
           type="button"
-          className="cursor-pointer text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition-all"
+          className="cursor-pointer text-slate-400 hover:text-white p-1 rounded-lg transition-all"
         >
-          Close
+          <X size={16} />
         </button>
       </div>
 
@@ -100,7 +100,7 @@ export default function BreakoutRooms({ onToast, onClose }: BreakoutRoomsProps) 
 
             <button
               onClick={handleStartBreakout}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all"
+              className="w-full py-3 bg-[#E57D37] hover:bg-[#d46b28] font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all text-white"
             >
               <Play size={14} /> Start Breakout Rooms
             </button>

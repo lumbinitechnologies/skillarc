@@ -18,7 +18,16 @@ import {
   Play,
   Loader2,
   CheckCircle2,
-  Volume2
+  MonitorUp,
+  MonitorX,
+  LayoutGrid,
+  Hand,
+  Sparkles,
+  Split,
+  ShieldCheck,
+  UserCheck,
+  Search,
+  ExternalLink
 } from "lucide-react"
 
 import { supabase } from "@/lib/supabase"
@@ -56,13 +65,17 @@ interface MeetingRoomClientProps {
   meeting: any
 }
 
+const JAAS_APP_ID = process.env.NEXT_PUBLIC_JAAS_APP_ID || "vpaas-magic-cookie-d08c4a10b6d548079ff833f1e0db5ffc"
+const JAAS_DOMAIN = "8x8.vc"
+
 export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
   const router = useRouter()
   
-  // Call status bindings (linked directly with Jitsi)
+  // Call status bindings (linked directly with Jitsi/8x8 JaaS)
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOn, setIsVideoOn] = useState(true)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
+  const [isHandRaised, setIsHandRaised] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   
   const jitsiApiRef = useRef<any>(null)
@@ -70,12 +83,17 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
 
   // Side panels toggles
   const [activePanel, setActivePanel] = useState<"chat" | "participants" | "whiteboard" | "backgrounds" | "breakout" | null>(null)
-  const [currentBg, setCurrentBg] = useState<VirtualBg>({ id: "none", name: "None" })
+  const [whiteboardMode, setWhiteboardMode] = useState<"split" | "fullscreen">("split")
+  const [currentBg, setCurrentBg] = useState<VirtualBg>({ id: "none", name: "None (Real Camera)" })
 
   // Synchronized chat feed
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [messageInput, setMessageInput] = useState("")
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Synchronized participant list
+  const [activeParticipants, setActiveParticipants] = useState<any[]>([])
+  const [participantSearch, setParticipantSearch] = useState("")
 
   // Floating reactions emitter
   const [reactions, setReactions] = useState<ReactionItem[]>([])
@@ -93,46 +111,68 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // 1. Load Jitsi external script and initialize room
+  // 1. Load 8x8 JaaS external script and initialize room
   useEffect(() => {
-    const script = document.createElement("script")
-    script.src = "https://meet.jit.si/external_api.js"
-    script.async = true
-    script.onload = () => {
-      if (window.JitsiMeetExternalAPI) {
-        const domain = "meet.jit.si"
-        const options = {
-          roomName: `skillarc-lecture-${meeting.meeting_code}`,
-          width: "100%",
-          height: "100%",
-          parentNode: document.getElementById("jitsi-container"),
-          userInfo: {
-            displayName: user.name,
-            email: user.email,
-          },
-          configOverwrite: {
-            startWithAudioMuted: false,
-            startWithVideoMuted: false,
-            prejoinPageEnabled: false,
-            disableDeepLinking: true,
-            // Configure controls
-            toolbarButtons: [
-              "microphone", "camera", "desktop", "hangup", "videoquality", "tileview"
-            ],
-            disableChat: true,
-            disablePolls: true,
-            hideConferenceSubject: true,
-          },
-          interfaceConfigOverwrite: {
-            TOOLBAR_BUTTONS: [
-              "microphone", "camera", "desktop", "hangup", "videoquality", "tileview"
-            ],
-          }
-        }
-        
-        const api = new window.JitsiMeetExternalAPI(domain, options)
-        
-        // Sync API events with local React states
+    let isDisposed = false
+    const scriptSrc = `https://${JAAS_DOMAIN}/${JAAS_APP_ID}/external_api.js`
+
+    function initJaaS() {
+      if (isDisposed || !window.JitsiMeetExternalAPI) return
+      const container = document.getElementById("jaas-container")
+      if (!container) return
+
+      // Prevent duplicate iframe creation
+      if (container.children.length > 0 && jitsiApiRef.current) return
+
+      // Scope room name under tenant app ID for isolated room security
+      const roomName = `${JAAS_APP_ID}/skillarc-lecture-${meeting.meeting_code}`
+      const options = {
+        roomName,
+        width: "100%",
+        height: "100%",
+        parentNode: container,
+        userInfo: {
+          displayName: user.name,
+          email: user.email,
+        },
+        configOverwrite: {
+          startWithAudioMuted: false,
+          startWithVideoMuted: false,
+          prejoinPageEnabled: false,
+          disableDeepLinking: true,
+          hideConferenceSubject: true,
+          disablePolls: true,
+          toolbarButtons: [
+            "microphone",
+            "camera",
+            "desktop",
+            "hangup",
+            "videoquality",
+            "tileview",
+            "raisehand",
+            "participants-pane",
+          ],
+        },
+        interfaceConfigOverwrite: {
+          SHOW_JITSI_WATERMARK: false,
+          SHOW_WATERMARK_FOR_GUESTS: false,
+          SHOW_BRAND_WATERMARK: false,
+          TOOLBAR_BUTTONS: [
+            "microphone",
+            "camera",
+            "desktop",
+            "hangup",
+            "videoquality",
+            "tileview",
+            "raisehand",
+            "participants-pane",
+          ],
+        },
+      }
+
+      try {
+        const api = new window.JitsiMeetExternalAPI(JAAS_DOMAIN, options)
+
         api.addEventListener("videoMuteStatusChanged", (e: any) => {
           setIsVideoOn(!e.muted)
         })
@@ -142,21 +182,50 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
         api.addEventListener("screenSharingStatusChanged", (e: any) => {
           setIsScreenSharing(e.on)
         })
+        api.addEventListener("raiseHandUpdated", (e: any) => {
+          setIsHandRaised(Boolean(e?.handRaised))
+        })
+        api.addEventListener("participantJoined", (e: any) => {
+          addToast(`${e.displayName || "A participant"} joined the lecture`, "info")
+          refreshParticipants()
+        })
+        api.addEventListener("participantLeft", () => {
+          refreshParticipants()
+        })
         api.addEventListener("readyToClose", () => {
           handleEndCall()
         })
 
         jitsiApiRef.current = api
+      } catch (err) {
+        console.error("Failed to initialize 8x8 JaaS:", err)
       }
     }
-    document.body.appendChild(script)
+
+    const existingScript = document.querySelector(`script[src="${scriptSrc}"]`)
+    if (window.JitsiMeetExternalAPI) {
+      initJaaS()
+    } else if (existingScript) {
+      existingScript.addEventListener("load", initJaaS)
+    } else {
+      const script = document.createElement("script")
+      script.src = scriptSrc
+      script.async = true
+      script.onload = () => {
+        initJaaS()
+      }
+      document.body.appendChild(script)
+    }
+
     return () => {
-      document.body.removeChild(script)
+      isDisposed = true
       if (jitsiApiRef.current) {
-        jitsiApiRef.current.dispose()
+        try {
+          jitsiApiRef.current.dispose()
+        } catch {}
       }
     }
-  }, [meeting.meeting_code])
+  }, [meeting.meeting_code, user.name, user.email])
 
   // Custom Toolbar Controls linked to Jitsi Meet Commands
   const toggleCamera = () => {
@@ -177,11 +246,49 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     }
   }
 
+  const toggleTileView = () => {
+    if (jitsiApiRef.current) {
+      jitsiApiRef.current.executeCommand("toggleTileView")
+      addToast("Toggled view layout", "info")
+    }
+  }
+
+  const toggleRaiseHand = () => {
+    if (jitsiApiRef.current) {
+      jitsiApiRef.current.executeCommand("toggleRaiseHand")
+    }
+    const nextHand = !isHandRaised
+    setIsHandRaised(nextHand)
+    if (nextHand) {
+      emitReaction("✋")
+      addToast("Hand raised", "info")
+    }
+  }
+
+  const handleSelectBackground = (bg: VirtualBg) => {
+    setCurrentBg(bg)
+    if (jitsiApiRef.current) {
+      try {
+        jitsiApiRef.current.executeCommand("toggleVirtualBackgroundDialog")
+      } catch {}
+    }
+    addToast(`Selected background: ${bg.name}`, "info")
+  }
+
+  const refreshParticipants = async () => {
+    if (!meeting?.id) return
+    const res = await getMeetingAnalyticsAction(meeting.id)
+    if (res.success && Array.isArray(res.logs)) {
+      setActiveParticipants(res.logs)
+    }
+  }
+
   useEffect(() => {
     const registerJoin = async () => {
       if (!meeting?.id || !user?.id || joinRecordedRef.current) return
       joinRecordedRef.current = true
       await recordJoinMeetingAction(meeting.id, user.id)
+      refreshParticipants()
     }
 
     void registerJoin()
@@ -205,6 +312,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     }
 
     fetchMessages()
+    refreshParticipants()
 
     const channel = supabase
       .channel(`meeting:${meeting.id}`)
@@ -374,6 +482,13 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     addToast("Meeting code copied to clipboard!", "success")
   }
 
+  const filteredParticipants = activeParticipants.filter((p) => {
+    const name = p.user?.name || ""
+    const email = p.user?.email || ""
+    const term = participantSearch.toLowerCase()
+    return name.toLowerCase().includes(term) || email.toLowerCase().includes(term)
+  })
+
   return (
     <div className="fixed inset-0 bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden">
       
@@ -391,11 +506,11 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
             <div className="flex items-center gap-2">
               <h1 className="font-extrabold text-sm text-white tracking-tight">{meeting.title}</h1>
               {user.role === "faculty" && (
-                <span className="bg-indigo-600 border border-indigo-400/20 text-[9px] font-extrabold px-1.5 py-0.5 rounded text-indigo-100 uppercase tracking-wider">Host</span>
+                <span className="bg-[#E57D37] border border-[#EAAD62]/30 text-[9px] font-extrabold px-1.5 py-0.5 rounded text-white uppercase tracking-wider">Host</span>
               )}
             </div>
             <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
-              {meeting.subject?.name} ({meeting.subject?.code}) • Code: <span className="font-mono text-indigo-400 select-all cursor-pointer" onClick={handleCopyLink}>{meeting.meeting_code}</span>
+              {meeting.subject?.name} ({meeting.subject?.code}) • Code: <span className="font-mono text-[#E57D37] select-all cursor-pointer font-bold" onClick={handleCopyLink}>{meeting.meeting_code}</span>
             </p>
           </div>
         </div>
@@ -407,7 +522,8 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
           </div>
           <button
             onClick={handleCopyLink}
-            className="flex items-center gap-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold transition-all"
+            className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold transition-all cursor-pointer text-slate-200"
+            title="Copy Meeting Code"
           >
             <Copy size={13} />
             Copy Code
@@ -420,11 +536,11 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
         <FloatingReactions reactions={reactions} />
 
         {showMeetingSummary && meetingSummary && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
             <div className="w-[92%] max-w-2xl rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-300">Meeting analysis</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#EAAD62]">Meeting analysis</p>
                   <h2 className="text-xl font-bold text-white">Attendance and duration summary</h2>
                 </div>
                 <div className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
@@ -468,31 +584,60 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
           </div>
         )}
 
-        {/* Video feed canvas */}
-        <div className="flex-grow flex flex-col p-6 items-center justify-center relative overflow-hidden bg-slate-900/40">
-          {activePanel === "whiteboard" ? (
-            <div className="w-full h-full border border-white/10 rounded-3xl overflow-hidden shadow-2xl bg-white">
-              <Whiteboard onToast={addToast} onClose={() => setActivePanel(null)} />
+        {/* Video feed canvas + Whiteboard Workspace */}
+        <div className="flex-grow flex p-3 md:p-5 gap-4 items-center justify-center relative overflow-hidden bg-slate-900/40">
+          
+          {/* Whiteboard in Split View Mode */}
+          {activePanel === "whiteboard" && whiteboardMode === "split" && (
+            <div className="flex-1 h-full min-w-0 animate-in fade-in zoom-in-95 duration-200">
+              <Whiteboard
+                onToast={addToast}
+                onClose={() => setActivePanel(null)}
+                isFullScreen={false}
+                onToggleFullScreen={() => setWhiteboardMode("fullscreen")}
+              />
             </div>
-          ) : (
-            <div className="w-full h-full relative border border-white/10 rounded-3xl overflow-hidden shadow-2xl bg-slate-950">
-              {/* Jitsi Meet Mount Node */}
-              <div id="jitsi-container" className="w-full h-full" />
+          )}
+
+          {/* Video Container (ALWAYS MOUNTED IN DOM - RESIZES SMOOTHLY WITHOUT CALL DROPS) */}
+          <div
+            className={`h-full transition-all duration-300 relative border border-white/10 rounded-3xl overflow-hidden shadow-2xl bg-slate-950 ${
+              activePanel === "whiteboard" && whiteboardMode === "split"
+                ? "w-[360px] lg:w-[480px] flex-shrink-0"
+                : activePanel === "whiteboard" && whiteboardMode === "fullscreen"
+                ? "fixed bottom-24 right-8 w-80 h-48 z-40 ring-2 ring-[#E57D37]/50 shadow-2xl"
+                : "w-full flex-grow"
+            }`}
+          >
+            {/* JaaS 8x8 Meet Mount Node */}
+            <div id="jaas-container" className="w-full h-full" />
+          </div>
+
+          {/* Whiteboard in Fullscreen Mode */}
+          {activePanel === "whiteboard" && whiteboardMode === "fullscreen" && (
+            <div className="absolute inset-3 md:inset-5 z-20 animate-in fade-in zoom-in-95 duration-200">
+              <Whiteboard
+                onToast={addToast}
+                onClose={() => setActivePanel(null)}
+                isFullScreen={true}
+                onToggleFullScreen={() => setWhiteboardMode("split")}
+              />
             </div>
           )}
         </div>
 
         {/* Dynamic side drawers */}
         {activePanel && activePanel !== "whiteboard" && (
-          <div className="w-full md:w-80 border-l border-white/10 bg-slate-950 flex flex-col flex-shrink-0 z-30">
-            {/* Supabase synced Chat sidebar */}
+          <div className="w-full md:w-80 border-l border-white/10 bg-slate-950 flex flex-col flex-shrink-0 z-30 animate-in slide-in-from-right duration-200">
+            
+            {/* 1. Supabase synced Chat sidebar */}
             {activePanel === "chat" && (
               <div className="flex flex-col h-full text-left">
                 <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
                   <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
-                    <MessageSquare size={16} className="text-emerald-400" /> Meeting Chat
+                    <MessageSquare size={16} className="text-[#E57D37]" /> Meeting Chat
                   </h3>
-                  <button onClick={() => setActivePanel(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+                  <button onClick={() => setActivePanel(null)} className="cursor-pointer text-slate-400 hover:text-white p-1"><X size={16} /></button>
                 </div>
 
                 <div className="flex-grow p-4 overflow-y-auto space-y-4">
@@ -508,7 +653,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
                         <div key={idx} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                           <span className="text-[9px] font-bold text-slate-500 mb-0.5">{m.sender_name}</span>
                           <div className={`px-3 py-2 rounded-xl text-xs max-w-[85%] font-medium leading-relaxed break-words ${
-                            isMe ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-900 text-slate-200 rounded-tl-none"
+                            isMe ? "bg-[#E57D37] text-white rounded-tr-none shadow-sm" : "bg-slate-900 text-slate-200 rounded-tl-none border border-white/5"
                           }`}>
                             {m.message}
                           </div>
@@ -520,30 +665,115 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
                 </div>
 
                 <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-slate-950 flex-shrink-0">
-                  <div className="flex gap-2 bg-slate-900 border border-white/5 rounded-xl px-3 py-1.5">
+                  <div className="flex gap-2 bg-slate-900 border border-white/5 rounded-xl px-3 py-1.5 focus-within:border-[#E57D37]/50 transition-all">
                     <input
                       type="text"
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       placeholder="Type a message..."
-                      className="flex-1 bg-transparent border-none text-xs outline-none focus:ring-0 text-white"
+                      className="flex-1 bg-transparent border-none text-xs outline-none focus:ring-0 text-white placeholder:text-slate-500"
                     />
-                    <button type="submit" className="text-indigo-400 hover:text-indigo-300 font-bold text-xs px-2 py-1">Send</button>
+                    <button type="submit" className="text-[#E57D37] hover:text-[#EAAD62] font-bold text-xs px-2 py-1 cursor-pointer">Send</button>
                   </div>
                 </form>
               </div>
             )}
 
-            {/* Virtual background options list */}
+            {/* 2. Participants & Attendance Sidebar */}
+            {activePanel === "participants" && (
+              <div className="flex flex-col h-full text-left">
+                <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+                  <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                    <Users size={16} className="text-[#E57D37]" /> Participants ({activeParticipants.length || 1})
+                  </h3>
+                  <button onClick={() => setActivePanel(null)} className="cursor-pointer text-slate-400 hover:text-white p-1"><X size={16} /></button>
+                </div>
+
+                <div className="p-3 border-b border-white/10">
+                  <div className="flex items-center gap-2 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs">
+                    <Search size={14} className="text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Search participants..."
+                      value={participantSearch}
+                      onChange={(e) => setParticipantSearch(e.target.value)}
+                      className="bg-transparent border-none outline-none text-white placeholder:text-slate-500 flex-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex-grow p-4 overflow-y-auto space-y-2.5">
+                  {/* Current user */}
+                  <div className="flex items-center justify-between p-3 rounded-2xl bg-[#E57D37]/10 border border-[#E57D37]/30">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#E57D37] text-white flex items-center justify-center font-bold text-xs shadow">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                          {user.name} <span className="text-[10px] text-[#EAAD62] font-semibold">(You)</span>
+                        </p>
+                        <p className="text-[10px] text-slate-400 capitalize">{user.role}</p>
+                      </div>
+                    </div>
+                    {user.role === "faculty" ? (
+                      <span className="px-2 py-0.5 rounded-md bg-[#E57D37] text-[9px] font-extrabold text-white uppercase">Host</span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-[9px] font-bold text-emerald-400 border border-emerald-500/30">Active</span>
+                    )}
+                  </div>
+
+                  {/* Other participants */}
+                  {filteredParticipants
+                    .filter((p) => p.user_id !== user.id)
+                    .map((p, idx) => (
+                      <div key={p.id || idx} className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/60 border border-white/5 hover:border-white/15 transition-all">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-slate-800 text-slate-200 flex items-center justify-center font-bold text-xs border border-white/10">
+                            {(p.user?.name || "U").charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-200">{p.user?.name || "Attendee"}</p>
+                            <p className="text-[10px] text-slate-500">{p.user?.email || p.user?.role || "Student"}</p>
+                          </div>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                          p.is_present !== false ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20" : "bg-slate-800 text-slate-400"
+                        }`}>
+                          {p.is_present !== false ? "Joined" : "Left"}
+                        </span>
+                      </div>
+                    ))}
+
+                  {filteredParticipants.length === 0 && (
+                    <div className="text-center py-8 text-slate-600 text-xs">
+                      No participants match your search.
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t border-white/10 bg-slate-950 flex flex-col gap-2">
+                  <button
+                    onClick={handleCopyLink}
+                    className="w-full py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold flex items-center justify-center gap-2 text-slate-300 hover:text-white transition-all cursor-pointer"
+                  >
+                    <Copy size={13} />
+                    Copy Meeting Link
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Virtual background options list */}
             {activePanel === "backgrounds" && (
               <VirtualBackgrounds
                 currentBg={currentBg}
-                onChangeBg={setCurrentBg}
+                onChangeBg={handleSelectBackground}
                 onClose={() => setActivePanel(null)}
               />
             )}
 
-            {/* Breakout configuration settings */}
+            {/* 4. Breakout configuration settings */}
             {activePanel === "breakout" && (
               <BreakoutRooms
                 onToast={addToast}
@@ -557,105 +787,153 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
       {/* 3. Custom Controls Overlay */}
       <div className="px-6 py-4 bg-slate-950 border-t border-white/10 flex items-center justify-between z-30 flex-shrink-0">
         
-        {/* Reaction Emitter buttons */}
-        <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-2 py-1">
-          {["👍", "😂", "👏", "🎉", "❤️"].map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => emitReaction(emoji)}
-              className="p-2 hover:bg-white/10 rounded-xl transition-all text-xl"
-              title={`React ${emoji}`}
-            >
-              {emoji}
-            </button>
-          ))}
+        {/* Left: User identity & Reaction Emitters */}
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 bg-slate-900 border border-white/10 rounded-2xl px-3 py-1.5">
+            <div className="w-5 h-5 rounded-full bg-[#E57D37] text-white flex items-center justify-center font-extrabold text-[10px]">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-xs font-bold text-slate-300 truncate max-w-[100px]">{user.name}</span>
+          </div>
+
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-2 py-1">
+            {["👍", "👏", "❤️", "🎉", "💡"].map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => emitReaction(emoji)}
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-all text-lg cursor-pointer hover:scale-110 active:scale-95"
+                title={`React ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Central switches */}
-        <div className="flex items-center gap-3">
+        {/* Center: Core Meeting Controls (Mic, Cam, Screen Share, Grid, Raise Hand, Hangup) */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Microphone Toggle */}
           <button
             onClick={toggleMute}
-            className={`p-3 rounded-2xl border transition-all ${
-              isMuted ? "bg-red-500 border-red-400 text-white" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              isMuted ? "bg-red-500 border-red-400 text-white shadow-lg shadow-red-500/20" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
             }`}
             title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
           >
             {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
           </button>
+
+          {/* Camera Toggle */}
           <button
             onClick={toggleCamera}
-            className={`p-3 rounded-2xl border transition-all ${
-              !isVideoOn ? "bg-red-500 border-red-400 text-white" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              !isVideoOn ? "bg-red-500 border-red-400 text-white shadow-lg shadow-red-500/20" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
             }`}
             title={isVideoOn ? "Turn Camera Off" : "Turn Camera On"}
           >
             {isVideoOn ? <Video size={18} /> : <VideoOff size={18} />}
           </button>
 
+          {/* Screen Share Toggle (FIXED: Monitor icon instead of speaker) */}
           <button
             onClick={toggleScreenShare}
-            className={`p-3 rounded-2xl border transition-all ${
-              isScreenSharing ? "bg-blue-600 border-blue-500 text-white" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              isScreenSharing ? "bg-[#3A6DAF] border-[#3A6DAF] text-white shadow-lg shadow-blue-500/20" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
             }`}
             title={isScreenSharing ? "Stop Sharing Screen" : "Share Screen"}
           >
-            <Volume2 size={18} />
+            {isScreenSharing ? <MonitorX size={18} /> : <MonitorUp size={18} />}
+          </button>
+
+          {/* Grid View Toggle */}
+          <button
+            onClick={toggleTileView}
+            className="p-3 rounded-2xl border bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+            title="Toggle Grid / Speaker View"
+          >
+            <LayoutGrid size={18} />
+          </button>
+
+          {/* Raise Hand Toggle */}
+          <button
+            onClick={toggleRaiseHand}
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              isHandRaised ? "bg-amber-500/20 border-amber-400 text-amber-300" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
+            }`}
+            title={isHandRaised ? "Lower Hand" : "Raise Hand"}
+          >
+            <Hand size={18} className={isHandRaised ? "fill-amber-400 text-amber-400" : ""} />
           </button>
 
           <div className="w-px h-8 bg-white/10" />
 
-          {/* End call button */}
+          {/* End / Leave Call Button */}
           <button
             onClick={handleEndCall}
-            className="p-3 bg-red-600 hover:bg-red-700 border border-red-500 text-white rounded-2xl transition-all shadow-lg shadow-red-500/20 active:scale-95"
+            className="p-3 bg-red-600 hover:bg-red-700 border border-red-500 text-white rounded-2xl transition-all shadow-lg shadow-red-500/20 active:scale-95 cursor-pointer"
             title="Leave Meeting Room"
           >
             <PhoneOff size={18} />
           </button>
         </div>
 
-        {/* Right side panels toggle buttons */}
+        {/* Right: Interactive Panels Toggle (Whiteboard, Virtual Bg, Breakout, Participants, Chat) */}
         <div className="flex items-center gap-2">
+          {/* Whiteboard Toggle */}
           <button
             onClick={() => setActivePanel(prev => prev === "whiteboard" ? null : "whiteboard")}
-            className={`p-3 rounded-2xl border transition-all ${
-              activePanel === "whiteboard" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              activePanel === "whiteboard" ? "bg-[#E57D37] border-[#EAAD62] text-white shadow-lg shadow-[#E57D37]/20" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
             }`}
-            title="Whiteboard Canvas"
+            title="Lecture Whiteboard"
           >
             <Pencil size={18} />
           </button>
 
+          {/* Virtual Backgrounds Toggle (FIXED: Sparkles icon instead of volume) */}
+          <button
+            onClick={() => setActivePanel(prev => prev === "backgrounds" ? null : "backgrounds")}
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              activePanel === "backgrounds" ? "bg-[#E57D37] border-[#EAAD62] text-white shadow-lg shadow-[#E57D37]/20" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+            }`}
+            title="Virtual Backgrounds & Effects"
+          >
+            <Sparkles size={18} />
+          </button>
+
+          {/* Breakout Rooms Toggle (Faculty Only - FIXED: Split icon) */}
           {user.role === "faculty" && (
             <button
               onClick={() => setActivePanel(prev => prev === "breakout" ? null : "breakout")}
-              className={`p-3 rounded-2xl border transition-all ${
-                activePanel === "breakout" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                activePanel === "breakout" ? "bg-[#E57D37] border-[#EAAD62] text-white shadow-lg shadow-[#E57D37]/20" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
               }`}
-              title="Breakout Group Rooms"
+              title="Breakout Discussion Rooms"
             >
-              <Users size={18} />
+              <Split size={18} />
             </button>
           )}
 
+          {/* Participants List Toggle */}
           <button
-            onClick={() => setActivePanel(prev => prev === "backgrounds" ? null : "backgrounds")}
-            className={`p-3 rounded-2xl border transition-all ${
-              activePanel === "backgrounds" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+            onClick={() => setActivePanel(prev => prev === "participants" ? null : "participants")}
+            className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+              activePanel === "participants" ? "bg-[#E57D37] border-[#EAAD62] text-white shadow-lg shadow-[#E57D37]/20" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
             }`}
-            title="Audio Background Config"
+            title="Class Participants"
           >
-            <Volume2 size={18} />
+            <Users size={18} />
           </button>
 
           <div className="w-px h-8 bg-white/10" />
 
+          {/* Chat Panel Toggle */}
           <button
             onClick={() => setActivePanel(prev => prev === "chat" ? null : "chat")}
-            className={`p-3 rounded-2xl border transition-all relative ${
-              activePanel === "chat" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+            className={`p-3 rounded-2xl border transition-all relative cursor-pointer ${
+              activePanel === "chat" ? "bg-[#E57D37] border-[#EAAD62] text-white shadow-lg shadow-[#E57D37]/20" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
             }`}
-            title="Chat Panel"
+            title="Live Lecture Chat"
           >
             <MessageSquare size={18} />
             {chatMessages.length > 0 && (
@@ -668,10 +946,11 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
       {/* Local Toast Alert overlay */}
       {toast && (
         <div className="fixed bottom-24 right-6 z-50 bg-slate-900 border border-white/10 rounded-2xl p-4 shadow-2xl flex items-center gap-3 animate-slide-in max-w-sm text-white">
-          <CheckCircle2 size={16} className="text-emerald-400" />
+          <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
           <span className="text-xs font-bold">{toast.message}</span>
         </div>
       )}
     </div>
   )
 }
+
