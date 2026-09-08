@@ -4,8 +4,10 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Load .env from backend/ directory
+# Load local overrides first. A developer can run the compatibility service
+# without accidentally inheriting the normal .env file's hosted credentials.
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BACKEND_DIR / ".env.local")
 load_dotenv(BACKEND_DIR / ".env")
 
 
