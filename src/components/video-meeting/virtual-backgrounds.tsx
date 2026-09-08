@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { EyeOff, AlertCircle } from "lucide-react"
+import { EyeOff, AlertCircle, Sparkles, X } from "lucide-react"
 
 export interface VirtualBg {
   id: string
@@ -16,7 +16,7 @@ interface VirtualBackgroundsProps {
 }
 
 const BG_OPTIONS: VirtualBg[] = [
-  { id: "none", name: "None (Real Video)" },
+  { id: "none", name: "None (Real Camera)" },
   { id: "blur", name: "Blur Background" },
   {
     id: "classroom",
@@ -30,8 +30,8 @@ const BG_OPTIONS: VirtualBg[] = [
   },
   {
     id: "abstract",
-    name: "Neon Lights",
-    url: "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=400&q=80",
+    name: "Warm Study",
+    url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&q=80",
   },
 ]
 
@@ -39,21 +39,24 @@ export default function VirtualBackgrounds({ currentBg, onChangeBg, onClose }: V
   return (
     <div className="flex flex-col h-full bg-slate-900 border-l border-white/10 text-white font-sans text-left">
       <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-        <h3 className="text-sm font-bold uppercase tracking-wider">Background Effects</h3>
+        <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+          <Sparkles size={16} className="text-[#E57D37]" />
+          Virtual Backgrounds
+        </h3>
         <button
           onClick={onClose}
           type="button"
-          className="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition-all"
+          className="cursor-pointer text-slate-400 hover:text-white p-1 rounded-lg transition-all"
         >
-          Close
+          <X size={16} />
         </button>
       </div>
 
       <div className="flex-grow p-5 overflow-y-auto space-y-5">
-        <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-2.5 text-amber-300 text-xs font-semibold leading-normal">
-          <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+        <div className="p-4 bg-[#EAAD62]/10 border border-[#EAAD62]/20 rounded-2xl flex gap-2.5 text-[#EAAD62] text-xs font-semibold leading-normal">
+          <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-[#EAAD62]" />
           <p>
-            Virtual backgrounds are processed on your local device browser thread. Background segmentation filters will adjust your video rendering dynamically.
+            Choose a virtual background or subtle blur to maintain lecture focus and privacy.
           </p>
         </div>
 
@@ -64,8 +67,8 @@ export default function VirtualBackgrounds({ currentBg, onChangeBg, onClose }: V
               <button
                 key={bg.id}
                 onClick={() => onChangeBg(bg)}
-                className={`flex flex-col border rounded-xl overflow-hidden text-left bg-slate-950/40 hover:bg-slate-950/80 transition-all ${
-                  isActive ? "border-blue-500 ring-1 ring-blue-500" : "border-white/10"
+                className={`flex flex-col border rounded-2xl overflow-hidden text-left bg-slate-950/40 hover:bg-slate-950/80 transition-all cursor-pointer ${
+                  isActive ? "border-[#E57D37] ring-2 ring-[#E57D37]/40 shadow-lg shadow-[#E57D37]/15" : "border-white/10 hover:border-white/25"
                 }`}
               >
                 {bg.url ? (
@@ -74,11 +77,11 @@ export default function VirtualBackgrounds({ currentBg, onChangeBg, onClose }: V
                     style={{ backgroundImage: `url('${bg.url}')` }}
                   />
                 ) : (
-                  <div className="h-20 w-full bg-slate-900 flex items-center justify-center text-slate-500">
-                    <EyeOff size={24} />
+                  <div className="h-20 w-full bg-slate-950 flex items-center justify-center text-slate-500">
+                    <EyeOff size={22} className={isActive ? "text-[#E57D37]" : "text-slate-500"} />
                   </div>
                 )}
-                <div className="p-2.5 text-[11px] font-bold text-slate-200">
+                <div className={`p-2.5 text-[11px] font-bold ${isActive ? "text-[#EAAD62]" : "text-slate-200"}`}>
                   {bg.name}
                 </div>
               </button>
@@ -89,3 +92,4 @@ export default function VirtualBackgrounds({ currentBg, onChangeBg, onClose }: V
     </div>
   )
 }
+
