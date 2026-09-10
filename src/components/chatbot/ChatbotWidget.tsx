@@ -84,24 +84,33 @@ export function ChatbotWidget() {
   const [profile, setProfile] = useState<ChatProfile | null>(null)
   const [profileStatus, setProfileStatus] = useState<"idle" | "loading" | "authenticated" | "guest">("idle")
   const [threadId, setThreadId] = useState<string | null>(null)
+  const [chatGeneration, setChatGeneration] = useState(0)
   const listRef = useRef<HTMLDivElement | null>(null)
   const profileRequestRef = useRef(0)
+  const chatGenerationRef = useRef(0)
   const storageKey = profile ? `${STORAGE_PREFIX}:${profile.actorId}:${profile.id}:${profile.role}:${profile.institution_id ?? profile.organization_id ?? "unscoped"}` : null
 
   const privateTransport = useMemo(() => new DefaultChatTransport<AssistantUIMessage>({ api: "/api/assistant/chat" }), [])
   const publicTransport = useMemo(() => new DefaultChatTransport<AssistantUIMessage>({ api: "/api/assistant/public" }), [])
-  const privateChat = useChat<AssistantUIMessage>({ id: "arca-private-widget", transport: privateTransport, onError: (error) => console.error("Arca assistant error", error.message) })
-  const publicChat = useChat<AssistantUIMessage>({ id: "arca-public-widget", transport: publicTransport, onError: (error) => console.error("Arca public assistant error", error.message) })
+  const privateChat = useChat<AssistantUIMessage>({ id: `arca-private-widget:${chatGeneration}`, transport: privateTransport, onError: (error) => console.error("Arca assistant error", error.message) })
+  const publicChat = useChat<AssistantUIMessage>({ id: `arca-public-widget:${chatGeneration}`, transport: publicTransport, onError: (error) => console.error("Arca public assistant error", error.message) })
   const setPrivateMessages = privateChat.setMessages
   const setPublicMessages = publicChat.setMessages
   const sendPrivateMessage = privateChat.sendMessage
   const sendPublicMessage = publicChat.sendMessage
   const stopPrivate = privateChat.stop
   const stopPublic = publicChat.stop
+  const stopPrivateRef = useRef(stopPrivate)
+  const stopPublicRef = useRef(stopPublic)
   const messages = profileStatus === "authenticated" ? privateChat.messages : publicChat.messages
   const status = profileStatus === "authenticated" ? privateChat.status : publicChat.status
   const error = profileStatus === "authenticated" ? privateChat.error : publicChat.error
   const loading = status === "submitted" || status === "streaming"
+
+  useEffect(() => {
+    stopPrivateRef.current = stopPrivate
+    stopPublicRef.current = stopPublic
+  }, [stopPrivate, stopPublic])
 
   const loadProfile = useCallback(async () => {
     const requestId = ++profileRequestRef.current
@@ -136,13 +145,25 @@ export function ChatbotWidget() {
   // Profile work is deferred until the widget is opened. Auth transitions clear
   // the local thread before resolving the next principal.
   useEffect(() => {
-    if (open && profileStatus === "idle") queueMicrotask(() => void loadProfile())
-  }, [loadProfile, open, profileStatus])
+    if (open && profileStatus === "idle") {
+      const generation = chatGeneration
+      queueMicrotask(() => {
+        if (generation !== chatGenerationRef.current) return
+        void loadProfile()
+      })
+    }
+  }, [chatGeneration, loadProfile, open, profileStatus])
 
   useEffect(() => {
     const resetForAuthChange = () => {
+      const nextChatGeneration = chatGenerationRef.current + 1
+      chatGenerationRef.current = nextChatGeneration
+      profileRequestRef.current += 1
+      void stopPrivateRef.current()
+      void stopPublicRef.current()
       setPrivateMessages([])
       setPublicMessages([])
+      setChatGeneration(nextChatGeneration)
       setProfile(null)
       setThreadId(null)
       setProfileStatus("idle")
@@ -157,7 +178,9 @@ export function ChatbotWidget() {
 
   useEffect(() => {
     if (profileStatus === "loading") return
+    const generation = chatGeneration
     queueMicrotask(() => {
+      if (generation !== chatGenerationRef.current) return
       if (!profile) {
       setThreadId(null)
       setPublicMessages([welcomeMessage(null)])
@@ -171,7 +194,7 @@ export function ChatbotWidget() {
       setThreadId(savedValue?.threadId ?? crypto.randomUUID())
       setPrivateMessages(savedMessages.length ? savedMessages : [welcomeMessage(profile)])
     })
-  }, [profile, profileStatus, setPrivateMessages, setPublicMessages, storageKey])
+  }, [chatGeneration, profile, profileStatus, setPrivateMessages, setPublicMessages, storageKey])
 
   useEffect(() => {
     if (!storageKey || !threadId || !messages.length || profileStatus !== "authenticated") return
