@@ -1,16 +1,15 @@
 import { tool, type UIMessageStreamWriter } from "ai"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { z } from "zod"
 
 import { getNavigationContext, getWorkflowInstructions } from "@/lib/assistant/workflows"
 import { readAuthorizedDashboard, searchPermittedDocuments } from "@/lib/assistant/read-service"
 import { createAssistantDataClient } from "@/lib/assistant/server-client"
-import type { AssistantData, AssistantPrincipal, AssistantUIMessage } from "@/lib/assistant/types"
+import type { AssistantData, AssistantPrincipal, AssistantReadResult, AssistantReadScope, AssistantUIMessage } from "@/lib/assistant/types"
 
 type ToolObserver = (toolName: string) => void
 
-const topicSchema = z.object({
-  topic: z.string().trim().max(240).optional().describe("The dashboard topic the user is asking about"),
-})
+const emptySchema = z.object({})
 
 function writeData(
   writer: UIMessageStreamWriter<AssistantUIMessage> | undefined,
@@ -23,33 +22,47 @@ export function createAssistantTools(
   principal: AssistantPrincipal,
   writer?: UIMessageStreamWriter<AssistantUIMessage>,
   observer?: ToolObserver,
+  dataClientFactory: (principal: AssistantPrincipal) => Promise<SupabaseClient> = createAssistantDataClient,
 ) {
-  const dashboardTool = (name: string, description: string) => tool({
+  const scopeCache = new Map<AssistantReadScope, Promise<AssistantReadResult>>()
+  const emittedScopes = new Set<AssistantReadScope>()
+
+  const dashboardTool = (name: string, description: string, scope: AssistantReadScope) => tool({
     description,
-    inputSchema: topicSchema,
+    inputSchema: emptySchema,
     execute: async () => {
       observer?.(name)
-      const supabase = await createAssistantDataClient(principal)
-      const result = await readAuthorizedDashboard(supabase, principal)
-      for (const source of result.sources) writeData(writer, { type: "data-sources", data: [source] })
+      let read = scopeCache.get(scope)
+      if (!read) {
+        read = (async () => {
+          const supabase = await dataClientFactory(principal)
+          return readAuthorizedDashboard(supabase, principal, scope)
+        })()
+        scopeCache.set(scope, read)
+      }
+      const result = await read
+      if (!emittedScopes.has(scope)) {
+        emittedScopes.add(scope)
+        for (const source of result.sources) writeData(writer, { type: "data-sources", data: [source] })
+      }
       return result.context ?? "No authorized dashboard data was available for this account."
     },
   })
 
   return {
-    get_dashboard_context: dashboardTool("get_dashboard_context", "Read the current user's authorized, role-specific SkillArc dashboard facts. Use this for attendance, timetable, assignments, subjects, announcements, grades, admissions, placements, and project-group questions. Never infer or invent values that are not returned."),
-    get_current_profile: dashboardTool("get_current_profile", "Read the minimum authorized current-profile and role context needed to answer a SkillArc question."),
-    get_my_program_and_subjects: dashboardTool("get_my_program_and_subjects", "Read the current user's authorized program, section, semester, and subject information."),
-    get_my_timetable: dashboardTool("get_my_timetable", "Read the current user's authorized timetable and class schedule."),
-    get_my_assignments: dashboardTool("get_my_assignments", "Read the current user's authorized assignment and submission information."),
-    get_my_quizzes_and_grades: dashboardTool("get_my_quizzes_and_grades", "Read the current user's authorized quiz, grade, and feedback information."),
-    get_my_attendance: dashboardTool("get_my_attendance", "Read the current user's authorized attendance information."),
-    get_my_announcements_and_events: dashboardTool("get_my_announcements_and_events", "Read authorized announcements and event information relevant to the current user."),
-    get_my_admissions: dashboardTool("get_my_admissions", "Read the current user's authorized admissions information without exposing sensitive documents."),
-    get_my_placements: dashboardTool("get_my_placements", "Read the current user's authorized placement information."),
-    get_my_project_groups: dashboardTool("get_my_project_groups", "Read the current user's authorized project-group information."),
-    get_faculty_sections: dashboardTool("get_faculty_sections", "Read authorized faculty section information when the effective role permits it."),
-    get_faculty_submission_counts: dashboardTool("get_faculty_submission_counts", "Read authorized faculty assignment submission counts when the effective role permits it."),
+    get_dashboard_context: dashboardTool("get_dashboard_context", "Read the current user's authorized, role-specific SkillArc dashboard facts for broad or multi-domain questions. Never infer or invent values that are not returned.", "all"),
+    get_current_profile: dashboardTool("get_current_profile", "Read the minimum authorized current-profile and role context needed to answer a SkillArc question.", "profile"),
+    get_my_program_and_subjects: dashboardTool("get_my_program_and_subjects", "Read the current user's authorized program, section, semester, and subject information.", "program_subjects"),
+    get_my_timetable: dashboardTool("get_my_timetable", "Read the current user's authorized timetable and class schedule.", "timetable"),
+    get_my_assignments: dashboardTool("get_my_assignments", "Read the current user's authorized assignment and submission information.", "assignments"),
+    get_my_quizzes_and_grades: dashboardTool("get_my_quizzes_and_grades", "Read the current user's authorized quiz, grade, and feedback information.", "quizzes_grades"),
+    get_my_attendance: dashboardTool("get_my_attendance", "Read the current user's authorized attendance information.", "attendance"),
+    get_my_announcements_and_events: dashboardTool("get_my_announcements_and_events", "Read authorized announcements and event information relevant to the current user.", "announcements_events"),
+    get_my_admissions: dashboardTool("get_my_admissions", "Read the current user's authorized admissions information without exposing sensitive documents.", "admissions"),
+    get_my_placements: dashboardTool("get_my_placements", "Read the current user's authorized placement information.", "placements"),
+    get_my_project_groups: dashboardTool("get_my_project_groups", "Read the current user's authorized project-group information.", "project_groups"),
+    get_faculty_sections: dashboardTool("get_faculty_sections", "Read authorized faculty section information when the effective role permits it.", "faculty_sections"),
+    get_faculty_submission_counts: dashboardTool("get_faculty_submission_counts", "Read authorized faculty assignment submission counts when the effective role permits it.", "faculty_submission_counts"),
     get_workflow_instructions: tool({
       description: "Return verified SkillArc workflow steps and validated dashboard links. Use this when the user asks how to do something in SkillArc, especially publishing a project team. This tool is guidance only and never performs the action.",
       inputSchema: z.object({ question: z.string().trim().max(240).describe("The user's workflow question") }),
@@ -66,7 +79,7 @@ export function createAssistantTools(
       inputSchema: z.object({ query: z.string().trim().min(3).max(240).describe("Terms to search for in permitted academic documents") }),
       execute: async ({ query }) => {
         observer?.("search_permitted_documents")
-        const supabase = await createAssistantDataClient(principal)
+        const supabase = await dataClientFactory(principal)
         const result = await searchPermittedDocuments(supabase, principal, query)
         for (const source of result.sources) writeData(writer, { type: "data-sources", data: [source] })
         return result.context ?? "No permitted academic document matched that search."

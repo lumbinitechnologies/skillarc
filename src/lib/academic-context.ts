@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AssistantReadScope } from "@/lib/assistant/types";
 
 export const ACADEMIC_CONTEXT_LIMITS = {
   maxQueries: 12,
@@ -25,6 +26,10 @@ export type AcademicContextProfile = {
 
 type QueryResult = { data: any; error: any };
 type QueryFn = () => PromiseLike<QueryResult>;
+
+function includesScope(scope: AssistantReadScope, ...scopes: AssistantReadScope[]): boolean {
+  return scope === "all" || scopes.includes(scope);
+}
 
 const ROLE_LABELS: Record<string, string> = {
   STUDENT: "Student",
@@ -157,87 +162,104 @@ async function studentContext(
   supabase: SupabaseClient,
   profile: AcademicContextProfile,
   state: { queries: number; rows: number },
+  scope: AssistantReadScope,
 ): Promise<string[]> {
-  const student = await safeQuery(
-    "student profile",
-    () =>
-      supabase
-        .from("students")
-        .select(
-          "section_id, semester, program_id, section:section_id(name), program:program_id(name, department_id)",
-        )
-        .eq("id", profile.id)
-        .maybeSingle(),
-    state,
-  );
-  if (!student || Array.isArray(student)) return [];
-  const sectionId = student.section_id;
-  const semester = student.semester;
-  const programId = student.program_id;
+  const needsStudentRecord = includesScope(scope, "program_subjects", "timetable", "assignments");
+  const student = needsStudentRecord
+    ? await safeQuery(
+        "student profile",
+        () =>
+          supabase
+            .from("students")
+            .select(
+              "section_id, semester, program_id, section:section_id(name), program:program_id(name, department_id)",
+            )
+            .eq("id", profile.id)
+            .eq("institution_id", profile.institution_id)
+            .maybeSingle(),
+        state,
+      )
+    : null;
+  if (needsStudentRecord && (!student || Array.isArray(student))) return [];
+  const studentRecord = student && !Array.isArray(student) ? student : null;
+  const sectionId = studentRecord?.section_id;
+  const semester = studentRecord?.semester;
+  const programId = studentRecord?.program_id;
   const [dept, subjects, slots, attendance, grades, assignments, submissions] =
     await Promise.all([
-      departmentLines(
-        supabase,
-        {
-          ...profile,
-          department_id:
-            student.program?.department_id ?? profile.department_id,
-        },
-        state,
-      ),
-      safeQuery(
-        "student subjects",
-        () =>
-          supabase
-            .from("subjects")
-            .select("name, code, credits")
-            .eq("program_id", programId)
-            .eq("semester", semester)
-            .order("code")
-            .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects),
-        state,
-      ),
-      safeQuery(
-        "student timetable",
-        () =>
-          supabase
-            .from("timetable_slots")
-            .select(
-              "day, period, subjects(name, code), faculty:faculty_id(name)",
-            )
-            .eq("institution_id", profile.institution_id)
-            .eq("section_id", sectionId)
-            .eq("semester", semester)
-            .order("day")
-            .order("period")
-            .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots),
-        state,
-      ),
-      safeQuery(
-        "student attendance summary",
-        () =>
-          supabase.rpc("get_student_attendance_summary", {
-            p_student_id: profile.id,
-            p_since: cutoffDate(),
-            p_limit: ACADEMIC_CONTEXT_LIMITS.maxSubjects,
-          }),
-        state,
-      ),
-      safeQuery(
-        "student grades",
-        () =>
-          supabase
-            .from("submissions")
-            .select(
-              "grade, feedback, status, submitted_at, assignment:assignment_id(title, max_score, type, subjects(name, code))",
-            )
-            .eq("student_id", profile.id)
-            .eq("status", "graded")
-            .order("submitted_at", { ascending: false })
-            .limit(ACADEMIC_CONTEXT_LIMITS.maxGrades),
-        state,
-      ),
-      sectionId
+      includesScope(scope, "program_subjects")
+        ? departmentLines(
+            supabase,
+            {
+              ...profile,
+              department_id:
+                studentRecord?.program?.department_id ?? profile.department_id,
+            },
+            state,
+          )
+        : Promise.resolve([]),
+      includesScope(scope, "program_subjects")
+        ? safeQuery(
+            "student subjects",
+            () =>
+              supabase
+                .from("subjects")
+                .select("name, code, credits")
+                .eq("institution_id", profile.institution_id)
+                .eq("program_id", programId)
+                .eq("semester", semester)
+                .order("code")
+                .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects),
+            state,
+          )
+        : Promise.resolve(null),
+      includesScope(scope, "timetable")
+        ? safeQuery(
+            "student timetable",
+            () =>
+              supabase
+                .from("timetable_slots")
+                .select(
+                  "day, period, subjects(name, code), faculty:faculty_id(name)",
+                )
+                .eq("institution_id", profile.institution_id)
+                .eq("section_id", sectionId)
+                .eq("semester", semester)
+                .order("day")
+                .order("period")
+                .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots),
+            state,
+          )
+        : Promise.resolve(null),
+      includesScope(scope, "attendance")
+        ? safeQuery(
+            "student attendance summary",
+            () =>
+              supabase.rpc("get_student_attendance_summary", {
+                p_student_id: profile.id,
+                p_since: cutoffDate(),
+                p_limit: ACADEMIC_CONTEXT_LIMITS.maxSubjects,
+              }),
+            state,
+          )
+        : Promise.resolve(null),
+      includesScope(scope, "quizzes_grades")
+        ? safeQuery(
+            "student grades",
+            () =>
+              supabase
+                .from("submissions")
+                .select(
+                  "grade, feedback, status, submitted_at, assignment:assignment_id(title, max_score, type, subjects(name, code))",
+                )
+                .eq("student_id", profile.id)
+                .eq("status", "graded")
+                .order("submitted_at", { ascending: false })
+                .limit(ACADEMIC_CONTEXT_LIMITS.maxGrades),
+            state,
+          )
+        : Promise.resolve(null),
+      includesScope(scope, "assignments") && sectionId
         ? safeQuery(
             "section assignments",
             () =>
@@ -252,25 +274,31 @@ async function studentContext(
             state,
           )
         : Promise.resolve(null),
-      safeQuery(
-        "student submissions",
-        () =>
-          supabase
-            .from("submissions")
-            .select("assignment_id")
-            .eq("student_id", profile.id)
-            .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments),
-        state,
-      ),
+      includesScope(scope, "assignments")
+        ? safeQuery(
+            "student submissions",
+            () =>
+              supabase
+                .from("submissions")
+                .select("assignment_id")
+                .eq("student_id", profile.id)
+                .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments),
+            state,
+          )
+        : Promise.resolve(null),
     ]);
   const lines = [
-    `\nAcademic Details:`,
-    `- Program: ${clip(student.program?.name || "N/A", 80)}`,
-    `- Section: ${clip(student.section?.name || "N/A", 50)}`,
-    `- Semester: ${student.semester ?? "N/A"}`,
-    ...dept,
+    ...(studentRecord
+      ? [
+          `\nAcademic Details:`,
+          `- Program: ${clip(studentRecord.program?.name || "N/A", 80)}`,
+          `- Section: ${clip(studentRecord.section?.name || "N/A", 50)}`,
+          `- Semester: ${studentRecord.semester ?? "N/A"}`,
+        ]
+      : []),
+    ...(includesScope(scope, "program_subjects") ? dept : []),
   ];
-  if (Array.isArray(subjects) && subjects.length)
+  if (includesScope(scope, "program_subjects") && Array.isArray(subjects) && subjects.length)
     lines.push(
       "\nCourses/Subjects:",
       ...subjects.map(
@@ -278,7 +306,7 @@ async function studentContext(
           `- ${clip(s.name, 70)} (${clip(s.code || "No Code", 20)}) [Credits: ${s.credits || 0}]`,
       ),
     );
-  if (Array.isArray(slots) && slots.length)
+  if (includesScope(scope, "timetable") && Array.isArray(slots) && slots.length)
     lines.push(
       "\nTimetable:",
       ...slots.map(
@@ -286,7 +314,7 @@ async function studentContext(
           `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Free Period", 70)}${s.faculty?.name ? ` taught by ${clip(s.faculty.name, 60)}` : ""}`,
       ),
     );
-  if (Array.isArray(attendance) && attendance.length)
+  if (includesScope(scope, "attendance") && Array.isArray(attendance) && attendance.length)
     lines.push(
       "\nAttendance (last 180 days):",
       ...attendance.map(
@@ -294,7 +322,7 @@ async function studentContext(
           `- ${clip(v.subject_name, 70)} (${clip(v.subject_code || "", 20)}): ${v.total_count ? ((v.present_count / v.total_count) * 100).toFixed(1) : "0"}% (${v.present_count}/${v.total_count})`,
       ),
     );
-  if (Array.isArray(grades) && grades.length)
+  if (includesScope(scope, "quizzes_grades") && Array.isArray(grades) && grades.length)
     lines.push(
       "\nGraded Assignments:",
       ...grades.map(
@@ -302,7 +330,7 @@ async function studentContext(
           `- ${clip(s.assignment?.title, 80)} (${clip(s.assignment?.subjects?.name || "Unknown subject", 60)}): ${s.grade}/${s.assignment?.max_score}${s.feedback ? ` — ${clip(s.feedback, 120)}` : ""}`,
       ),
     );
-  if (Array.isArray(assignments) && assignments.length) {
+  if (includesScope(scope, "assignments") && Array.isArray(assignments) && assignments.length) {
     const submitted = new Set(
       (submissions || []).map((s: any) => s.assignment_id),
     );
@@ -323,59 +351,70 @@ async function facultyContext(
   supabase: SupabaseClient,
   profile: AcademicContextProfile,
   state: { queries: number; rows: number },
+  scope: AssistantReadScope,
 ): Promise<string[]> {
   const [taught, slots, assignments, attendance] = await Promise.all([
-    safeQuery(
-      "faculty subjects",
-      () =>
-        supabase
-          .from("faculty_subjects")
-          .select(
-            "semester, academic_year, subject:subject_id(name, code), section:section_id(name)",
-          )
-          .eq("faculty_id", profile.id)
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects),
-      state,
-    ),
-    safeQuery(
-      "faculty timetable",
-      () =>
-        supabase
-          .from("timetable_slots")
-          .select("day, period, subjects(name, code), section:section_id(name)")
-          .eq("faculty_id", profile.id)
-          .order("day")
-          .order("period")
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots),
-      state,
-    ),
-    safeQuery(
-      "faculty assignments",
-      () =>
-        supabase
-          .from("assignments")
-          .select("id, title, subjects(name)")
-          .eq("faculty_id", profile.id)
-          .order("created_at", { ascending: false })
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments),
-      state,
-    ),
-    safeQuery(
-      "faculty attendance summary",
-      () =>
-        supabase.rpc("get_faculty_attendance_summary", {
-          p_faculty_id: profile.id,
-          p_since: cutoffDate(),
-          p_limit: ACADEMIC_CONTEXT_LIMITS.maxSubjects,
-        }),
-      state,
-    ),
+    includesScope(scope, "program_subjects", "faculty_sections")
+      ? safeQuery(
+          "faculty subjects",
+          () =>
+            supabase
+              .from("faculty_subjects")
+              .select(
+                "semester, academic_year, subject:subject_id(name, code), section:section_id(name)",
+              )
+              .eq("institution_id", profile.institution_id)
+              .eq("faculty_id", profile.id)
+              .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects),
+          state,
+        )
+      : Promise.resolve(null),
+    includesScope(scope, "timetable")
+      ? safeQuery(
+          "faculty timetable",
+          () =>
+            supabase
+              .from("timetable_slots")
+              .select("day, period, subjects(name, code), section:section_id(name)")
+              .eq("institution_id", profile.institution_id)
+              .eq("faculty_id", profile.id)
+              .order("day")
+              .order("period")
+              .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots),
+          state,
+        )
+      : Promise.resolve(null),
+    includesScope(scope, "assignments")
+      ? safeQuery(
+          "faculty assignments",
+          () =>
+            supabase
+              .from("assignments")
+              .select("id, title, subjects(name)")
+              .eq("faculty_id", profile.id)
+              .order("created_at", { ascending: false })
+              .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments),
+          state,
+        )
+      : Promise.resolve(null),
+    includesScope(scope, "attendance")
+      ? safeQuery(
+          "faculty attendance summary",
+          () =>
+            supabase.rpc("get_faculty_attendance_summary", {
+              p_faculty_id: profile.id,
+              p_since: cutoffDate(),
+              p_limit: ACADEMIC_CONTEXT_LIMITS.maxSubjects,
+            }),
+          state,
+        )
+      : Promise.resolve(null),
   ]);
   const lines = [
     `\nDepartment Affiliation:`,
-    ...(await departmentLines(supabase, profile, state)),
+    ...(includesScope(scope, "program_subjects") ? await departmentLines(supabase, profile, state) : []),
   ];
-  if (Array.isArray(taught) && taught.length)
+  if (includesScope(scope, "program_subjects", "faculty_sections") && Array.isArray(taught) && taught.length)
     lines.push(
       "\nSubjects Taught:",
       ...taught.map(
@@ -383,7 +422,7 @@ async function facultyContext(
           `- ${clip(s.subject?.name, 70)} (${clip(s.subject?.code || "", 20)})`,
       ),
     );
-  if (Array.isArray(slots) && slots.length)
+  if (includesScope(scope, "timetable") && Array.isArray(slots) && slots.length)
     lines.push(
       "\nTeaching Schedule:",
       ...slots.map(
@@ -391,7 +430,7 @@ async function facultyContext(
           `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Class", 70)}${s.section?.name ? ` for ${clip(s.section.name, 50)}` : ""}`,
       ),
     );
-  if (Array.isArray(assignments) && assignments.length)
+  if (includesScope(scope, "assignments") && Array.isArray(assignments) && assignments.length)
     lines.push(
       "\nAssignments:",
       ...assignments.map(
@@ -399,7 +438,7 @@ async function facultyContext(
           `- ${clip(a.title, 80)} (${clip(a.subjects?.name || "Unknown subject", 60)})`,
       ),
     );
-  if (Array.isArray(attendance) && attendance.length)
+  if (includesScope(scope, "attendance") && Array.isArray(attendance) && attendance.length)
     lines.push(
       "\nAttendance Overview (last 180 days):",
       ...attendance.map(
@@ -414,27 +453,29 @@ async function parentContext(
   supabase: SupabaseClient,
   profile: AcademicContextProfile,
   state: { queries: number; rows: number },
+  scope: AssistantReadScope,
 ): Promise<string[]> {
   const children = await safeQuery(
     "parent academic context",
     () =>
-      supabase.rpc("get_parent_academic_context", {
+      supabase.rpc(scope === "all" ? "get_parent_academic_context" : "get_parent_academic_context_scoped", {
         p_parent_id: profile.id,
         p_since: cutoffDate(),
         p_limit: ACADEMIC_CONTEXT_LIMITS.maxChildren,
+        ...(scope === "all" ? {} : { p_scope: scope }),
       }),
     state,
   );
   if (!Array.isArray(children)) return [];
   const lines: string[] = [];
   for (const child of children) {
-    lines.push(
+    if (includesScope(scope, "program_subjects")) lines.push(
       `\nChild: ${clip(child.child_name, 80)}${child.relationship ? ` (${clip(child.relationship, 40)})` : ""}`,
       `- Program: ${clip(child.program_name || "N/A", 70)}`,
       `- Section: ${clip(child.section_name || "N/A", 50)}`,
       `- Semester: ${child.semester ?? "N/A"}`,
     );
-    if (Array.isArray(child.attendance) && child.attendance.length)
+    if (includesScope(scope, "attendance") && Array.isArray(child.attendance) && child.attendance.length)
       lines.push(
         "- Attendance:",
         ...child.attendance.map(
@@ -442,7 +483,7 @@ async function parentContext(
             `  - ${clip(v.subject_name, 60)}: ${v.total_count ? ((v.present_count / v.total_count) * 100).toFixed(1) : "0"}% (${v.present_count}/${v.total_count})`,
         ),
       );
-    if (Array.isArray(child.grades) && child.grades.length)
+    if (includesScope(scope, "quizzes_grades") && Array.isArray(child.grades) && child.grades.length)
       lines.push(
         "- Graded work:",
         ...child.grades.map(
@@ -451,6 +492,7 @@ async function parentContext(
         ),
       );
     if (
+      includesScope(scope, "assignments") &&
       Array.isArray(child.pending_assignments) &&
       child.pending_assignments.length
     )
@@ -461,7 +503,7 @@ async function parentContext(
             `  - ${clip(v.title, 70)} — Due: ${v.due_date ? new Date(v.due_date).toISOString() : "No due date"}`,
         ),
       );
-    if (Array.isArray(child.timetable) && child.timetable.length)
+    if (includesScope(scope, "timetable") && Array.isArray(child.timetable) && child.timetable.length)
       lines.push(
         "- Timetable:",
         ...child.timetable.map(
@@ -502,19 +544,22 @@ async function announcements(
 export async function fetchAcademicContext(
   supabase: SupabaseClient,
   profile: AcademicContextProfile,
+  scope: AssistantReadScope = "all",
 ): Promise<string | null> {
   const state = { queries: 0, rows: 0 };
   const roleLines =
     profile.role === "STUDENT"
-      ? studentContext(supabase, profile, state)
+      ? studentContext(supabase, profile, state, scope)
       : ["FACULTY", "HOD", "PROGRAM_HEAD"].includes(profile.role)
-        ? facultyContext(supabase, profile, state)
+        ? facultyContext(supabase, profile, state, scope)
         : profile.role === "PARENT"
-          ? parentContext(supabase, profile, state)
+          ? ["all", "program_subjects", "timetable", "assignments", "quizzes_grades", "attendance"].includes(scope)
+            ? parentContext(supabase, profile, state, scope)
+            : Promise.resolve([])
           : Promise.resolve([]);
   const [academic, noticeLines] = await Promise.all([
     roleLines,
-    announcements(supabase, profile, state),
+    includesScope(scope, "announcements_events") ? announcements(supabase, profile, state) : Promise.resolve([]),
   ]);
   // Email is intentionally absent: the model only needs the effective role/name
   // and academic facts to answer the chatbot request.

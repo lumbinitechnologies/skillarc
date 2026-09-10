@@ -22,6 +22,7 @@ export function toAssistantPrincipal(profile: UserContext): AssistantPrincipal {
   return {
     userId: profile.id,
     actorUserId: profile.originalProfile.id,
+    name: profile.name,
     organizationId: profile.organization_id,
     institutionId: profile.institution_id,
     departmentId: profile.department_id ?? profile.originalProfile.department_id ?? null,

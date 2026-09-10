@@ -55,7 +55,7 @@ test("Task 04 contract exposes the configured hard bounds", () => {
     maxRows: 50,
     maxContextChars: 2500,
     academicWindowDays: 180,
-    queryTimeoutMs: 140,
+    queryTimeoutMs: 2000,
     maxSubjects: 12,
     maxTimetableSlots: 12,
     maxAssignments: 12,
