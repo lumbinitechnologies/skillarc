@@ -8,6 +8,7 @@ function principal(role: AssistantPrincipal["role"]): AssistantPrincipal {
   return {
     userId: "user-1",
     actorUserId: "user-1",
+    name: "User One",
     organizationId: "org-1",
     institutionId: "institution-1",
     departmentId: "department-1",

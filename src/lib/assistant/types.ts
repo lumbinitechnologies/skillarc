@@ -5,12 +5,28 @@ import type { UserRole } from "@/constants/roles"
 export type AssistantPrincipal = {
   userId: string
   actorUserId: string
+  name: string
   organizationId: string | null
   institutionId: string | null
   departmentId: string | null
   role: UserRole
   isImpersonating: boolean
 }
+
+export type AssistantReadScope =
+  | "all"
+  | "profile"
+  | "program_subjects"
+  | "timetable"
+  | "assignments"
+  | "quizzes_grades"
+  | "attendance"
+  | "announcements_events"
+  | "admissions"
+  | "placements"
+  | "project_groups"
+  | "faculty_sections"
+  | "faculty_submission_counts"
 
 export type SourceCitation = {
   id: string
