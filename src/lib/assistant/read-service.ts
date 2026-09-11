@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { ACADEMIC_CONTEXT_LIMITS, boundAcademicContext, fetchAcademicContext } from "@/lib/academic-context"
+import { ACADEMIC_CONTEXT_LIMITS, fetchAcademicContext } from "@/lib/academic-context"
 import type { AssistantPrincipal, AssistantReadResult, AssistantReadScope, SourceCitation } from "@/lib/assistant/types"
 
 /**
@@ -39,16 +39,12 @@ export async function readAuthorizedDashboard(
   const academicProfile = {
     id: principal.userId,
     role: principal.role,
+    organization_id: principal.organizationId,
     institution_id: principal.institutionId,
     department_id: principal.departmentId,
     name: principal.name || "the current user",
   }
-  const context = principal.role === "PARENT" && principal.isImpersonating && PARENT_ACADEMIC_SCOPES.has(scope)
-    ? [
-        await readImpersonatedParentAcademicContext(supabase, principal, scope),
-        scope === "all" ? await fetchAcademicContext(supabase, academicProfile, "announcements_events") : null,
-      ].filter(Boolean).join("\n") || null
-    : await fetchAcademicContext(supabase, academicProfile, scope)
+  const context = await fetchAcademicContext(supabase, academicProfile, scope, principal)
   const domain = await readAuthorizedDomainData(supabase, principal, scope)
 
   return {
@@ -64,173 +60,6 @@ export async function readAuthorizedDashboard(
         ]
       : []), ...domain.sources],
   }
-}
-
-const PARENT_ACADEMIC_SCOPES = new Set<AssistantReadScope>([
-  "all",
-  "program_subjects",
-  "timetable",
-  "assignments",
-  "quizzes_grades",
-  "attendance",
-])
-
-function parentScopeIncludes(scope: AssistantReadScope, requested: AssistantReadScope): boolean {
-  return scope === "all" || scope === requested
-}
-
-/**
- * The scoped parent RPC validates auth.uid(), which is unavailable when an
- * impersonated request uses the server-only service client. Keep this path
- * explicit and batched so service-role access does not reintroduce broad reads.
- */
-async function readImpersonatedParentAcademicContext(
-  supabase: SupabaseClient,
-  principal: AssistantPrincipal,
-  scope: AssistantReadScope,
-): Promise<string | null> {
-  if (!PARENT_ACADEMIC_SCOPES.has(scope)) return null
-
-  const { data: relationData } = await supabase
-    .from("parent_student_relations")
-    .select("student_id, relationship")
-    .eq("parent_id", principal.userId)
-    .limit(ACADEMIC_CONTEXT_LIMITS.maxChildren)
-  const relations = Array.isArray(relationData) ? relationData : []
-  const childIds = relations.map((row) => row?.student_id).filter(Boolean)
-  if (!childIds.length) return null
-
-  const { data: childData } = await supabase
-    .from("students")
-    .select("id, section_id, semester, program_id, users!inner(name, role), program:program_id(name), section:section_id(name)")
-    .in("id", childIds)
-    .eq("institution_id", principal.institutionId)
-    .limit(ACADEMIC_CONTEXT_LIMITS.maxChildren)
-  const children = Array.isArray(childData) ? childData : []
-  const validChildren = children.filter((child) => {
-    const user = child?.users && typeof child.users === "object" ? child.users as unknown as Record<string, unknown> : {}
-    return user.role === "STUDENT"
-  })
-  if (!validChildren.length) return null
-
-  const validChildIds = validChildren.map((child) => child.id).filter(Boolean)
-  const sectionIds = validChildren.map((child) => child.section_id).filter(Boolean)
-  const programIds = validChildren.map((child) => child.program_id).filter(Boolean)
-  const [subjectsResult, attendanceResult, gradesResult, assignmentsResult, assignmentSubmissionsResult, timetableResult] = await Promise.all([
-    parentScopeIncludes(scope, "program_subjects") && programIds.length
-      ? supabase
-          .from("subjects")
-          .select("id, name, code, program_id, semester")
-          .eq("institution_id", principal.institutionId)
-          .in("program_id", programIds)
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-    parentScopeIncludes(scope, "attendance")
-      ? supabase
-          .from("attendance_records")
-          .select("student_id, status, attendance_sessions!inner(attendance_date, subject:subject_id(name, code))")
-          .in("student_id", validChildIds)
-          .gte("attendance_sessions.attendance_date", new Date(Date.now() - ACADEMIC_CONTEXT_LIMITS.academicWindowDays * 86400000).toISOString().slice(0, 10))
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxSubjects * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-    parentScopeIncludes(scope, "quizzes_grades")
-      ? supabase
-          .from("submissions")
-          .select("student_id, grade, feedback, status, submitted_at, assignment:assignment_id(title, max_score, subjects(name, code))")
-          .in("student_id", validChildIds)
-          .eq("status", "graded")
-          .order("submitted_at", { ascending: false })
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxGrades * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-    parentScopeIncludes(scope, "assignments") && sectionIds.length
-      ? supabase
-          .from("assignments")
-          .select("id, title, due_date, type, section_ids, subjects(name, code)")
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-    parentScopeIncludes(scope, "assignments")
-      ? supabase
-          .from("submissions")
-          .select("student_id, assignment_id")
-          .in("student_id", validChildIds)
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxAssignments * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-    parentScopeIncludes(scope, "timetable") && sectionIds.length
-      ? supabase
-          .from("timetable_slots")
-          .select("section_id, semester, day, period, subjects(name, code)")
-          .eq("institution_id", principal.institutionId)
-          .in("section_id", sectionIds)
-          .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots * ACADEMIC_CONTEXT_LIMITS.maxChildren)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const subjects = Array.isArray(subjectsResult.data) ? subjectsResult.data : []
-  const attendance = Array.isArray(attendanceResult.data) ? attendanceResult.data : []
-  const grades = Array.isArray(gradesResult.data) ? gradesResult.data : []
-  const assignments = Array.isArray(assignmentsResult.data) ? assignmentsResult.data : []
-  const assignmentSubmissions = Array.isArray(assignmentSubmissionsResult.data) ? assignmentSubmissionsResult.data : []
-  const timetable = Array.isArray(timetableResult.data) ? timetableResult.data : []
-  const relationByChild = new Map(relations.map((row) => [row.student_id, row.relationship]))
-  const lines: string[] = [
-    "User Profile Summary:",
-    `- Name: ${principal.name || "the current user"}`,
-    `- Role: Parent`,
-  ]
-
-  for (const child of validChildren) {
-    const user = child.users && typeof child.users === "object" ? child.users as unknown as Record<string, unknown> : {}
-    const program = child.program && typeof child.program === "object" ? child.program as unknown as Record<string, unknown> : {}
-    const section = child.section && typeof child.section === "object" ? child.section as unknown as Record<string, unknown> : {}
-    if (parentScopeIncludes(scope, "program_subjects")) {
-      lines.push(
-        `\nChild: ${String(user.name ?? "Student")}${relationByChild.get(child.id) ? ` (${String(relationByChild.get(child.id))})` : ""}`,
-        `- Program: ${String(program.name ?? "N/A")}`,
-        `- Section: ${String(section.name ?? "N/A")}`,
-        `- Semester: ${String(child.semester ?? "N/A")}`,
-        ...subjects
-          .filter((subject) => subject.program_id === child.program_id && (child.semester == null || subject.semester === child.semester))
-          .slice(0, ACADEMIC_CONTEXT_LIMITS.maxSubjects)
-          .map((subject) => `- Subject: ${String(subject.name ?? "Unknown subject")} (${String(subject.code ?? "No code")})`),
-      )
-    }
-    if (parentScopeIncludes(scope, "attendance")) {
-      const childAttendance = attendance.filter((row) => row.student_id === child.id)
-      if (childAttendance.length) {
-        const grouped = new Map<string, { name: string; code: string; present: number; total: number }>()
-        for (const row of childAttendance) {
-          const session = row.attendance_sessions && typeof row.attendance_sessions === "object" ? row.attendance_sessions as unknown as Record<string, unknown> : {}
-          const subject = session.subject && typeof session.subject === "object" ? session.subject as Record<string, unknown> : {}
-          const key = `${String(subject.name ?? "Unknown subject")}:${String(subject.code ?? "")}`
-          const current = grouped.get(key) ?? { name: String(subject.name ?? "Unknown subject"), code: String(subject.code ?? ""), present: 0, total: 0 }
-          current.total += 1
-          if (row.status === "PRESENT" || row.status === "LATE") current.present += 1
-          grouped.set(key, current)
-        }
-        lines.push("- Attendance:", ...[...grouped.values()].slice(0, ACADEMIC_CONTEXT_LIMITS.maxSubjects).map((item) => `  - ${item.name} (${item.code}): ${item.total ? ((item.present / item.total) * 100).toFixed(1) : "0"}% (${item.present}/${item.total})`))
-      }
-    }
-    if (parentScopeIncludes(scope, "quizzes_grades")) {
-      const childGrades = grades.filter((row) => row.student_id === child.id)
-      if (childGrades.length) lines.push("- Graded work:", ...childGrades.slice(0, ACADEMIC_CONTEXT_LIMITS.maxGrades).map((row) => {
-        const assignment = row.assignment && typeof row.assignment === "object" ? row.assignment as unknown as Record<string, unknown> : {}
-        return `  - ${String(assignment.title ?? "Assignment")}: ${String(row.grade ?? "N/A")}/${String(assignment.max_score ?? "N/A")}${row.feedback ? ` — ${String(row.feedback).slice(0, 100)}` : ""}`
-      }))
-    }
-    if (parentScopeIncludes(scope, "assignments")) {
-      const submitted = new Set(assignmentSubmissions.filter((row) => row.student_id === child.id).map((row) => row.assignment_id))
-      const pending = assignments.filter((assignment) => Array.isArray(assignment.section_ids) && assignment.section_ids.includes(child.section_id) && !submitted.has(assignment.id))
-      if (pending.length) lines.push("- Pending work:", ...pending.slice(0, ACADEMIC_CONTEXT_LIMITS.maxAssignments).map((assignment) => `  - ${String(assignment.title ?? "Assignment")} — Due: ${assignment.due_date ? new Date(assignment.due_date).toISOString() : "No due date"}`))
-    }
-    if (parentScopeIncludes(scope, "timetable")) {
-      const childSlots = timetable.filter((slot) => slot.section_id === child.section_id && slot.semester === child.semester)
-      if (childSlots.length) lines.push("- Timetable:", ...childSlots.slice(0, ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots).map((slot) => {
-        const subject = slot.subjects && typeof slot.subjects === "object" ? slot.subjects as unknown as Record<string, unknown> : {}
-        return `  - ${String(slot.day ?? "Day")}, Period ${String(slot.period ?? "")}: ${String(subject.name ?? "Class")}`
-      }))
-    }
-  }
-  return boundAcademicContext(lines)
 }
 
 async function readAuthorizedDomainData(

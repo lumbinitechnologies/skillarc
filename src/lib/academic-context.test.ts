@@ -21,7 +21,9 @@ function mockSupabase(results: Record<string, unknown> = {}) {
       eq: (field: string, value: unknown) => { calls.push(`${key}.eq:${field}=${String(value)}`); return query },
       neq: (field: string, value: unknown) => { calls.push(`${key}.neq:${field}=${String(value)}`); return query },
       gte: (field: string, value: unknown) => { calls.push(`${key}.gte:${field}=${String(value)}`); return query },
+      in: (field: string, value: unknown[]) => { calls.push(`${key}.in:${field}=${value.join(",")}`); return query },
       contains: (field: string) => { calls.push(`${key}.contains:${field}`); return query },
+      overlaps: (field: string, value: unknown[]) => { calls.push(`${key}.overlaps:${field}=${value.join(",")}`); return query },
       order: (field: string) => { calls.push(`${key}.order:${field}`); return query },
       limit: (value: number) => { calls.push(`${key}.limit:${value}`); return query },
       maybeSingle: () => query,
@@ -44,6 +46,7 @@ function mockSupabase(results: Record<string, unknown> = {}) {
 const profile = {
   id: "student-1",
   role: "STUDENT",
+  organization_id: "organization-1",
   institution_id: "institution-1",
   department_id: null,
   name: "Student One",
@@ -84,6 +87,60 @@ test("student context uses the SQL attendance summary RPC", async () => {
   assert.equal(supabase.calls.some((call: string) => call.startsWith("attendance_records")), false)
 })
 
+test("impersonated student context aggregates effective attendance without the auth.uid RPC", async () => {
+  const supabase = mockSupabase({
+    attendance_records: [
+      { status: "PRESENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+      { status: "ABSENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+      { status: "PRESENT", attendance_sessions: { subject: { name: "Other tenant", code: "OTH", institution_id: "institution-2" } } },
+    ],
+  })
+  const context = await fetchAcademicContext(
+    supabase,
+    profile,
+    "attendance",
+    {
+      userId: profile.id,
+      actorUserId: "super-admin-1",
+      organizationId: "organization-1",
+      institutionId: profile.institution_id,
+      departmentId: null,
+      role: "STUDENT",
+      isImpersonating: true,
+    },
+  )
+
+  assert.match(context ?? "", /Algorithms/)
+  assert.match(context ?? "", /50\.0%/)
+  assert.doesNotMatch(context ?? "", /Other tenant/)
+  assert.equal(supabase.calls.some((call: string) => call.startsWith("rpc:get_student_attendance_summary")), false)
+  assert.ok(supabase.calls.some((call: string) => call.startsWith("attendance_records.eq:student_id=student-1")))
+})
+
+test("impersonated faculty context aggregates effective attendance without the auth.uid RPC", async () => {
+  const facultyProfile = { ...profile, id: "faculty-1", role: "FACULTY", name: "Faculty One" }
+  const supabase = mockSupabase({
+    attendance_records: [
+      { status: "LATE", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+      { status: "ABSENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+    ],
+  })
+  const context = await fetchAcademicContext(supabase, facultyProfile, "attendance", {
+    userId: facultyProfile.id,
+    actorUserId: "super-admin-1",
+    organizationId: "organization-1",
+    institutionId: facultyProfile.institution_id,
+    departmentId: null,
+    role: "FACULTY",
+    isImpersonating: true,
+  })
+
+  assert.match(context ?? "", /Algorithms/)
+  assert.match(context ?? "", /50\.0%/)
+  assert.equal(supabase.calls.some((call: string) => call.startsWith("rpc:get_faculty_attendance_summary")), false)
+  assert.ok(supabase.calls.some((call: string) => call.startsWith("attendance_records.eq:attendance_sessions.faculty_id=faculty-1")))
+})
+
 test("parent context is obtained only through the linked-child RPC", async () => {
   const supabase = mockSupabase({
     "rpc:get_parent_academic_context": [{
@@ -103,6 +160,73 @@ test("parent context is obtained only through the linked-child RPC", async () =>
   assert.match(context ?? "", /Quiz/)
   assert.deepEqual(supabase.calls.filter((call: string) => call.startsWith("rpc:")), ["rpc:get_parent_academic_context"])
   assert.ok(supabase.calls.some((call: string) => call.startsWith("subject_announcements")))
+})
+
+test("impersonated parent context reads only linked children in the effective institution", async () => {
+  const supabase = mockSupabase({
+    parent_student_relations: [
+      { student_id: "child-1", relationship: "Guardian" },
+      { student_id: "child-2", relationship: "Guardian" },
+    ],
+    students: [
+      {
+        id: "child-1",
+        institution_id: "institution-1",
+        section_id: "section-1",
+        semester: 2,
+        program_id: "program-1",
+        users: { name: "Child One", role: "STUDENT" },
+        program: { name: "Computer Science" },
+        section: { name: "A" },
+      },
+      {
+        id: "child-2",
+        institution_id: "institution-2",
+        section_id: "section-2",
+        semester: 2,
+        program_id: "program-2",
+        users: { name: "Other Tenant Child", role: "STUDENT" },
+        program: { name: "Other Program" },
+        section: { name: "B" },
+      },
+    ],
+    attendance_records: [
+      { student_id: "child-1", status: "PRESENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+      { student_id: "child-2", status: "PRESENT", attendance_sessions: { subject: { name: "Other subject", code: "OTH", institution_id: "institution-2" } } },
+    ],
+  })
+  const context = await fetchAcademicContext(supabase, { ...profile, id: "parent-1", role: "PARENT", name: "Parent One" }, "all", {
+    userId: "parent-1",
+    actorUserId: "super-admin-1",
+    organizationId: "organization-1",
+    institutionId: "institution-1",
+    departmentId: null,
+    role: "PARENT",
+    isImpersonating: true,
+  })
+
+  assert.match(context ?? "", /Child One/)
+  assert.match(context ?? "", /Algorithms/)
+  assert.doesNotMatch(context ?? "", /Other Tenant Child/)
+  assert.doesNotMatch(context ?? "", /Other subject/)
+  assert.equal(supabase.calls.some((call: string) => call.startsWith("rpc:get_parent_academic_context")), false)
+  assert.ok(supabase.calls.some((call: string) => call.startsWith("parent_student_relations.eq:parent_id=parent-1")))
+})
+
+test("invalid impersonated principals fail closed before any academic read", async () => {
+  const supabase = mockSupabase()
+  const context = await fetchAcademicContext(supabase, profile, "all", {
+    userId: profile.id,
+    actorUserId: profile.id,
+    organizationId: "organization-1",
+    institutionId: profile.institution_id,
+    departmentId: null,
+    role: "STUDENT",
+    isImpersonating: true,
+  })
+
+  assert.equal(context, null)
+  assert.equal(supabase.calls.length, 0)
 })
 
 test("migration defines bounded, caller-authorized SQL aggregates", () => {
