@@ -355,6 +355,33 @@ DROP POLICY IF EXISTS knowledge_jobs_owner_select ON public.knowledge_ingestion_
 CREATE POLICY knowledge_jobs_owner_select ON public.knowledge_ingestion_jobs
   FOR SELECT TO authenticated USING (requested_by = (SELECT auth.uid()));
 
+-- Explicit Data API exposure for the server and authenticated dashboard client.
+-- No anon access is granted; RLS remains the row-level tenant boundary.
+GRANT SELECT, INSERT, UPDATE, DELETE
+  ON TABLE public.assistant_threads,
+             public.assistant_messages,
+             public.assistant_message_sources,
+             public.assistant_tool_runs,
+             public.assistant_feedback
+  TO authenticated;
+
+GRANT ALL PRIVILEGES
+  ON TABLE public.assistant_threads,
+             public.assistant_messages,
+             public.assistant_message_sources,
+             public.assistant_tool_runs,
+             public.assistant_feedback,
+             public.knowledge_documents,
+             public.knowledge_chunks,
+             public.knowledge_ingestion_jobs
+  TO service_role;
+
+GRANT SELECT
+  ON TABLE public.knowledge_documents,
+             public.knowledge_chunks,
+             public.knowledge_ingestion_jobs
+  TO authenticated;
+
 -- Source files are held in this private bucket. No browser policy is granted;
 -- signed URLs or server-side reads must be added through a separate audited
 -- document-management workflow.
