@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getCurrentUserContext } from "@/lib/user-context"
 import { createArcaBackendHeaders } from "@/lib/arca-backend"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { fetchAcademicContext } from "@/lib/academic-context"
 import { arcaGatewayErrorResponse } from "@/lib/arca-gateway-errors"
+import { toAssistantPrincipal } from "@/lib/assistant/principal"
+import { createAssistantDataClient } from "@/lib/assistant/server-client"
 
 const BACKEND_URL = process.env.EDURAG_BACKEND_URL || "http://localhost:8000"
 
@@ -35,10 +36,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Question is required" }, { status: 400 })
     }
 
+    let principal
+    try {
+      principal = toAssistantPrincipal(profile)
+    } catch {
+      return NextResponse.json({ error: "This account is not eligible for the assistant." }, { status: 403 })
+    }
+
     // 1. Build live Supabase context (academic details, attendance, grades,
     //    assignments, teaching load, announcements — all role-aware).
-    const supabase = await createSupabaseServerClient()
-    const dbContextText = await fetchAcademicContext(supabase, profile)
+    const supabase = await createAssistantDataClient(principal)
+    const dbContextText = await fetchAcademicContext(supabase, profile, "all", principal)
     const trimmedQuestion = question.trim()
 
     // 2. Query the RAG backend with clean boundaries.

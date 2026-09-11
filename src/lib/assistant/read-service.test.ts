@@ -20,6 +20,7 @@ function mockSupabase(results: Record<string, unknown> = {}) {
       gte: (field: string, value: unknown) => { calls.push(`${key}.gte:${field}=${String(value)}`); return query },
       in: (field: string, value: unknown[]) => { calls.push(`${key}.in:${field}=${value.join(",")}`); return query },
       contains: (field: string) => { calls.push(`${key}.contains:${field}`); return query },
+      overlaps: (field: string, value: unknown[]) => { calls.push(`${key}.overlaps:${field}=${value.join(",")}`); return query },
       or: (value: string) => { calls.push(`${key}.or:${value}`); return query },
       order: (field: string) => { calls.push(`${key}.order:${field}`); return query },
       limit: (value: number) => { calls.push(`${key}.limit:${value}`); return query },
@@ -88,6 +89,25 @@ test("student timetable scope does not load unrelated academic or domain data", 
   for (const forbidden of ["submissions", "assignments", "admissions_applications", "applications", "group_members", "projects", "job_posts", "subject_announcements"]) {
     assert.equal(supabase.calls.some((call) => call.startsWith(`${forbidden}.`)), false, `unexpected ${forbidden} query`)
   }
+})
+
+test("impersonated dashboard reads use the effective student attendance path", async () => {
+  const supabase = mockSupabase({
+    attendance_records: [
+      { status: "PRESENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+      { status: "ABSENT", attendance_sessions: { subject: { name: "Algorithms", code: "ALG", institution_id: "institution-1" } } },
+    ],
+  })
+  const result = await readAuthorizedDashboard(supabase, {
+    ...student,
+    userId: "effective-student-1",
+    actorUserId: "super-admin-1",
+    isImpersonating: true,
+  }, "attendance")
+
+  assert.match(result.context ?? "", /Algorithms/)
+  assert.equal(supabase.calls.some((call) => call.startsWith("rpc:get_student_attendance_summary")), false)
+  assert.ok(supabase.calls.some((call) => call.startsWith("attendance_records.eq:student_id=effective-student-1")))
 })
 
 test("student domain scopes query only their selected domain", async () => {
