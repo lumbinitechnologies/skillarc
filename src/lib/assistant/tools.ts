@@ -6,6 +6,7 @@ import { getNavigationContext, getWorkflowInstructions } from "@/lib/assistant/w
 import { readAuthorizedDashboard, searchPermittedDocuments } from "@/lib/assistant/read-service"
 import { createAssistantDataClient } from "@/lib/assistant/server-client"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { knowledgeSearchEnabled } from "@/lib/knowledge/config"
 import type { AssistantData, AssistantPrincipal, AssistantReadResult, AssistantReadScope, AssistantUIMessage } from "@/lib/assistant/types"
 
 type ToolObserver = (toolName: string) => void
@@ -84,7 +85,7 @@ export function createAssistantTools(
         // The search RPC is intentionally service-role-only. Relationship
         // discovery still uses the request client, while the RPC applies the
         // final tenant/audience predicates in Postgres.
-        const searchClient = createSupabaseAdminClient()
+        const searchClient = knowledgeSearchEnabled() ? createSupabaseAdminClient() : supabase
         const result = await searchPermittedDocuments(supabase, principal, query, searchClient)
         for (const source of result.sources) writeData(writer, { type: "data-sources", data: [source] })
         return result.context ?? "No permitted academic document matched that search."
