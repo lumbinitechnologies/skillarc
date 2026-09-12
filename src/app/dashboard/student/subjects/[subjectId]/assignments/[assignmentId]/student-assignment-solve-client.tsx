@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 
 import { submitAssignmentAction } from "@/app/actions/assignments"
+import { verifyCodeAction } from "@/app/actions/code-runner"
 import { supabase } from "@/lib/supabase"
 
 interface StudentAssignmentSolveClientProps {
@@ -85,9 +86,9 @@ export function StudentAssignmentSolveClient({
   const [submission, setSubmission] = useState<any | null>(initialSubmission)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Due date cutoff calculation
+  // Due date cutoff calculation (allowing 60s latency buffer for on-time submissions)
   const isPastDueDate = Boolean(
-    assignment.due_date && new Date(assignment.due_date).getTime() < Date.now()
+    assignment.due_date && (Date.now() - new Date(assignment.due_date).getTime() > 60000)
   )
 
   // In-app UI Toast and Confirm States
@@ -112,9 +113,22 @@ export function StudentAssignmentSolveClient({
   const [fileName, setFileName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const MAX_FILE_SIZE_MB = 50
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
   const uploadFileToSupabase = async (file: File) => {
     if (isPastDueDate) {
       showToast("Submissions closed: The deadline for this assignment has passed.", "error")
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      showToast(`File "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds maximum limit of ${MAX_FILE_SIZE_MB}MB.`, "error")
+      return
+    }
+
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      showToast("Network offline. Please check your internet connection and try again.", "error")
       return
     }
 
@@ -136,9 +150,13 @@ export function StudentAssignmentSolveClient({
       setFileUrl(publicData.publicUrl)
       showToast("File uploaded successfully!", "success")
     } catch (err: any) {
-      console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
-      setFileUrl(`https://mock-lms-storage.local/${studentId}/${Date.now()}_${file.name}`)
-      showToast("File attached successfully.", "info")
+      if (typeof window !== "undefined" && !window.navigator.onLine) {
+        showToast("Network disconnected during file upload. Please check your connection.", "error")
+      } else {
+        console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
+        setFileUrl(`https://mock-lms-storage.local/${studentId}/${Date.now()}_${file.name}`)
+        showToast("File attached successfully.", "info")
+      }
     } finally {
       setIsUploadingFile(false)
     }
@@ -172,11 +190,12 @@ export function StudentAssignmentSolveClient({
     return initialSubmission?.code_content || LANG_TEMPLATES[assignment.language || "python"] || LANG_TEMPLATES.python
   })
   const [isRunningCode, setIsRunningCode] = useState(false)
-  const [testResults, setTestResults] = useState<Array<{ passed: boolean; label: string }> | null>(null)
+  const [testResults, setTestResults] = useState<Array<{ passed: boolean; label: string; input?: string; expected?: string; actual?: string; error?: string }> | null>(null)
   const [consoleLogs, setConsoleLogs] = useState<string[]>([
     "Sandbox Environment initialized.",
-    "Ready to run test cases..."
+    "Select language and click 'Run Sandbox' to verify test cases."
   ])
+  const [isResubmitting, setIsResubmitting] = useState(false)
 
   // Quiz states & Anti-Cheat Proctoring States
   const [quizAnswers, setQuizAnswers] = useState<number[]>(() => {
@@ -403,11 +422,14 @@ export function StudentAssignmentSolveClient({
       return
     }
 
-    let score = 0
     const questions = assignment.questions || []
+    const totalQuestions = questions.length || 1
+    const maxScore = assignment.max_score || totalQuestions || 100
+    let correctCount = 0
     answersToSubmit.forEach((ans, idx) => {
-      if (ans === questions[idx]?.answer) score += 1
+      if (ans === questions[idx]?.answer) correctCount += 1
     })
+    const finalScore = Number(((correctCount / totalQuestions) * maxScore).toFixed(1))
 
     setIsSubmitting(true)
     const res = await submitAssignmentAction({
@@ -417,8 +439,8 @@ export function StudentAssignmentSolveClient({
       quiz_answers: answersToSubmit,
       code_content: null,
       language: null,
-      grade: score,
-      feedback: customFeedback || "Auto-graded Quiz submission.",
+      grade: finalScore,
+      feedback: customFeedback || `Auto-graded Quiz: ${correctCount}/${totalQuestions} questions correct (${finalScore}/${maxScore} Marks).`,
       status: "graded",
       subject_id: subjectId,
     })
@@ -432,8 +454,8 @@ export function StudentAssignmentSolveClient({
         quiz_answers: answersToSubmit,
         code_content: null,
         language: null,
-        grade: score,
-        feedback: customFeedback || "Auto-graded Quiz submission.",
+        grade: finalScore,
+        feedback: customFeedback || `Auto-graded Quiz: ${correctCount}/${totalQuestions} questions correct (${finalScore}/${maxScore} Marks).`,
         status: "graded",
         submitted_at: new Date().toISOString(),
       }
@@ -455,7 +477,7 @@ export function StudentAssignmentSolveClient({
       } else if (isAuto) {
         showToast("Time is up! Your quiz has been auto-submitted and graded.", "info")
       } else {
-        showToast(`🎉 Quiz submitted successfully! Score: ${score}/${questions.length}`, "success")
+        showToast(`🎉 Quiz submitted successfully! Score: ${finalScore}/${maxScore} (${correctCount}/${totalQuestions} correct)`, "success")
       }
       router.refresh()
     } else {
@@ -534,6 +556,7 @@ export function StudentAssignmentSolveClient({
         submitted_at: new Date().toISOString(),
       }
       setSubmission(newSub)
+      setIsResubmitting(false)
       showToast("✨ Assignment submitted successfully!", "success")
       router.refresh()
     } else {
@@ -541,32 +564,65 @@ export function StudentAssignmentSolveClient({
     }
   }
 
-  // Run student code against test cases (simulate sandbox)
-  const handleRunCode = () => {
-    setIsRunningCode(true)
-    setConsoleLogs(prev => [...prev, `> Executing solution in sandbox using ${lang}...`])
-    
-    setTimeout(() => {
-      const cases = assignment.test_cases || []
-      const results = cases.map((tc: any, idx: number) => {
-        const passed = Math.random() > 0.1
-        return {
-          passed,
-          label: `Case ${idx + 1}: Input (${tc.input}) → Expected: ${tc.output} | Actual: ${passed ? tc.output : "Error: unexpected EOF"}`
-        }
-      })
-
-      const allPassed = results.every((r: any) => r.passed)
-      const logs = results.map((r: any) => `  [${r.passed ? "SUCCESS" : "FAILED"}] ${r.label}`)
-      
+  // Run student code against test cases (real sandbox compilation & execution)
+  const handleRunCode = async () => {
+    // Validate empty code (CODE-020)
+    if (!code || !code.trim()) {
+      showToast("Cannot run empty code. Please write your solution.", "error")
       setConsoleLogs(prev => [
         ...prev,
-        ...logs,
-        allPassed ? "✓ Code verification completed. Ready to submit." : "✗ Verification failed. Check compilation logs above."
+        "> [VALIDATION ERROR] Cannot execute empty code. Please write a solution."
       ])
-      setTestResults(results)
+      return
+    }
+
+    setIsRunningCode(true)
+    setConsoleLogs(prev => [...prev, `> Compiling and executing ${lang.toUpperCase()} in sandbox...`])
+
+    try {
+      const cases = assignment.test_cases || []
+      const res = await verifyCodeAction(code, lang, cases)
+
+      setConsoleLogs(prev => [...prev, ...res.logs])
+
+      if (res.errorType === "syntax") {
+        setTestResults(null)
+        showToast("Compilation Error: Syntax check failed. See console outputs.", "error")
+      } else if (res.errorType === "runtime") {
+        setTestResults(res.results.map((r, idx) => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expected,
+          actual: r.actual,
+          error: r.error,
+          label: `Case ${idx + 1}: Input (${r.input || "none"}) → ${r.passed ? "PASSED" : "FAILED (Runtime Error)"}`
+        })))
+        showToast("Runtime Error: Execution terminated with errors. See logs.", "error")
+      } else if (res.allPassed) {
+        setTestResults(res.results.map((r, idx) => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expected,
+          actual: r.actual,
+          label: `Case ${idx + 1}: Input (${r.input || "none"}) → Expected: "${r.expected}" | Actual: "${r.actual}"`
+        })))
+        showToast(`🎉 All ${res.totalPassed} test cases passed successfully!`, "success")
+      } else {
+        setTestResults(res.results.map((r, idx) => ({
+          passed: r.passed,
+          input: r.input,
+          expected: r.expected,
+          actual: r.actual,
+          label: `Case ${idx + 1}: Input (${r.input || "none"}) → Expected: "${r.expected}" | Actual: "${r.actual}"`
+        })))
+        showToast(`Verification Failed: ${res.totalTests - res.totalPassed} of ${res.totalTests} test case(s) failed.`, "error")
+      }
+    } catch (err: any) {
+      setConsoleLogs(prev => [...prev, `> [SYSTEM ERROR] Sandbox error: ${err.message}`])
+      showToast("Error running code: " + err.message, "error")
+    } finally {
       setIsRunningCode(false)
-    }, 1500)
+    }
   }
 
   const performCodeSubmit = async () => {
@@ -575,39 +631,86 @@ export function StudentAssignmentSolveClient({
       return
     }
 
+    // Validate empty code (CODE-020)
+    if (!code || !code.trim()) {
+      showToast("Cannot submit empty code. Please write your solution before submitting.", "error")
+      setConsoleLogs(prev => [
+        ...prev,
+        "> [SUBMISSION REJECTED] Cannot submit empty code."
+      ])
+      return
+    }
+
     setIsSubmitting(true)
-    const res = await submitAssignmentAction({
-      assignment_id: assignment.id,
-      student_id: studentId,
-      file_url: null,
-      quiz_answers: null,
-      code_content: code,
-      language: lang,
-      grade: null,
-      feedback: null,
-      status: "pending",
-      subject_id: subjectId,
-    })
-    setIsSubmitting(false)
-    if (res.success) {
-      const newSub = {
-        id: (res as any).submissionId || Date.now().toString(),
+    setConsoleLogs(prev => [...prev, `> Verifying solution prior to submission...`])
+
+    try {
+      const cases = assignment.test_cases || []
+      const verifyRes = await verifyCodeAction(code, lang, cases)
+
+      setConsoleLogs(prev => [...prev, ...verifyRes.logs])
+
+      // If syntax error, reject submission (CODE-018)
+      if (verifyRes.errorType === "syntax") {
+        setIsSubmitting(false)
+        showToast("Submission Rejected: Please fix syntax/compilation errors before submitting.", "error")
+        return
+      }
+
+      // If runtime error, reject submission (CODE-019)
+      if (verifyRes.errorType === "runtime" || verifyRes.results.some(r => r.error)) {
+        setIsSubmitting(false)
+        showToast("Submission Rejected: Runtime error occurred during test execution.", "error")
+        return
+      }
+
+      // If test cases failed, reject submission (CODE-017)
+      if (!verifyRes.allPassed && cases.length > 0) {
+        setIsSubmitting(false)
+        showToast(`Submission Rejected: Solution failed ${verifyRes.totalTests - verifyRes.totalPassed} test case(s). Please fix failing cases before submitting.`, "error")
+        return
+      }
+
+      // Valid solution, submit (CODE-016)
+      const res = await submitAssignmentAction({
         assignment_id: assignment.id,
         student_id: studentId,
         file_url: null,
         quiz_answers: null,
         code_content: code,
         language: lang,
-        grade: null,
-        feedback: null,
-        status: "pending",
-        submitted_at: new Date().toISOString(),
+        grade: assignment.max_score || 100,
+        feedback: `Automated Code Evaluation: All ${cases.length || 1} test cases passed successfully (${assignment.max_score || 100}/${assignment.max_score || 100} Marks).`,
+        status: "graded",
+        subject_id: subjectId,
+      })
+
+      setIsSubmitting(false)
+
+      if (res.success) {
+        const newSub = {
+          id: (res as any).submissionId || Date.now().toString(),
+          assignment_id: assignment.id,
+          student_id: studentId,
+          file_url: null,
+          quiz_answers: null,
+          code_content: code,
+          language: lang,
+          grade: assignment.max_score || 100,
+          feedback: `Automated Code Evaluation: All ${cases.length || 1} test cases passed successfully (${assignment.max_score || 100}/${assignment.max_score || 100} Marks).`,
+          status: "graded",
+          submitted_at: new Date().toISOString(),
+        }
+        setSubmission(newSub)
+        setIsResubmitting(false)
+        showToast("🚀 Code solution passed all test cases and was submitted successfully!", "success")
+        router.refresh()
+      } else {
+        showToast("Error submitting: " + res.error, "error")
       }
-      setSubmission(newSub)
-      showToast("🚀 Code solution submitted successfully!", "success")
-      router.refresh()
-    } else {
-      showToast("Error submitting: " + res.error, "error")
+    } catch (err: any) {
+      setIsSubmitting(false)
+      showToast("Error evaluating code: " + err.message, "error")
     }
   }
 
@@ -617,11 +720,17 @@ export function StudentAssignmentSolveClient({
       return
     }
 
+    // Validate empty code upfront (CODE-020)
+    if (!code || !code.trim()) {
+      showToast("Cannot submit empty code. Please write your solution before submitting.", "error")
+      return
+    }
+
     setConfirmModal({
       isOpen: true,
       title: "Submit Code Solution?",
-      message: "Are you sure you want to submit your code? This will record your solution for faculty evaluation.",
-      confirmLabel: "Submit Solution",
+      message: "Your code will be evaluated against all test cases. Make sure your solution is tested and working.",
+      confirmLabel: "Verify & Submit",
       onConfirm: performCodeSubmit,
     })
   }
@@ -833,9 +942,19 @@ export function StudentAssignmentSolveClient({
           </div>
           <div>
             <h1 className="font-extrabold text-slate-800 text-sm leading-none">{assignment.title}</h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-              Coursework • Due {formatDueDate(assignment.due_date)}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase font-['Space_Grotesk']">
+                Coursework • Due {formatDueDate(assignment.due_date)}
+              </span>
+              {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-[10px] font-extrabold text-[#E57D37] bg-orange-50 border border-orange-200/60 px-2 py-0.5 rounded-md font-['Space_Grotesk'] flex items-center gap-1">
+                    <Award size={11} className="text-[#E57D37]" /> Max Marks: {assignment.max_score || 100}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1077,8 +1196,44 @@ export function StudentAssignmentSolveClient({
               </div>
             )}
 
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-              <h2 className="font-extrabold text-slate-800 text-base border-b pb-3">Coursework Instructions</h2>
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="font-extrabold text-slate-800 text-base">Coursework Instructions</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Carefully review the guidelines before submitting your work.</p>
+                </div>
+                {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                  <div className="px-3.5 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl text-amber-900 font-extrabold text-xs flex items-center gap-2 font-['Space_Grotesk'] shadow-sm shrink-0">
+                    <Award size={16} className="text-[#E57D37]" />
+                    <span>Max Marks: <strong className="text-sm font-black text-slate-900">{assignment.max_score || 100}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Assignment Overview Metadata Card */}
+              {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Marks</span>
+                    <span className="text-sm font-extrabold text-slate-900 font-['Space_Grotesk'] flex items-center gap-1">
+                      <Award size={14} className="text-[#E57D37]" /> {assignment.max_score || 100} Marks
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deadline</span>
+                    <span className="text-xs font-bold text-slate-700 font-['Space_Grotesk'] truncate block">
+                      {formatDueDate(assignment.due_date)}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status</span>
+                    <span className={`text-xs font-bold font-['Space_Grotesk'] ${submission ? (submission.status === 'graded' ? 'text-indigo-700' : 'text-emerald-700') : isPastDueDate ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {submission ? (submission.status === 'graded' ? `Graded (${submission.grade}/${assignment.max_score || 100})` : 'Submitted') : isPastDueDate ? 'Closed (Overdue)' : 'Pending Submission'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="text-slate-600 text-xs font-normal leading-relaxed whitespace-pre-wrap">
                 {assignment.description || "Solve the questions below and upload your implementation."}
               </div>
@@ -1130,7 +1285,7 @@ export function StudentAssignmentSolveClient({
 
           {/* Right panel: Solve Input */}
           <div className="w-full md:w-1/2 p-6 sm:p-8 overflow-y-auto bg-white text-left">
-            {submission && assignment.type !== "Quiz" ? (
+            {submission && !isResubmitting && assignment.type !== "Quiz" ? (
               // Already submitted standard or coding
               <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 min-h-[320px] space-y-4">
                 <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -1165,6 +1320,28 @@ export function StudentAssignmentSolveClient({
                     <p className="text-xs text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">{submission.code_content}</p>
                   </div>
                 )}
+
+                {/* Resubmission Action (CODE-021) */}
+                {!isPastDueDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResubmitting(true)
+                      if (submission.code_content) {
+                        setCode(submission.code_content)
+                      }
+                      if (submission.language) {
+                        setLang(submission.language)
+                      }
+                      if (submission.file_url) {
+                        setFileUrl(submission.file_url)
+                      }
+                    }}
+                    className="mt-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <RotateCcw size={13} /> Edit & Resubmit Solution
+                  </button>
+                )}
               </div>
             ) : assignment.type === "Quiz" ? (
               // Quiz Solving & Results
@@ -1183,10 +1360,15 @@ export function StudentAssignmentSolveClient({
                 {submission ? (
                   // Quiz Graded / Completed Key View
                   <div className="space-y-4">
-                    <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl text-center">
-                      <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
-                      <h4 className="font-bold text-emerald-900 text-sm">Quiz Answer Key Available</h4>
-                      <p className="text-xs text-emerald-600 mt-0.5">Your score is {submission.grade}/{assignment.questions?.length}</p>
+                    <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl text-center space-y-1.5">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-1" />
+                      <h4 className="font-bold text-emerald-900 text-sm">Quiz Evaluation Completed</h4>
+                      <div className="text-2xl font-black text-emerald-950 font-['Space_Grotesk']">
+                        {submission.grade} <span className="text-sm font-semibold text-emerald-600">/ {assignment.max_score || 100} Marks</span>
+                      </div>
+                      <p className="text-xs text-emerald-700 font-medium font-['Space_Grotesk']">
+                        {submission.quiz_answers?.filter((ans: number, idx: number) => ans === assignment.questions?.[idx]?.answer).length || 0} of {assignment.questions?.length || 0} Questions Correct
+                      </p>
                     </div>
                     {/* Key List */}
                     <div className="space-y-3">
@@ -1282,9 +1464,31 @@ export function StudentAssignmentSolveClient({
               </div>
             ) : assignment.type === "Coding Assignment" ? (
               // Coding Playground
-              <div className="space-y-6 flex flex-col h-[560px]">
+              <div className="space-y-4 flex flex-col h-[580px]">
+                {/* Resubmission Banner */}
+                {isResubmitting && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between text-xs text-amber-900 font-medium">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
+                      <span>Editing mode: Make modifications and re-verify your code to update your submission.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsResubmitting(false)}
+                      className="text-[11px] font-bold text-amber-700 hover:text-amber-900 px-2.5 py-1 bg-white border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors ml-2 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center bg-slate-50 border rounded-2xl p-3">
-                  <span className="text-xs font-bold text-slate-700">Coding Workspace</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Coding Workspace</span>
+                    <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                      {assignment.test_cases?.length || 0} Test Cases
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     {LANGUAGES.map(l => (
                       <button
@@ -1295,10 +1499,10 @@ export function StudentAssignmentSolveClient({
                           setTestResults(null)
                         }}
                         disabled={isPastDueDate}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all disabled:opacity-50 ${
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all disabled:opacity-50 cursor-pointer ${
                           lang === l.id
-                            ? "bg-slate-800 border-slate-800 text-white"
-                            : "bg-white border-slate-200 text-slate-500"
+                            ? "bg-slate-800 border-slate-800 text-white shadow-sm"
+                            : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
                         }`}
                       >
                         {l.label}
@@ -1307,63 +1511,133 @@ export function StudentAssignmentSolveClient({
                   </div>
                 </div>
 
+                {/* Test Results Summary Strip */}
+                {testResults && testResults.length > 0 && (
+                  <div className="flex flex-wrap gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                    {testResults.map((tr, idx) => (
+                      <div
+                        key={idx}
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5 border transition-all ${
+                          tr.passed
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                            : "bg-rose-50 border-rose-300 text-rose-800"
+                        }`}
+                        title={tr.label}
+                      >
+                        {tr.passed ? (
+                          <CheckCircle2 size={12} className="text-emerald-600" />
+                        ) : (
+                          <AlertTriangle size={12} className="text-rose-600" />
+                        )}
+                        <span>Case {idx + 1}: {tr.passed ? "Passed" : "Failed"}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {/* Editor textarea */}
-                <div className="flex-1 flex flex-col border border-slate-200 rounded-2xl overflow-hidden">
+                <div className="flex-1 flex flex-col border border-slate-200 rounded-2xl overflow-hidden min-h-[220px]">
                   <textarea
                     value={code}
                     onChange={e => setCode(e.target.value)}
                     disabled={isPastDueDate}
+                    placeholder="Write your code solution here..."
                     spellCheck={false}
                     className="flex-1 bg-slate-900 text-green-400 p-4 font-mono text-xs leading-relaxed resize-none focus:outline-none disabled:opacity-75"
                     style={{ tabSize: 4 }}
                   />
-                  <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex items-center justify-end gap-2 flex-shrink-0">
+                  <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex items-center justify-between gap-2 flex-shrink-0">
                     <button
-                      onClick={handleRunCode}
-                      disabled={isRunningCode || isPastDueDate}
-                      className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
+                      type="button"
+                      onClick={() => setCode(LANG_TEMPLATES[lang] || "")}
+                      disabled={isPastDueDate}
+                      className="text-[10px] font-bold text-slate-400 hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Reset code template"
                     >
-                      {isRunningCode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="white" />}
-                      Run Sandbox
+                      <RotateCcw size={11} /> Reset Template
                     </button>
-                    <button
-                      onClick={handleSubmitCode}
-                      disabled={isSubmitting || isPastDueDate}
-                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1 cursor-pointer transition-all"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 size={12} className="animate-spin" /> Submitting...
-                        </>
-                      ) : isPastDueDate ? (
-                        <>
-                          <AlertOctagon size={12} /> Submissions Closed
-                        </>
-                      ) : (
-                        <>
-                          <Send size={12} /> Submit Code
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRunCode}
+                        disabled={isRunningCode || isPastDueDate}
+                        className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border border-slate-700"
+                      >
+                        {isRunningCode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="white" />}
+                        Run Sandbox
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmitCode}
+                        disabled={isSubmitting || isPastDueDate}
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" /> Submitting...
+                          </>
+                        ) : isPastDueDate ? (
+                          <>
+                            <AlertOctagon size={12} /> Submissions Closed
+                          </>
+                        ) : (
+                          <>
+                            <Send size={12} /> {isResubmitting ? "Resubmit Solution" : "Submit Code"}
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Console output */}
                 <div className="h-32 bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col flex-shrink-0">
-                  <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                    <Terminal size={10} /> Compiler Sandbox Outputs
+                  <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Terminal size={10} /> Compiler Sandbox Outputs
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConsoleLogs(["Terminal logs cleared."])}
+                      className="text-[9px] text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                      Clear
+                    </button>
                   </div>
-                  <div className="flex-grow p-3 overflow-y-auto font-mono text-[10px] text-slate-300 leading-normal space-y-1 bg-slate-950 text-left">
-                    {consoleLogs.map((l, i) => (
-                      <div key={i}>{l}</div>
-                    ))}
+                  <div className="flex-grow p-3 overflow-y-auto font-mono text-[10px] leading-normal space-y-1 bg-slate-950 text-left">
+                    {consoleLogs.map((l, i) => {
+                      const isSuccess = l.includes("[SUCCESS]") || l.includes("✓")
+                      const isFailed = l.includes("[FAILED]") || l.includes("✗") || l.includes("ERROR]") || l.includes("REJECTED]")
+                      const isTimeout = l.includes("[TIMEOUT]")
+                      return (
+                        <div
+                          key={i}
+                          className={
+                            isSuccess
+                              ? "text-emerald-400"
+                              : isFailed
+                              ? "text-rose-400 font-semibold"
+                              : isTimeout
+                              ? "text-amber-400"
+                              : "text-slate-300"
+                          }
+                        >
+                          {l}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
             ) : (
               // Standard Upload Assignment Form
               <form onSubmit={handleUploadSubmit} className="space-y-6">
-                <h2 className="font-extrabold text-slate-800 text-base">Submit Solution</h2>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="font-extrabold text-slate-800 text-base">Submit Solution</h2>
+                  <span className="text-xs font-extrabold text-slate-600 font-['Space_Grotesk'] bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                    <Award size={13} className="text-[#E57D37]" /> Max Score: {assignment.max_score || 100} Pts
+                  </span>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Text Response / Remarks</label>
                   <textarea

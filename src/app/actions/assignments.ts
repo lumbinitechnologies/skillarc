@@ -21,19 +21,68 @@ export async function createAssignmentAction(data: {
 }) {
   const supabase = await createSupabaseServerClient()
 
+  if (!data.title || !data.title.trim()) {
+    return { success: false, error: "Assignment title is required." }
+  }
+
+  if (!data.section_ids || data.section_ids.length === 0) {
+    return { success: false, error: "At least one target section must be selected." }
+  }
+
+  // Enforce mandatory/optional rules for content & attachments (ASG-003)
+  if (data.type === "Assignment" && !data.description?.trim() && (!data.files || data.files.length === 0)) {
+    return { success: false, error: "Assignment requires either instructions/description or at least one attached guideline file." }
+  }
+
+  if ((data.type === "Material" || data.type === "Syllabus") && !data.description?.trim() && (!data.files || data.files.length === 0)) {
+    return { success: false, error: "Please provide description details or attach at least one resource file." }
+  }
+
+  if (data.type === "Coding Assignment" && !data.description?.trim()) {
+    return { success: false, error: "Problem statement/description is required for coding assignments." }
+  }
+
+  if (data.type === "Quiz") {
+    if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+      return { success: false, error: "Quiz must have at least one question." }
+    }
+    for (let i = 0; i < data.questions.length; i++) {
+      const q = data.questions[i]
+      if (!q.q?.trim()) {
+        return { success: false, error: `Question #${i + 1} cannot be empty.` }
+      }
+      if (!Array.isArray(q.options) || q.options.some((opt: any) => !String(opt || "").trim())) {
+        return { success: false, error: `All options for Question #${i + 1} must be filled out.` }
+      }
+    }
+  }
+
+  // Prevent past due dates (ASG-005)
+  if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
+    const dueDate = new Date(data.due_date)
+    if (isNaN(dueDate.getTime())) {
+      return { success: false, error: "Invalid due date format." }
+    }
+    if (dueDate.getTime() < Date.now() - 60000) {
+      return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
+    }
+  }
+
+  const uniqueFiles = data.files && Array.isArray(data.files) ? Array.from(new Set(data.files)) : data.files
+
   const { error } = await supabase.from("assignments").insert({
     subject_id: data.subject_id,
     faculty_id: data.faculty_id,
-    title: data.title,
-    description: data.description,
-    due_date: data.due_date ? new Date(data.due_date).toISOString() : null,
+    title: data.title.trim(),
+    description: data.description?.trim() || "",
+    due_date: (data.type === "Material" || data.type === "Syllabus" || !data.due_date) ? null : new Date(data.due_date).toISOString(),
     type: data.type,
-    max_score: data.max_score,
+    max_score: data.type === "Material" || data.type === "Syllabus" ? 0 : data.max_score,
     questions: data.questions,
     language: data.language,
     test_cases: data.test_cases,
     section_ids: data.section_ids,
-    files: data.files,
+    files: uniqueFiles,
   })
 
   if (error) {
@@ -87,12 +136,58 @@ export async function updateAssignmentAction(
 ) {
   const supabase = await createSupabaseServerClient()
 
-  // Format due date if present
+  if (data.title !== undefined && !data.title.trim()) {
+    return { success: false, error: "Assignment title cannot be empty." }
+  }
+
+  if (data.section_ids !== undefined && data.section_ids.length === 0) {
+    return { success: false, error: "At least one target section must be selected." }
+  }
+
+  if (data.type === "Assignment" && data.description !== undefined && !data.description.trim() && (!data.files || data.files.length === 0)) {
+    return { success: false, error: "Assignment requires either instructions/description or at least one attached guideline file." }
+  }
+
+  if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
+    const dueDate = new Date(data.due_date)
+    if (isNaN(dueDate.getTime())) {
+      return { success: false, error: "Invalid due date format." }
+    }
+    if (dueDate.getTime() < Date.now() - 60000) {
+      return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
+    }
+  }
+
+  // Format update payload
   const updateData = { ...data } as any
+  if (data.title) updateData.title = data.title.trim()
+  if (data.description !== undefined) updateData.description = data.description.trim()
   if (data.due_date) {
     updateData.due_date = new Date(data.due_date).toISOString()
   } else if (data.due_date === null) {
     updateData.due_date = null
+  }
+
+  // Deduplicate files if provided
+  if (data.files && Array.isArray(data.files)) {
+    updateData.files = Array.from(new Set(data.files))
+  }
+
+  // If max_score or questions are being updated, fetch current assignment to check for changes
+  let oldAssignmentData: any = null
+  let oldMaxScore: number | null = null
+
+  const { data: currentAss } = await supabase
+    .from("assignments")
+    .select("type, max_score, questions")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (currentAss) {
+    oldAssignmentData = currentAss
+    if (currentAss.max_score) {
+      oldMaxScore = Number(currentAss.max_score)
+    }
   }
 
   const { error } = await supabase
@@ -103,6 +198,77 @@ export async function updateAssignmentAction(
   if (error) {
     console.error("Error updating assignment:", error)
     return { success: false, error: error.message }
+  }
+
+  // If this is a Quiz and questions or max_score were updated, auto-regrade all submitted student answers (QUIZ-024)
+  const isQuiz = (data.type === "Quiz") || (oldAssignmentData?.type === "Quiz")
+  if (isQuiz && (data.questions !== undefined || data.max_score !== undefined)) {
+    try {
+      const activeQuestions = data.questions || oldAssignmentData?.questions || []
+      const activeMaxScore = data.max_score !== undefined ? data.max_score : (oldAssignmentData?.max_score || 100)
+
+      if (Array.isArray(activeQuestions) && activeQuestions.length > 0) {
+        const { data: quizSubs } = await supabase
+          .from("submissions")
+          .select("id, quiz_answers")
+          .eq("assignment_id", id)
+
+        if (quizSubs && quizSubs.length > 0) {
+          for (const sub of quizSubs) {
+            if (sub.quiz_answers && Array.isArray(sub.quiz_answers)) {
+              let correct = 0
+              sub.quiz_answers.forEach((ans: number, idx: number) => {
+                if (ans === activeQuestions[idx]?.answer) correct++
+              })
+              const regradedScore = Number(((correct / activeQuestions.length) * activeMaxScore).toFixed(1))
+              await supabase
+                .from("submissions")
+                .update({
+                  grade: regradedScore,
+                  status: "graded",
+                  feedback: `Auto-graded Quiz: ${correct}/${activeQuestions.length} correct (${regradedScore}/${activeMaxScore} Marks).`,
+                })
+                .eq("id", sub.id)
+            }
+          }
+        }
+      }
+    } catch (regradeErr) {
+      console.error("Failed to auto-regrade quiz submissions after quiz update:", regradeErr)
+    }
+  } else if (
+    oldMaxScore !== null &&
+    data.max_score !== undefined &&
+    oldMaxScore > 0 &&
+    data.max_score > 0 &&
+    oldMaxScore !== data.max_score
+  ) {
+    // If max_score was updated and changed for non-quiz, proportionally rescale all existing graded submissions (ASG-074)
+    try {
+      const { data: gradedSubs } = await supabase
+        .from("submissions")
+        .select("id, grade")
+        .eq("assignment_id", id)
+        .not("grade", "is", null)
+
+      if (gradedSubs && gradedSubs.length > 0) {
+        const newMax = data.max_score
+        for (const sub of gradedSubs) {
+          if (sub.grade !== null && typeof sub.grade === "number") {
+            const scaled = (sub.grade / oldMaxScore) * newMax
+            const roundedGrade = Number((Math.round(scaled * 10) / 10).toFixed(1))
+            const finalGrade = Math.min(newMax, Math.max(0, roundedGrade))
+
+            await supabase
+              .from("submissions")
+              .update({ grade: finalGrade })
+              .eq("id", sub.id)
+          }
+        }
+      }
+    } catch (scaleErr) {
+      console.error("Failed to rescale existing submissions for updated max_score:", scaleErr)
+    }
   }
 
   revalidatePath(`/dashboard/faculty/subjects/${subjectId}`)
@@ -219,10 +385,10 @@ export async function submitAssignmentAction(data: {
     .eq("id", data.assignment_id)
     .maybeSingle()
 
-  // 2. Strict due date validation: block submissions if deadline has passed
+  // 2. Strict due date validation: block submissions if deadline has passed (with 2-minute latency buffer to guarantee on-time submittal acceptance)
   if (assignment?.due_date) {
     const dueDate = new Date(assignment.due_date)
-    if (!isNaN(dueDate.getTime()) && dueDate.getTime() < Date.now()) {
+    if (!isNaN(dueDate.getTime()) && Date.now() - dueDate.getTime() > 120000) {
       return {
         success: false,
         error: "Submissions closed: The deadline for this assignment/quiz has passed.",

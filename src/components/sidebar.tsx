@@ -358,110 +358,94 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
           </AnimatePresence>
         </nav>
 
-        <motion.div
-          className="mt-6 h-px bg-[#3A6DAF]/30"
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-        />
+        <div className="mt-auto pt-4 space-y-2.5">
+          <div className="h-px bg-slate-100" />
 
-        <motion.div
-          initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.5, delay: 0.45, type: "spring", stiffness: 80, damping: 12 }}
-        >
-          <motion.div
-            whileHover={{ scale: 1.02, x: 3 }}
-            transition={{ type: "spring", stiffness: 250, damping: 15 }}
+          <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-gray-400 px-1">
+            Account & Session
+          </div>
+
+          {/* Highlighted Account Item */}
+          <Link
+            href="/dashboard/account/profile"
+            onClick={() => document.body.classList.remove("sidebar-open")}
+            className={`group flex items-center justify-between py-2.5 px-3.5 text-sm font-semibold rounded-2xl transition-all duration-200 border ${
+              pathname.startsWith("/dashboard/account")
+                ? "bg-gradient-to-r from-amber-50 to-orange-50/60 border-amber-300/80 text-[#E57D37] shadow-sm font-bold"
+                : "bg-slate-50/90 hover:bg-amber-50/50 border-slate-200/70 hover:border-amber-200 text-slate-700 hover:text-slate-900 shadow-xs"
+            }`}
           >
-            <Link
-              href="/dashboard/account/profile"
-              onClick={() => document.body.classList.remove("sidebar-open")}
-              className={`mt-5 flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-xl transition-colors ${
                 pathname.startsWith("/dashboard/account")
-                  ? "border-l-4 border-l-[#E57D37] rounded-r-2xl bg-gray-100 text-gray-900 shadow-[0_4px_12px_rgba(229,125,55,0.12)] pl-3.5"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:pl-5"
-              }`}
-            >
-              <motion.div whileHover={{ scale: 1.15, rotate: 5 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 300, damping: 12 }}>
-                <UserCircle2 className="h-4 w-4 text-gray-600" />
-              </motion.div>
-              Account
-            </Link>
-          </motion.div>
-        </motion.div>
+                  ? "bg-[#E57D37] text-white shadow-xs"
+                  : "bg-white text-slate-500 group-hover:text-[#E57D37] shadow-xs border border-slate-100"
+              }`}>
+                <UserCircle2 className="h-4 w-4" />
+              </div>
+              <span className="tracking-[0.01em]">Account</span>
+            </div>
+            <ChevronRight className={`h-4 w-4 transition-transform group-hover:translate-x-0.5 ${
+              pathname.startsWith("/dashboard/account") ? "text-[#E57D37]" : "text-slate-400 group-hover:text-slate-600"
+            }`} />
+          </Link>
 
-        <motion.div
-          initial={{ opacity: 0, y: 15, filter: "blur(4px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.5, delay: 0.5, type: "spring", stiffness: 80, damping: 12 }}
-        >
-          <motion.button
+          {/* Highlighted Log out Button */}
+          <button
             type="button"
             onClick={async () => {
               document.body.classList.remove("sidebar-open")
               await handleLogout()
             }}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="mt-5 flex w-full cursor-pointer items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 transition-all duration-200 hover:bg-gray-50 shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+            className="group flex w-full cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white hover:bg-red-50/70 hover:border-red-200/80 px-3.5 py-2.5 text-sm font-semibold text-slate-700 hover:text-red-600 transition-all duration-200 shadow-xs"
           >
-            <motion.div whileHover={{ scale: 1.15 }} whileTap={{ scale: 0.9 }} transition={{ type: "spring", stiffness: 300, damping: 12 }}>
-              <LogOut className="h-4 w-4 text-gray-600" />
-            </motion.div>
-            Log out
-          </motion.button>
-        </motion.div>
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-red-100/90 group-hover:text-red-600 transition-colors shadow-xs">
+                <LogOut className="h-4 w-4" />
+              </div>
+              <span className="tracking-[0.01em]">Log out</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 group-hover:text-red-500 uppercase tracking-wider transition-colors">
+              Exit
+            </span>
+          </button>
 
-        <motion.div
-          className="mt-6 h-px bg-[#3A6DAF]/30"
-          initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.55, ease: [0.34, 1.56, 0.64, 1] }}
-        />
-
-        <motion.div
-          className="mt-6 flex items-center gap-3 rounded-[24px] border border-gray-200 bg-gray-50 p-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)]"
-          initial={{ opacity: 0, scale: 0.85, y: 20, filter: "blur(6px)" }}
-          animate={{ opacity: 1, scale: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.6, delay: 0.6, type: "spring", stiffness: 70, damping: 12 }}
-          whileHover={{ scale: 1.03, y: -2 }}
-        >
-          <motion.div
-            className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-[#14234B] shadow-md font-semibold text-sm"
-            whileHover={{ rotateZ: 8, scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 250, damping: 12 }}
+          {/* User Profile Card with DP at the Very Bottom */}
+          <Link
+            href="/dashboard/account/profile"
+            onClick={() => document.body.classList.remove("sidebar-open")}
+            className="block group cursor-pointer pt-1"
           >
-            {profile?.profile_image_url ? (
-              <img
-                src={profile.profile_image_url}
-                alt={profile.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initials
-            )}
-          </motion.div>
-          <div className="min-w-0">
-            <motion.p
-              className="truncate text-sm font-semibold text-gray-900"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.65 }}
-            >
-              {profile ? profile.name : "Loading..."}
-            </motion.p>
-            <motion.p
-              className="text-xs text-gray-600"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              {roleLabel}
-            </motion.p>
-          </div>
-        </motion.div>
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white p-3 shadow-sm hover:shadow-md hover:border-amber-200/80 hover:bg-amber-50/20 transition-all duration-200">
+              <div className="relative shrink-0">
+                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-[#E57D37] to-[#EAAD62] text-white shadow-sm font-bold text-sm">
+                  {profile?.profile_image_url ? (
+                    <img
+                      src={profile.profile_image_url}
+                      alt={profile.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    initials
+                  )}
+                </div>
+                {/* Active status indicator dot */}
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white shadow-xs" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold text-slate-900 group-hover:text-[#E57D37] transition-colors">
+                  {profile ? profile.name : "Loading..."}
+                </p>
+                <p className="truncate text-[11px] text-slate-500 font-medium">
+                  {roleLabel}
+                </p>
+              </div>
+
+              <ChevronRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-[#E57D37] group-hover:translate-x-0.5 transition-all shrink-0" />
+            </div>
+          </Link>
+        </div>
       </aside>
     </>
   )

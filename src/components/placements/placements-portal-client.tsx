@@ -17,7 +17,7 @@ import {
   MOCK_COMPANIES, MOCK_DRIVES, MOCK_STUDENTS, buildAnalytics, Student, Company, Drive
 } from "@/lib/placements-mock";
 import { predictPlacementProbability, PredictionResult } from "@/lib/placements-predictor";
-import { requestTypedAssistantTask } from "@/lib/assistant/client";
+import { PlacementsInterviewTerminal } from "@/components/placements/placements-interview-terminal";
 
 type TabType = "overview" | "students" | "companies" | "drives" | "interview" | "comms" | "predictor";
 
@@ -41,13 +41,10 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
 
   // Local metric states (e.g. attendance computed from DB)
   const [dbAttendancePercent, setDbAttendancePercent] = useState<number>(85.0);
-
   const [institutionId, setInstitutionId] = useState<string | null>(null);
 
   // Analytical structures
   const [analytics, setAnalytics] = useState(() => buildAnalytics());
-
-  // Load user profile & sync data
   const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
 
   // Load user profile & sync data
@@ -123,7 +120,6 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       }
 
       const { data: comps, error: compErr } = await compsQuery;
-
       if (compErr) throw compErr;
 
       // 2. Fetch Job Posts (Drives) Joined with companies
@@ -136,24 +132,19 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       }
 
       const { data: posts, error: postErr } = await postsQuery;
-
       if (postErr) throw postErr;
 
       // Map to Placements structure
       const fetchedCompanies: Company[] = (comps || []).map((c: any) => ({
         id: c.id,
         name: c.name,
-        industry: "Technology", // defaults as fallback
+        industry: "Technology",
         location: c.website || "Corporate",
         email: "recruiting@" + (c.website || "company.com"),
       }));
 
       const fetchedDrives: Drive[] = (posts || []).map((p: any) => {
-        let deadlineStr = "2026-07-15";
-        if (p.deadline) {
-          deadlineStr = p.deadline;
-        }
-
+        let deadlineStr = p.deadline || "2026-07-15";
         return {
           id: p.id,
           company_id: p.company_id,
@@ -216,7 +207,6 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       }
 
       const { data: studentsRes, error: studentsErr } = await studentsQuery;
-
       if (studentsErr) throw studentsErr;
 
       const studentIds = (studentsRes || []).map((s: any) => s.id);
@@ -263,14 +253,12 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
         };
       });
 
-      // compute lightweight analytics from fetchedStudents and fetchedCompanies
       function computeAnalytics(studs: Student[], compsList: Company[], drivesList: Drive[]) {
         const total = studs.length;
         const placed = studs.filter(s => s.status === "Placed");
         const placedN = placed.length;
         const avgPkg = placed.reduce((a, s) => a + (s.package || 0), 0) / (placedN || 1);
 
-        // trend: simple distribution across recent years (best-effort)
         const yearMap: Record<number, { placements: number; total: number; pkgSum: number }> = {};
         for (let y = 2020; y <= 2024; y++) yearMap[y] = { placements: 0, total: 0, pkgSum: 0 };
         studs.forEach((s, i) => {
@@ -396,7 +384,6 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
           />
         ) : (
           <div className="space-y-6">
-            {/* Tabs bar */}
             <div className="bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1">
               {
                 (() => {
@@ -405,15 +392,16 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
 
                   if (roleKey.includes("student") || roleKey.includes("parent")) {
                     tabs = [
+                      { id: "interview", label: "AI Mock Interview" },
                       { id: "predictor", label: "Placement Predictor" },
                       { id: "drives", label: "Placement Drives" },
-                      { id: "interview", label: "Mock Interview" },
                     ];
                   } else if (roleKey.includes("faculty")) {
                     tabs = [
                       { id: "overview", label: "Overview" },
                       { id: "students", label: "Students Database" },
                       { id: "drives", label: "Drives" },
+                      { id: "interview", label: "AI Mock Interview" },
                       { id: "predictor", label: "Placement Predictor" },
                     ];
                   } else if (roleKey.includes("institution") || roleKey.includes("org") || roleKey.includes("hod") || roleKey.includes("program")) {
@@ -422,6 +410,7 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
                       { id: "students", label: "Students Database" },
                       { id: "companies", label: "Companies" },
                       { id: "drives", label: "Drives" },
+                      { id: "interview", label: "AI Mock Interview" },
                       { id: "predictor", label: "Placement Predictor" },
                     ];
                   } else if (roleKey.includes("super")) {
@@ -430,45 +419,41 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
                       { id: "students", label: "Students Database" },
                       { id: "companies", label: "Companies" },
                       { id: "drives", label: "Drives" },
+                      { id: "interview", label: "AI Mock Interview" },
                       { id: "predictor", label: "Placement Predictor" },
                       { id: "comms", label: "Communication Coach" },
-                      { id: "interview", label: "Mock Interview" },
                     ];
                   } else {
                     tabs = [
                       { id: "overview", label: "Overview" },
                       { id: "companies", label: "Companies" },
                       { id: "drives", label: "Drives" },
+                      { id: "interview", label: "AI Mock Interview" },
                     ];
                   }
 
                   return tabs.map((tab) => {
-                    const active = activeTab === tab.id
+                    const active = activeTab === tab.id;
                     return (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as TabType)}
                         className={`flex-1 min-w-[120px] flex items-center justify-center py-2.5 px-4 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 ${
                           active
-                            ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
+                            ? "bg-[#E57D37] text-white shadow-md shadow-[#E57D37]/20"
                             : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
                         }`}
                       >
                         {tab.label}
                       </button>
-                    )
+                    );
                   });
                 })()
               }
             </div>
 
-            {/* Render Tab Contents */}
-            {activeTab === "overview" && (
-              <OverviewTabView analytics={analytics} />
-            )}
-            {activeTab === "students" && (
-              <StudentsTabView students={students} />
-            )}
+            {activeTab === "overview" && <OverviewTabView analytics={analytics} />}
+            {activeTab === "students" && <StudentsTabView students={students} />}
             {activeTab === "companies" && (
               <CompaniesTabView
                 companies={companies}
@@ -486,11 +471,9 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
               />
             )}
             {activeTab === "interview" && (
-              <InterviewTabView />
+              <PlacementsInterviewTerminal userId={userId} userName={userName} isStudent={false} />
             )}
-            {activeTab === "comms" && (
-              <CommsTabView />
-            )}
+            {activeTab === "comms" && <CommsTabView />}
             {activeTab === "predictor" && (
               <PredictorTabView students={students} defaultAttendance={dbAttendancePercent} />
             )}
@@ -523,7 +506,7 @@ function StudentPortalView({
   studentApplications: any[];
   setStudentApplications: React.Dispatch<React.SetStateAction<any[]>>;
 }) {
-  const [subTab, setSubTab] = useState<"drives" | "interview" | "predictor">("predictor");
+  const [subTab, setSubTab] = useState<"interview" | "predictor" | "drives">("interview");
 
   // Resume states
   const [resumeUrl, setResumeUrl] = useState<string>("");
@@ -603,7 +586,6 @@ function StudentPortalView({
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(driveId);
       if (!isUuid) {
-        // Fallback for mock IDs
         setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
         alert("Application submitted successfully using your uploaded resume!");
         return;
@@ -614,7 +596,6 @@ function StudentPortalView({
         .insert([{ job_post_id: driveId, student_id: userId, status: "APPLIED", resume_url: resumeUrl }]);
 
       if (error) {
-        // If it fails with a foreign key constraint (e.g. mock UUID or offline/test mode)
         if (error.code === "23503" || error.code === "P0001") {
           setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
           alert("Application submitted successfully using your uploaded resume!");
@@ -623,7 +604,6 @@ function StudentPortalView({
         throw error;
       }
 
-      // update states
       setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
       alert("Application submitted successfully!");
     } catch (err: any) {
@@ -643,29 +623,29 @@ function StudentPortalView({
         <StatCard label="Avg CGPA" value={avgSgpa.toFixed(2)} icon={<GraduationCap size={15} />} />
         <StatCard label="Attendance" value={`${attendancePercent}%`} icon={<Percent size={15} />} accent="bg-emerald-50 text-emerald-600" />
         <StatCard label="Active Backlogs" value={activeBacklogs} icon={<AlertTriangle size={15} />} accent="bg-amber-50 text-amber-600" />
-        <StatCard label={drives.length ? "Applied Openings" : "Active Drives"} value={drives.length ? studentApplications.length : "No active drives"} icon={<Award size={15} />} accent="bg-indigo-50 text-indigo-600" />
+        <StatCard label={drives.length ? "Applied Openings" : "Active Drives"} value={drives.length ? studentApplications.length : "No active drives"} icon={<Award size={15} />} accent="bg-[#E57D37]/10 text-[#E57D37]" />
       </div>
 
       <div className="bg-white/80 border border-slate-100 rounded-2xl p-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.01)] backdrop-blur-md flex flex-wrap gap-1 w-fit">
         {[
+          { id: "interview", label: "AI Mock Interview Terminal" },
           { id: "predictor", label: "Predictor & Insights" },
           { id: "drives", label: "Placement Drives" },
-          { id: "interview", label: "Mock Interview Terminal" },
         ].map((tab) => {
-          const active = subTab === tab.id
+          const active = subTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setSubTab(tab.id as any)}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 ${
                 active
-                  ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
+                  ? "bg-[#E57D37] text-white shadow-md shadow-[#E57D37]/20"
                   : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
               }`}
             >
               {tab.label}
             </button>
-          )
+          );
         })}
       </div>
 
@@ -676,9 +656,9 @@ function StudentPortalView({
       {subTab === "drives" && (
         <div className="space-y-4">
           {/* Resume Upload Card */}
-          <Card className="border border-violet-100 bg-violet-50/10 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+          <Card className="border border-amber-100 bg-amber-50/20 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center animate-pulse">
+              <div className="w-10 h-10 rounded-xl bg-[#E57D37]/10 text-[#E57D37] flex items-center justify-center animate-pulse">
                 <Briefcase size={20} />
               </div>
               <div>
@@ -709,7 +689,7 @@ function StudentPortalView({
                   Delete Resume
                 </button>
               )}
-              <label className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-sm">
+              <label className="px-4 py-2 bg-[#E57D37] hover:bg-[#D46C26] text-white text-xs font-bold rounded-xl cursor-pointer transition-all flex items-center gap-1.5 shadow-sm">
                 {isUploadingResume ? "Uploading..." : resumeUrl ? "Change Resume" : "Upload Resume (PDF)"}
                 <input
                   type="file"
@@ -728,7 +708,7 @@ function StudentPortalView({
               {drives.map((drive) => {
                 const alreadyApplied = studentApplications.some(app => app.job_post_id === drive.id);
                 return (
-                  <div key={drive.id} className="border border-slate-100 rounded-xl p-4 flex flex-col justify-between hover:border-violet-100 hover:shadow-sm transition-all bg-white">
+                  <div key={drive.id} className="border border-slate-100 rounded-xl p-4 flex flex-col justify-between hover:border-[#E57D37]/20 hover:shadow-sm transition-all bg-white">
                     <div>
                       <div className="flex justify-between items-start mb-2">
                         <div>
@@ -764,7 +744,7 @@ function StudentPortalView({
       )}
 
       {subTab === "interview" && (
-        <InterviewTabView />
+        <PlacementsInterviewTerminal userId={userId} userName={userName} isStudent={true} />
       )}
     </div>
   );
@@ -782,7 +762,12 @@ function OverviewTabView({ analytics }: { analytics: any }) {
     if (!aiQuery.trim()) return;
     setAiL(true);
     try {
-      const j = await requestTypedAssistantTask("placement_analytics", `Analytics Data: ${JSON.stringify(analytics.kpi)}\nUser Question: ${aiQuery}`);
+      const r = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: `Analytics Data: ${JSON.stringify(analytics.kpi)}\nUser Question: ${aiQuery}` }),
+      });
+      const j = await r.json();
       setAiA(j.text);
     } catch {
       setAiA("AI connection error. Check API setup.");
@@ -828,9 +813,9 @@ function OverviewTabView({ analytics }: { analytics: any }) {
         </Card>
       </div>
 
-      <Card className="border border-violet-100 bg-violet-50/20">
+      <Card className="border border-[#E57D37]/20 bg-[#E57D37]/5">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles className="text-violet-600" size={18} />
+          <Sparkles className="text-[#E57D37]" size={18} />
           <p className="text-sm font-bold text-slate-800">AI Placement Analytics Consultant</p>
         </div>
         <div className="flex gap-2">
@@ -994,7 +979,14 @@ function CompaniesTabView({
     if (!aiQ.trim() || !selected) return;
     setAiL(true);
     try {
-      const data = await requestTypedAssistantTask("placement_analytics", `Recruiter: ${selected}\nRecruiting Stats: ${JSON.stringify(selectedStats || {})}\nStudent Query: ${aiQ}`);
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Recruiter: ${selected}\nRecruiting Stats: ${JSON.stringify(selectedStats || {})}\nStudent Query: ${aiQ}`
+        }),
+      });
+      const data = await response.json();
       setAiA(data.text);
     } catch {
       setAiA("AI connection error. Check API credentials.");
@@ -1013,7 +1005,7 @@ function CompaniesTabView({
       </div>
 
       {showForm && (
-        <Card className="border border-violet-100 bg-violet-50/10">
+        <Card className="border border-amber-100 bg-amber-50/10">
           <div className="flex justify-between items-center mb-4">
             <h4 className="font-bold text-sm text-slate-800">Register Recruiter</h4>
             <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={15} /></button>
@@ -1056,7 +1048,7 @@ function CompaniesTabView({
                   onClick={() => { setSelected(isActive ? null : c.name); setAiA(""); setAiQ(""); }}
                   className={`w-full text-left p-4 rounded-xl border transition-all ${
                     isActive
-                      ? "border-violet-400 bg-violet-500/10 shadow-sm text-white"
+                      ? "border-[#E57D37] bg-[#E57D37]/10 shadow-sm text-slate-800"
                       : "border-white/10 bg-slate-950/50 text-slate-200 hover:border-white/20 hover:bg-white/5"
                   }`}
                 >
@@ -1086,13 +1078,13 @@ function CompaniesTabView({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatCard label="Applicants" value={selectedStats?.applicants ?? 0} />
                 <StatCard label="Selected" value={selectedStats?.selected ?? 0} accent="bg-emerald-50 text-emerald-600" />
-                <StatCard label="Success Ratio" value={selectedStats ? `${selectedStats.selection_rate}%` : "0%"} accent="bg-indigo-50 text-indigo-600" />
+                <StatCard label="Success Ratio" value={selectedStats ? `${selectedStats.selection_rate}%` : "0%"} accent="bg-amber-50 text-amber-600" />
                 <StatCard label="Average Package" value={selectedStats ? `₹${selectedStats.avg_package} LPA` : "—"} accent="bg-amber-50 text-amber-600" />
               </div>
 
-              <Card className="border border-violet-100 bg-violet-50/10">
+              <Card className="border border-amber-100 bg-amber-50/10">
                 <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={16} className="text-violet-600" />
+                  <Sparkles size={16} className="text-[#E57D37]" />
                   <h4 className="font-bold text-sm text-slate-800">Ask AI about {selected}</h4>
                 </div>
                 <div className="flex gap-2">
@@ -1238,307 +1230,6 @@ function DrivesTabView({
 }
 
 // =============================================================================
-// TAB VIEW: AI MOCK INTERVIEW
-// =============================================================================
-function InterviewTabView() {
-  const [phase, setPhase] = useState<"config" | "active" | "report">("config");
-  const [role, setRole] = useState("Software Engineer");
-  const [difficulty, setDiff] = useState<"Entry" | "Mid" | "Senior">("Entry");
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [logs, setLogs] = useState<{ question: string; answer: string; feedback: string; score: number; }[]>([]);
-  const [feedback, setFeedback] = useState("");
-  const [report, setReport] = useState("");
-  const [elapsed, setElapsed] = useState(0);
-  const [loading, setLoad] = useState(false);
-  const [camOn, setCamOn] = useState(false);
-
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  useEffect(() => {
-    if (phase === "active") {
-      const start = Date.now();
-      timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - start) / 1000));
-      }, 1000);
-    }
-    return () => clearInterval(timerRef.current);
-  }, [phase]);
-
-  const toggleCamera = async () => {
-    if (camOn) {
-      streamRef.current?.getTracks().forEach(track => track.stop());
-      setCamOn(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setCamOn(true);
-      } catch {
-        alert("Webcam device is not available.");
-      }
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  async function startInterview() {
-    setLoad(true);
-    try {
-      const data = await requestTypedAssistantTask("interview_question", `Formulate ONE high-end interview question in a technical capacity for a ${difficulty} level ${role}.`);
-      setQuestion(data.data?.question ?? data.text);
-      setPhase("active");
-    } catch {
-      alert("AI failed to prepare question.");
-    } finally {
-      setLoad(false);
-    }
-  }
-
-  async function submitAnswer() {
-    if (!answer.trim()) return;
-    setLoad(true);
-    try {
-      const data = await requestTypedAssistantTask("interview_answer_evaluation", `Interviewer Question: "${question}"\nCandidate Spoken Response: "${answer}"`);
-      const evaluation = data.data;
-      const feedback = evaluation ? `Score: ${evaluation.score}/10\n\nStrengths:\n- ${evaluation.strengths.join("\n- ")}\n\nWeaknesses:\n- ${evaluation.weaknesses.join("\n- ")}\n\nImprovements:\n- ${evaluation.improvements.join("\n- ")}\n\nVerdict:\n${evaluation.verdict}` : data.text;
-      setFeedback(feedback);
-      setLogs(p => [...p, { question, answer, feedback, score: evaluation?.score ?? 0 }]);
-    } catch {
-      alert("Failed to evaluate response.");
-    } finally {
-      setLoad(false);
-    }
-  }
-
-  async function fetchNextQuestion() {
-    setLoad(true);
-    setAnswer("");
-    setFeedback("");
-    try {
-      const data = await requestTypedAssistantTask("interview_question", `Provide the next interview question for a ${difficulty} ${role} role. Make it relevant to standard corporate processes.`);
-      setQuestion(data.data?.question ?? data.text);
-    } catch {
-      alert("Failed to load question.");
-    } finally {
-      setLoad(false);
-    }
-  }
-
-  async function generateFinalReport() {
-    setLoad(true);
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      setCamOn(false);
-    }
-    try {
-      const data = await requestTypedAssistantTask("interview_report", `Interview Logs: ${JSON.stringify(logs)}\nTarget Role: ${role}\nDifficulty: ${difficulty}\n\nCompile a comprehensive performance summary, overall score out of 10, list strengths, areas to improve, and a customized 30-day preparation plan.`);
-      setReport(data.text);
-      setPhase("report");
-    } catch {
-      alert("Failed to summarize interview.");
-    } finally {
-      setLoad(false);
-    }
-  }
-
-  function reset() {
-    setPhase("config");
-    setLogs([]);
-    setQuestion("");
-    setAnswer("");
-    setFeedback("");
-    setReport("");
-    setElapsed(0);
-  }
-
-  const formatTime = (s: number) => {
-    return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-  };
-
-  const avgScore = logs.length ? Math.round(logs.reduce((acc, x) => acc + x.score, 0) / logs.length) : 0;
-
-  if (phase === "config") {
-    return (
-      <div className="space-y-6 max-w-xl">
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Video className="text-violet-600" size={18} />
-            <h3 className="font-bold text-slate-800">AI Adaptive Interview Setup</h3>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Target Position</label>
-              <Select value={role} onChange={e => setRole(e.target.value)}>
-                {["Software Engineer", "AI/ML Engineer", "Data Engineer", "Cloud Consultant", "Full Stack Developer", "QA Analyst"].map(opt => <option key={opt}>{opt}</option>)}
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Interview Standard</label>
-              <div className="flex gap-2">
-                {["Entry", "Mid", "Senior"].map(lvl => (
-                  <button
-                    key={lvl}
-                    type="button"
-                    onClick={() => setDiff(lvl as any)}
-                    className={`flex-1 py-2 text-sm font-semibold rounded-lg border transition-all ${
-                      difficulty === lvl
-                        ? "bg-violet-50 text-violet-600 border-violet-400"
-                        : "bg-white border-slate-200 text-slate-400"
-                    }`}
-                  >
-                    {lvl}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Button variant="primary" className="w-full" onClick={startInterview} disabled={loading}>
-              {loading ? "Preparing terminal..." : "Initialize Interview"}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  if (phase === "report") {
-    return (
-      <div className="space-y-6 max-w-3xl">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-lg text-slate-800">Evaluation Report</h3>
-          <Button variant="secondary" className="text-xs" onClick={reset}>
-            <RotateCcw size={14} /> Retake Assessment
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white border border-slate-100 rounded-xl p-5 text-center">
-            <p className="text-xs font-bold text-slate-400 uppercase">Questions Taken</p>
-            <p className="text-3xl font-extrabold text-slate-800 mt-2">{logs.length}</p>
-          </div>
-          <div className="bg-white border border-slate-100 rounded-xl p-5 text-center">
-            <p className="text-xs font-bold text-slate-400 uppercase">Average Score</p>
-            <p className={`text-3xl font-extrabold mt-2 ${avgScore >= 7 ? "text-emerald-600" : "text-amber-500"}`}>
-              {avgScore}/10
-            </p>
-          </div>
-          <div className="bg-white border border-slate-100 rounded-xl p-5 text-center">
-            <p className="text-xs font-bold text-slate-400 uppercase">Duration</p>
-            <p className="text-3xl font-extrabold text-slate-800 mt-2">{formatTime(elapsed)}</p>
-          </div>
-        </div>
-
-        <Card>
-          <p className="text-sm font-bold text-slate-700 mb-3">AI Technical Assessment Summary</p>
-          <div className="text-sm text-slate-500 leading-relaxed whitespace-pre-wrap font-medium">
-            {report}
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
-        <Card className="border border-violet-100 bg-violet-50/5">
-          <div className="flex justify-between items-center mb-3">
-            <Badge variant="info">{difficulty} Level</Badge>
-            <span className="font-mono text-xs text-slate-400">{formatTime(elapsed)}</span>
-          </div>
-          <p className="text-slate-800 font-bold text-base leading-relaxed">{question}</p>
-        </Card>
-
-        <Card>
-          <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Your Answer</label>
-          <textarea
-            className="w-full h-40 p-4 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200 transition-colors font-mono"
-            placeholder="Type your coding solutions or explanations here..."
-            value={answer}
-            onChange={e => setAnswer(e.target.value)}
-          />
-          <div className="flex justify-end gap-2 mt-4">
-            {logs.length > 0 && !feedback && (
-              <Button variant="secondary" onClick={fetchNextQuestion}>Skip Question</Button>
-            )}
-            <Button onClick={submitAnswer} disabled={loading || !answer.trim()}>
-              {loading ? "Analyzing..." : "Submit Answer"}
-            </Button>
-          </div>
-        </Card>
-
-        {feedback && (
-          <Card className="border border-emerald-100 bg-emerald-50/5">
-            <h4 className="font-bold text-sm text-emerald-800 mb-2">Immediate Feedback</h4>
-            <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap font-medium">
-              {feedback}
-            </div>
-            <div className="flex justify-end mt-4 gap-2">
-              <Button variant="secondary" className="text-xs" onClick={generateFinalReport}>End Interview</Button>
-              <Button variant="primary" className="text-xs" onClick={fetchNextQuestion}>Next Question</Button>
-            </div>
-          </Card>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <Card className="p-4 text-center">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-xs font-bold text-slate-400 uppercase">Camera Proctoring</span>
-            <Button variant="secondary" className="text-[10px] py-1 px-2.5 h-auto" onClick={toggleCamera}>
-              {camOn ? <VideoOff size={11} /> : <Video size={11} />} {camOn ? "Disable" : "Enable"}
-            </Button>
-          </div>
-          <div className="aspect-video bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center overflow-hidden relative">
-            <video ref={videoRef} autoPlay muted playsInline className={`w-full h-full object-cover ${camOn ? "" : "hidden"}`} />
-            {!camOn && <VideoOff className="text-slate-300" size={24} />}
-          </div>
-          {camOn && (
-            <div className="mt-3 flex items-center gap-1.5 justify-center text-xs text-emerald-600 font-semibold bg-emerald-50 py-1.5 rounded-lg">
-              <span>●</span> Monitoring candidate behavior
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <h4 className="font-bold text-xs text-slate-400 mb-3 uppercase">Session Tracking</h4>
-          <div className="space-y-3">
-            <div className="flex justify-between text-xs font-bold text-slate-500">
-              <span>Progress</span>
-              <span>{logs.length} / 5 Questions</span>
-            </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-violet-600 transition-all duration-300" style={{ width: `${(logs.length / 5) * 100}%` }} />
-            </div>
-            {logs.length > 0 && (
-              <div className="border-t border-slate-100 pt-3 space-y-2">
-                {logs.map((log, index) => (
-                  <div key={index} className="flex justify-between items-center text-xs font-medium text-slate-500">
-                    <span>Question {index + 1}</span>
-                    <Badge variant={log.score >= 7 ? "success" : log.score >= 5 ? "warning" : "danger"}>
-                      {log.score}/10
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
 // TAB VIEW: COMMUNICATION ANALYZER
 // =============================================================================
 function CommsTabView() {
@@ -1585,7 +1276,14 @@ function CommsTabView() {
     if (!text.trim()) return;
     setAiL(true);
     try {
-      const data = await requestTypedAssistantTask("communication_feedback", `Evaluate interview spoken response communication quality: "${text}". Summarize strictly under Strengths, Weaknesses, Specific Improvements, Verdict.`);
+      const response = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Evaluate interview spoken response communication quality: "${text}". Summarize strictly under Strengths, Weaknesses, Specific Improvements, Verdict.`
+        }),
+      });
+      const data = await response.json();
       setAiFb(data.text);
     } catch {
       setAiFb("Connection failure to AI evaluator.");
@@ -1629,7 +1327,7 @@ function CommsTabView() {
           </Button>
         </div>
         <textarea
-          className="w-full h-36 p-4 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-200 transition-colors"
+          className="w-full h-36 p-4 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-[#E57D37] focus:ring-1 focus:ring-[#E57D37]/20 transition-colors"
           placeholder={recording ? "Listening to your spoken voice..." : "Type or speak your answer here (e.g. explain a complex project)..."}
           value={text}
           onChange={e => setText(e.target.value)}
@@ -1643,7 +1341,7 @@ function CommsTabView() {
       {metrics && (
         <div className="space-y-6">
           <div className="flex items-center gap-4 bg-white border border-slate-100 p-5 rounded-xl">
-            <div className="w-16 h-16 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center font-extrabold text-xl">
+            <div className="w-16 h-16 rounded-full bg-[#E57D37]/10 text-[#E57D37] flex items-center justify-center font-extrabold text-xl">
               {metrics.overall}%
             </div>
             <div>
@@ -1676,7 +1374,7 @@ function CommsTabView() {
           </div>
 
           {aiFb && (
-            <Card className="border border-violet-100 bg-violet-50/5">
+            <Card className="border border-amber-100 bg-amber-50/10">
               <h4 className="font-bold text-sm text-slate-800 mb-2">AI HR Evaluator Speech Coaching</h4>
               <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap font-medium">
                 {aiFb}
@@ -1710,7 +1408,6 @@ function PredictorTabView({
   const [aiExplanation, setAiExplanation] = useState<string>("");
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
 
-  // Sync with default attendance
   useEffect(() => {
     setAttendance(defaultAttendance);
   }, [defaultAttendance]);
@@ -1719,16 +1416,16 @@ function PredictorTabView({
     if (selectedStudentId) {
       const match = students.find(s => s.student_id === selectedStudentId);
       if (match) {
-          const sVal = match.sgpa ? (Object.values(match.sgpa).reduce((a, b) => a + b, 0) / Object.values(match.sgpa).length) : 8.0;
-          const aVal = match.attendance ? (Object.values(match.attendance).reduce((a, b) => a + b, 0) / Object.values(match.attendance).length) : defaultAttendance;
-          const bVal = match.backlogs ? Object.values(match.backlogs).reduce((a, b) => a + b, 0) : 0;
-          setSgpa(parseFloat(sVal.toFixed(2)));
-          setAttendance(parseFloat(aVal.toFixed(1)));
-          setBacklogs(bVal);
-          setSkillsTags((match.skills || "").split(",").map((s: string) => s.trim()).filter(Boolean));
-        }
+        const sVal = match.sgpa ? (Object.values(match.sgpa).reduce((a, b) => a + b, 0) / Object.values(match.sgpa).length) : 8.0;
+        const aVal = match.attendance ? (Object.values(match.attendance).reduce((a, b) => a + b, 0) / Object.values(match.attendance).length) : defaultAttendance;
+        const bVal = match.backlogs ? Object.values(match.backlogs).reduce((a, b) => a + b, 0) : 0;
+        setSgpa(parseFloat(sVal.toFixed(2)));
+        setAttendance(parseFloat(aVal.toFixed(1)));
+        setBacklogs(bVal);
+        setSkillsTags((match.skills || "").split(",").map((s: string) => s.trim()).filter(Boolean));
+      }
     }
-  }, [selectedStudentId, students]);
+  }, [selectedStudentId, students, defaultAttendance]);
 
   function runPrediction() {
     const sc = skillsTags.length;
@@ -1745,7 +1442,7 @@ function PredictorTabView({
       <div className="space-y-4">
         <Card>
           <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="text-violet-600" size={18} />
+            <Sparkles className="text-[#E57D37]" size={18} />
             <h3 className="font-bold text-slate-800 text-sm">Predictor Control Console</h3>
           </div>
 
@@ -1765,7 +1462,7 @@ function PredictorTabView({
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Average CGPA ({sgpa.toFixed(2)})</label>
               <input
-                type="range" min="5" max="10" step="0.1" className="w-full accent-violet-600"
+                type="range" min="5" max="10" step="0.1" className="w-full accent-[#E57D37]"
                 value={sgpa} onChange={e => setSgpa(parseFloat(e.target.value))}
               />
             </div>
@@ -1773,7 +1470,7 @@ function PredictorTabView({
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Cumulative Backlogs ({backlogs})</label>
               <input
-                type="range" min="0" max="6" step="1" className="w-full accent-violet-600"
+                type="range" min="0" max="6" step="1" className="w-full accent-[#E57D37]"
                 value={backlogs} onChange={e => setBacklogs(parseInt(e.target.value))}
               />
             </div>
@@ -1781,7 +1478,7 @@ function PredictorTabView({
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Average Attendance ({attendance.toFixed(1)}%)</label>
               <input
-                type="range" min="50" max="100" step="1" className="w-full accent-violet-600"
+                type="range" min="50" max="100" step="1" className="w-full accent-[#E57D37]"
                 value={attendance} onChange={e => setAttendance(parseFloat(e.target.value))}
               />
             </div>
@@ -1812,12 +1509,16 @@ function PredictorTabView({
             </div>
 
             <Button className="w-full" onClick={async () => {
-              // Button now fetches AI explanation for the current prediction
               if (!prediction) return;
               setAiExplanation("");
               try {
-                const j = await requestTypedAssistantTask("placement_prediction_explanation", `Explain this placement prediction and provide tailored improvement steps. Inputs: sgpa=${sgpa}, backlogs=${backlogs}, attendance=${attendance}, skills=${skillsTags.join(", ")}, score=${prediction.probability}`);
-                setAiExplanation(j.data?.summary ? `${j.data.summary}\n\nFactors:\n- ${j.data.factors.join("\n- ")}\n\nCaveats:\n- ${j.data.caveats.join("\n- ")}` : j.text || "AI explanation unavailable.");
+                const res = await fetch("/api/ai/chat", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ prompt: `Explain this placement prediction and provide tailored improvement steps. Inputs: sgpa=${sgpa}, backlogs=${backlogs}, attendance=${attendance}, skills=${skillsTags.join(", ")}, score=${prediction.probability}` }),
+                });
+                const j = await res.json();
+                setAiExplanation(j.text || j.answer || "AI explanation unavailable.");
               } catch (err) {
                 setAiExplanation("AI request failed.");
               }
@@ -1868,7 +1569,7 @@ function PredictorTabView({
                 <div className="space-y-2.5">
                   {prediction.suggestions.map((item, index) => (
                     <div key={index} className="flex gap-2.5 items-start p-3 bg-slate-50 rounded-xl border border-slate-100/50 text-xs font-semibold leading-relaxed text-slate-600">
-                      <span className="text-violet-600 font-bold shrink-0 mt-0.5">✓</span>
+                      <span className="text-emerald-600 font-bold shrink-0 mt-0.5">✓</span>
                       <p>{item}</p>
                     </div>
                   ))}
