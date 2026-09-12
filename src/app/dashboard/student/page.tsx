@@ -2,24 +2,16 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import StudentPage from "./student-dashboard-client"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user: context },
-  } = await supabase.auth.getUser()
-
+  const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, role, institution_id, organization_id, name, email, phone")
-    .eq("id", context.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  const supabase = await createSupabaseServerClient()
 
   const { data: studentData } = await supabase
     .from("students")
@@ -27,17 +19,18 @@ export default async function DashboardPage() {
     .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
+  const profile = { ...context, ...studentData }
 
   // 1. Check if organization has multi_week_timetable enabled and find active week for today
   let activeWeekId: string | null = null
-  if (profile.organization_id && profile.section_id) {
-    const [{ data: orgData }, { data: weeksData }] = await Promise.all([
-      supabase.from("organizations").select("features").eq("id", profile.organization_id).single(),
-      supabase.from("timetable_weeks").select("id, start_date, end_date").eq("section_id", profile.section_id),
-    ])
+  if (profile.section_id && context.features.includes("multi_week_timetable")) {
+    const { data: weeksData } = await supabase
+      .from("timetable_weeks")
+      .select("id, start_date, end_date")
+      .eq("section_id", profile.section_id)
 
-    if (orgData?.features?.includes("multi_week_timetable") && weeksData && weeksData.length > 0) {
+    if (weeksData && weeksData.length > 0) {
       const today = new Date().toISOString().split("T")[0]
       const currentWeek = weeksData.find((w: any) => w.start_date <= today && today <= w.end_date)
       if (currentWeek) {
@@ -65,7 +58,7 @@ export default async function DashboardPage() {
     }
   }
 
-  const [institutionRes, sectionRes, timetableRes, attendanceRes] = await Promise.all([
+  const [institutionRes, sectionRes, timetableRes, attendanceRes] = await measureServer("dashboard.student.overview.data", () => Promise.all([
     supabase
       .from("institutions")
       .select("id, name")
@@ -86,7 +79,7 @@ export default async function DashboardPage() {
           .eq("student_id", context.id)
           .eq("attendance_sessions.section_id", profile.section_id)
       : Promise.resolve({ data: [] }),
-  ])
+  ]))
 
   const institution = institutionRes.data
   const section = sectionRes.data

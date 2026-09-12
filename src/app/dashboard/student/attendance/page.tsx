@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
-import { getCurrentUserContext } from "@/lib/user-context"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 import AttendanceClient from "./attendance-client"
 
 export const dynamic = "force-dynamic"
@@ -28,7 +28,7 @@ interface SubjectSummary {
 }
 
 export default async function StudentAttendancePage() {
-  const context = await getCurrentUserContext()
+  const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 

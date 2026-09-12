@@ -3,12 +3,13 @@ import { redirect } from "next/navigation"
 import ParentDashboardClient from "./parent-dashboard-client"
 import { ROLES } from "@/constants/roles"
 
-import { getCurrentUserContext } from "@/lib/user-context"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function ParentDashboardPage() {
-  const context = await getCurrentUserContext()
+  const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.PARENT) redirect("/auth/login")
 
@@ -27,7 +28,7 @@ export default async function ParentDashboardPage() {
     .select("student_id, relationship")
     .eq("parent_id", profile.id)
 
-  const childrenData = await Promise.all(
+  const childrenData = await measureServer("dashboard.parent.overview.data", () => Promise.all(
     (relations || []).map(async (rel) => {
       const studentId = rel.student_id
 
@@ -169,7 +170,7 @@ export default async function ParentDashboardPage() {
         }
       }
     })
-  )
+  ))
 
   const validChildren = childrenData.filter(Boolean) as any[]
 

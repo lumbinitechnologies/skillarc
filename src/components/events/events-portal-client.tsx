@@ -4,6 +4,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useDashboardSession } from "@/components/dashboard-session-provider";
+import { startClientTiming } from "@/lib/client-perf";
 import {
   Calendar as CalIcon, MapPin, User as UserIcon, Users, Search, Plus, Grid, List, CheckCircle2,
   ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame, Camera, Image as ImageIcon,
@@ -124,11 +126,12 @@ const DEPT_COLOR_HEX: Record<string, string> = {
 
 export default function EventsPortalClient() {
   const pathname = usePathname() || "";
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>("");
-  const [userEmail, setUserEmail] = useState<string>("");
-  const [userRole, setUserRole] = useState<string>("student");
-  const [institutionId, setInstitutionId] = useState<string | null>(null);
+  const session = useDashboardSession();
+  const userId = session?.id ?? null;
+  const userName = session?.name ?? "";
+  const userEmail = session?.email ?? "";
+  const userRole = session?.role ?? "student";
+  const institutionId = session?.institution_id ?? null;
 
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -228,40 +231,7 @@ export default function EventsPortalClient() {
     department?: string;
   } | null>(null);
 
-  // Fetch current user details from Supabase auth
-  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
-
-  useEffect(() => {
-    async function getUserDetails() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserId(user.id);
-          setUserEmail(user.email || "");
-          const metadataName = (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "";
-          if (metadataName) setUserName(metadataName);
-
-          const { data } = await supabase
-            .from("users")
-            .select("name, email, role, institution_id")
-            .eq("id", user.id)
-            .single();
-
-          if (data) {
-            setUserRole(data.role || "student");
-            if (data.name) setUserName(data.name);
-            if (data.email) setUserEmail(data.email);
-            setInstitutionId(data.institution_id || null);
-          }
-        }
-      } catch (err) {
-        console.error("Error getting user profile:", err);
-      } finally {
-        setProfileLoaded(true);
-      }
-    }
-    getUserDetails();
-  }, []);
+  const profileLoaded = Boolean(session);
 
   useEffect(() => {
     async function fetchCollegeDepts() {
@@ -350,6 +320,7 @@ export default function EventsPortalClient() {
 
   // Fetch Events from Supabase Database with resilient fallbacks
   const fetchEvents = async () => {
+    const finishTiming = startClientTiming("dashboard.events.initialize")
     setLoading(true);
     try {
       let data: any[] | null = null;
@@ -519,6 +490,7 @@ export default function EventsPortalClient() {
       console.error("Error fetching events:", err?.message || err);
     } finally {
       setLoading(false);
+      finishTiming();
     }
   };
 

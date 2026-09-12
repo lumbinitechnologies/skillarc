@@ -3,6 +3,8 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import { useDashboardSession } from "@/components/dashboard-session-provider";
+import { startClientTiming } from "@/lib/client-perf";
 import {
   Users, Building2, TrendingUp, DollarSign, Award, Search, Plus, X, Video, VideoOff,
   RotateCcw, AlertTriangle, Mic, MicOff, MessageSquare, Sparkles, GraduationCap, Percent, Briefcase
@@ -27,9 +29,10 @@ interface PlacementsPortalClientProps {
 }
 
 export default function PlacementsPortalClient({ role: enforcedRole, defaultTab = "overview" }: PlacementsPortalClientProps) {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(enforcedRole || null);
-  const [userName, setUserName] = useState<string>("User");
+  const session = useDashboardSession();
+  const userId = session?.id ?? null;
+  const userRole = enforcedRole || session?.role || null;
+  const userName = session?.name || "User";
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
@@ -41,72 +44,55 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
 
   // Local metric states (e.g. attendance computed from DB)
   const [dbAttendancePercent, setDbAttendancePercent] = useState<number>(85.0);
-  const [institutionId, setInstitutionId] = useState<string | null>(null);
+  const institutionId = session?.institution_id ?? null;
 
   // Analytical structures
   const [analytics, setAnalytics] = useState(() => buildAnalytics());
-  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
+  const profileLoaded = Boolean(session);
 
-  // Load user profile & sync data
+  // Load session-scoped placement data without another auth/profile round trip.
   useEffect(() => {
-    async function loadSession() {
+    async function loadStudentData() {
+      const finishTiming = startClientTiming("dashboard.placements.session-data")
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from("users")
-            .select("name, role, institution_id")
-            .eq("id", user.id)
-            .single();
+        if (session && userId) {
+          const shouldLoadStudentData = ["student", "parent"].includes(session.role.toLowerCase()) || enforcedRole === "student";
+          if (!shouldLoadStudentData) return;
 
-          if (profile) {
-            setUserRole(profile.role || "student");
-            setUserName(profile.name || user.email?.split("@")[0] || "User");
-            setInstitutionId(profile.institution_id || null);
-          } else {
-            setUserRole("student");
-            setUserName(user.email?.split("@")[0] || "User");
-          }
+          const [attendanceResult, applicationsResult] = await Promise.all([
+            supabase
+              .from("attendance_records")
+              .select("status")
+              .eq("student_id", userId),
+            supabase
+              .from("applications")
+              .select("*, job_posts(title, company_id)")
+              .eq("student_id", userId),
+          ]);
 
           // Fetch attendance records from database to calculate real attendance
-          const { data: attendanceData } = await supabase
-            .from("attendance_records")
-            .select("status")
-            .eq("student_id", user.id);
-
-          if (attendanceData && attendanceData.length > 0) {
-            const present = attendanceData.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
-            setDbAttendancePercent(Math.round((present / attendanceData.length) * 100));
+          if (attendanceResult.data && attendanceResult.data.length > 0) {
+            const present = attendanceResult.data.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
+            setDbAttendancePercent(Math.round((present / attendanceResult.data.length) * 100));
           }
 
           // Fetch student placements applications
-          const { data: apps } = await supabase
-            .from("applications")
-            .select("*, job_posts(title, company_id)")
-            .eq("student_id", user.id);
-      
-          if (apps) {
-            setStudentApplications(apps);
+          if (applicationsResult.data) {
+            setStudentApplications(applicationsResult.data);
           }
-
-          setUserId(user.id);
-        } else {
-          // Local fallback in non-auth setups
-          setUserRole("institution_admin");
-          setUserName("Placement Officer");
         }
       } catch (err) {
         console.error("Session fetch error:", err);
-        setUserRole("student");
       } finally {
-        setProfileLoaded(true);
+        finishTiming();
       }
     }
-    loadSession();
-  }, []);
+    void loadStudentData();
+  }, [enforcedRole, session, userId]);
 
   // Fetch Companies & Job posts from Supabase database
   const fetchPlacementsData = async () => {
+    const finishTiming = startClientTiming("dashboard.placements.initialize")
     setLoading(true);
     try {
       // 1. Fetch Companies
@@ -342,6 +328,7 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
       setStudents([]);
     } finally {
       setLoading(false);
+      finishTiming();
     }
   };
 

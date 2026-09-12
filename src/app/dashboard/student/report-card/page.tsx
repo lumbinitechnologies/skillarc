@@ -1,39 +1,29 @@
 import { redirect } from "next/navigation"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import { StudentReportCardClient } from "./student-report-card-client"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudentReportCardPage() {
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
 
   const adminClient = createSupabaseAdminClient()
-
-  const { data: userProfile } = await adminClient
-    .from("users")
-    .select("id, name, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const { data: studentData } = await adminClient
     .from("students")
     .select("id, section_id, program_id, semester")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
   const profile = {
-    id: user.id,
-    name: userProfile.name || "Student",
-    institution_id: userProfile.institution_id,
+    id: context.id,
+    name: context.name || "Student",
+    institution_id: context.institution_id,
     ...studentData,
   }
 
@@ -75,20 +65,23 @@ export default async function StudentReportCardPage() {
     )
   }
 
-  const [subjectsResult, assignmentsResult, submissionsResult, gradeColumnsResult] = await Promise.all([
+  const [subjectsResult, assignmentsResult, submissionsResult, gradeColumnsResult] = await measureServer("dashboard.student.report-card.data", () => Promise.all([
     adminClient.from("subjects").select("id, name, code").in("id", subjectIds),
     adminClient
       .from("assignments")
       .select("id, subject_id, title, description, type, max_score, due_date, section_ids, created_at")
       .in("subject_id", subjectIds),
-    adminClient.from("submissions").select("*").eq("student_id", user.id),
+    adminClient
+      .from("submissions")
+      .select("assignment_id, status, grade, feedback, submitted_at")
+      .eq("student_id", context.id),
     adminClient
       .from("grade_columns")
-      .select("*")
+      .select("id, subject_id, title, type, max_score, display_order")
       .in("subject_id", subjectIds)
       .eq("is_active", true)
       .order("display_order", { ascending: true }),
-  ])
+  ]))
 
   const subjects = subjectsResult.data ?? []
   const allAssignments = assignmentsResult.data ?? []
@@ -106,8 +99,8 @@ export default async function StudentReportCardPage() {
   const gradeEntries = columnIds.length
     ? await adminClient
         .from("grade_entries")
-        .select("*")
-        .eq("student_id", user.id)
+        .select("column_id, score, feedback, graded_at")
+        .eq("student_id", context.id)
         .in("column_id", columnIds)
     : { data: [] }
 
