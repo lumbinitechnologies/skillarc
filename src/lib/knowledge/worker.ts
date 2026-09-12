@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai"
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { extractText } from "unpdf"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
-import { KNOWLEDGE_BUCKET, KNOWLEDGE_MAX_FILE_BYTES, sha256 } from "@/lib/knowledge/service"
+import { KNOWLEDGE_BUCKET, KNOWLEDGE_MAX_FILE_BYTES } from "@/lib/knowledge/service"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import mammoth from "mammoth"
 
