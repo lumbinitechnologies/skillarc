@@ -4,6 +4,8 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { detectAIContent } from "@/lib/ai-detector"
 import { dispatchNotification, dispatchBatchNotifications } from "@/lib/notification-service"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { syncAssignmentKnowledge, archiveAssignmentKnowledge } from "@/lib/knowledge/assignment"
 
 export async function createAssignmentAction(data: {
   subject_id: string
@@ -70,7 +72,7 @@ export async function createAssignmentAction(data: {
 
   const uniqueFiles = data.files && Array.isArray(data.files) ? Array.from(new Set(data.files)) : data.files
 
-  const { error } = await supabase.from("assignments").insert({
+  const { data: assignment, error } = await supabase.from("assignments").insert({
     subject_id: data.subject_id,
     faculty_id: data.faculty_id,
     title: data.title.trim(),
@@ -83,12 +85,14 @@ export async function createAssignmentAction(data: {
     test_cases: data.test_cases,
     section_ids: data.section_ids,
     files: uniqueFiles,
-  })
+  }).select("id").single()
 
   if (error) {
     console.error("Error creating assignment:", error)
     return { success: false, error: error.message }
   }
+
+  await syncAssignmentKnowledge(createSupabaseAdminClient(), assignment.id)
 
   // Insert notifications for all students in the selected sections
   if (data.section_ids && data.section_ids.length > 0) {
@@ -271,6 +275,8 @@ export async function updateAssignmentAction(
     }
   }
 
+  await syncAssignmentKnowledge(createSupabaseAdminClient(), id)
+
   revalidatePath(`/dashboard/faculty/subjects/${subjectId}`)
   revalidatePath(`/dashboard/student/subjects/${subjectId}`)
   return { success: true }
@@ -299,6 +305,8 @@ export async function deleteAssignmentAction(id: string, subjectId: string) {
     console.error("Error deleting assignment:", error)
     return { success: false, error: error.message }
   }
+
+  await archiveAssignmentKnowledge(createSupabaseAdminClient(), id)
 
   revalidatePath(`/dashboard/faculty/subjects/${subjectId}`)
   revalidatePath(`/dashboard/student/subjects/${subjectId}`)
