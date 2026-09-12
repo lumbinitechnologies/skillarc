@@ -2,6 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { ACADEMIC_CONTEXT_LIMITS, fetchAcademicContext } from "@/lib/academic-context"
 import type { AssistantPrincipal, AssistantReadResult, AssistantReadScope, SourceCitation } from "@/lib/assistant/types"
+import { embed } from "ai"
+import { openai } from "@ai-sdk/openai"
+import { knowledgeEmbeddingDimensions, knowledgeEmbeddingModel, knowledgeSearchEnabled } from "@/lib/knowledge/config"
 
 /**
  * The only dashboard-data entry point exposed to assistant orchestration.
@@ -230,43 +233,38 @@ export async function searchPermittedDocuments(
   supabase: SupabaseClient,
   principal: AssistantPrincipal,
   query: string,
+  searchClient: SupabaseClient = supabase,
+  embedQuery: (value: string) => Promise<number[]> = defaultQueryEmbedding,
 ): Promise<AssistantReadResult> {
-  if (!principal.organizationId || !principal.institutionId) return { context: null, sources: [] }
-  const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 3).slice(0, 4)
-  if (!tokens.length) return { context: null, sources: [] }
+  if (!knowledgeSearchEnabled() || !principal.organizationId || !principal.institutionId) return { context: null, sources: [] }
+  if (!query.trim()) return { context: null, sources: [] }
 
   const relationships = await getPermittedDocumentRelationships(supabase, principal)
+  let queryEmbedding: number[]
+  try {
+    queryEmbedding = await embedQuery(query.trim())
+    if (queryEmbedding.length !== knowledgeEmbeddingDimensions()) return { context: null, sources: [] }
+  } catch {
+    return { context: null, sources: [] }
+  }
 
-  let request = supabase
-    .from("knowledge_chunks")
-    .select("id, document_id, chunk_index, content, owner_id, institution_id, department_id, subject_id, section_id, visibility, allowed_roles, document:document_id(title, original_filename, status)")
-    .eq("organization_id", principal.organizationId)
-    .or(`institution_id.eq.${principal.institutionId},institution_id.is.null`)
-    .limit(100)
+  const { data, error } = await searchClient.rpc("match_knowledge_chunks", {
+    query_embedding: queryEmbedding,
+    match_threshold: 0.25,
+    match_count: 5,
+    p_user_id: principal.userId,
+    p_organization_id: principal.organizationId,
+    p_institution_id: principal.institutionId,
+    p_department_id: principal.departmentId,
+    p_role: principal.role,
+    p_subject_ids: [...relationships.subjectIds],
+    p_section_ids: [...relationships.sectionIds],
+  })
+  if (error || !Array.isArray(data)) return { context: null, sources: [] }
 
-  // Keyword filtering is the safe compatibility path while the ingestion
-  // worker backfills 384-dimensional pgvector embeddings. Ranking remains
-  // bounded and all tenant/audience filtering happens before this ranking.
-  for (const token of tokens) request = request.ilike("content", `%${token}%`)
-  const { data, error } = await request
-  if (error || !data) return { context: null, sources: [] }
-
-  const permitted = (data as unknown as Record<string, unknown>[])
-    .filter((row) => {
-      const visibility = row.visibility
-      const roles = Array.isArray(row.allowed_roles) ? row.allowed_roles.map(String) : []
-      const audienceAllowed = roles.length === 0 || roles.includes(principal.role)
-      const owner = row.owner_id === principal.userId
-      const departmentAllowed = visibility !== "department" || row.department_id === principal.departmentId
-      const departmentRelationAllowed = Boolean(row.department_id && row.department_id === principal.departmentId)
-      const relationshipAllowed = relationships.isBroad || owner || departmentRelationAllowed || (
-        (!row.subject_id || relationships.subjectIds.has(String(row.subject_id))) &&
-        (!row.section_id || relationships.sectionIds.has(String(row.section_id)))
-      )
-      const document = row.document && typeof row.document === "object" ? row.document as Record<string, unknown> : {}
-      return document.status === "ready" && audienceAllowed && relationshipAllowed && (owner || visibility === "organization" || visibility === "institution" || departmentAllowed)
-    })
-    .slice(0, 5)
+  // The RPC is the authorization boundary and performs scope predicates
+  // before vector ranking. Do not re-query the table or trust browser data.
+  const permitted = (data as unknown as Record<string, unknown>[]).slice(0, 5)
 
   const sources: SourceCitation[] = permitted.map((row) => {
     const document = row.document && typeof row.document === "object" ? row.document as Record<string, unknown> : {}
@@ -277,6 +275,7 @@ export async function searchPermittedDocuments(
       snippet: String(row.content ?? "").slice(0, 320),
       documentId: String(row.document_id),
       chunkIndex: Number(row.chunk_index ?? 0),
+      score: Number(row.similarity ?? 0),
     }
   })
 
@@ -286,6 +285,16 @@ export async function searchPermittedDocuments(
       : null,
     sources,
   }
+}
+
+async function defaultQueryEmbedding(value: string): Promise<number[]> {
+  const { embedding } = await embed({
+    model: openai.embeddingModel(knowledgeEmbeddingModel()),
+    value,
+    maxRetries: 2,
+    providerOptions: { openai: { dimensions: knowledgeEmbeddingDimensions() } },
+  })
+  return embedding
 }
 
 type DocumentRelationships = {
