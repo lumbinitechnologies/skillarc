@@ -15,6 +15,26 @@ type AssignmentRow = {
   section_ids: string[] | null
 }
 
+type SubjectRow = {
+  id: string
+  institution_id: string | null
+  program_id: string | null
+}
+
+type FacultyRow = {
+  id: string
+  organization_id: string | null
+  institution_id: string | null
+  department_id: string | null
+}
+
+type ProgramRow = {
+  id: string
+  department_id: string | null
+  institution_id: string | null
+  organization_id: string | null
+}
+
 export async function syncAssignmentKnowledge(admin: SupabaseClient, assignmentId: string): Promise<void> {
   const { data: assignment, error: assignmentError } = await admin
     .from("assignments")
@@ -30,19 +50,41 @@ export async function syncAssignmentKnowledge(admin: SupabaseClient, assignmentI
   }
   if (!assignment.subject_id || !assignment.faculty_id) throw new Error("Indexed assignment has no subject or faculty")
 
-  const [{ data: subject }, { data: faculty }] = await Promise.all([
-    admin.from("subjects").select("id, institution_id, department_id").eq("id", assignment.subject_id).maybeSingle(),
-    admin.from("users").select("id, organization_id, institution_id").eq("id", assignment.faculty_id).maybeSingle(),
-  ])
+  const subjectQuery = admin.from("subjects").select("id, institution_id, program_id").eq("id", assignment.subject_id).maybeSingle()
+  const facultyQuery = admin.from("users").select("id, organization_id, institution_id, department_id").eq("id", assignment.faculty_id).maybeSingle()
+  const [{ data: subject, error: subjectError }, { data: faculty, error: facultyError }] = await Promise.all([
+    subjectQuery,
+    facultyQuery,
+  ]) as [{ data: SubjectRow | null; error: unknown }, { data: FacultyRow | null; error: unknown }]
+  if (subjectError) throw subjectError
+  if (facultyError) throw facultyError
   if (!subject || !faculty || !faculty.organization_id || !faculty.institution_id || faculty.institution_id !== subject.institution_id) {
     throw new Error("Indexed assignment scope could not be validated")
   }
 
+  let departmentId = faculty.department_id
+  if (subject.program_id) {
+    const { data: program, error: programError } = await admin
+      .from("programs")
+      .select("id, department_id, institution_id, organization_id")
+      .eq("id", subject.program_id)
+      .maybeSingle() as { data: ProgramRow | null; error: unknown }
+    if (programError) throw programError
+    if (!program || program.institution_id !== faculty.institution_id || program.organization_id !== faculty.organization_id) {
+      throw new Error("Indexed assignment program scope could not be validated")
+    }
+    departmentId = program.department_id ?? departmentId
+  }
+
   const requestedSections = Array.isArray(assignment.section_ids) ? assignment.section_ids.filter(Boolean) : []
-  const { data: sections } = requestedSections.length
+  const { data: sections, error: sectionError } = requestedSections.length
     ? await admin.from("sections").select("id").eq("institution_id", faculty.institution_id).in("id", requestedSections)
     : { data: [] }
+  if (sectionError) throw sectionError
   const validSections = (sections ?? []).map((section) => String(section.id))
+  if (requestedSections.length && validSections.length !== requestedSections.length) {
+    throw new Error("Indexed assignment section scope could not be validated")
+  }
   const targets = validSections.length ? validSections : [null]
   const content = `${assignment.title}\n\n${assignment.description ?? ""}`.trim()
   const contentHash = sha256(content)
@@ -63,7 +105,7 @@ export async function syncAssignmentKnowledge(admin: SupabaseClient, assignmentI
     const { data: document, error: documentError } = await admin.from("knowledge_documents").insert({
       organization_id: faculty.organization_id,
       institution_id: faculty.institution_id,
-      department_id: subject.department_id,
+      department_id: departmentId,
       subject_id: assignment.subject_id,
       section_id: sectionId,
       owner_id: assignment.faculty_id,
