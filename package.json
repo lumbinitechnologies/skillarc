@@ -15,7 +15,6 @@
     "local:stop": "bash scripts/local/stop.sh",
     "local:reset": "bash scripts/local/reset.sh",
     "local:dev": "bash scripts/local/dev.sh",
-    "local:backend": "bash scripts/local/backend.sh",
     "local:test": "bash scripts/local/test.sh",
     "seed:demo": "node --env-file=.env scripts/seed-demo-data.mjs",
     "knowledge:backfill": "node --env-file=.env.local --import tsx scripts/backfill-knowledge.ts"
