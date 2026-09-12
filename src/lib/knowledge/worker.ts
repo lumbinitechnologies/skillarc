@@ -1,16 +1,16 @@
-import { embedMany } from "ai"
-import { openai } from "@ai-sdk/openai"
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { extractText } from "unpdf"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { KNOWLEDGE_BUCKET, KNOWLEDGE_MAX_FILE_BYTES } from "@/lib/knowledge/service"
+import { embedKnowledgeMany } from "@/lib/knowledge/embeddings"
+import { knowledgeEmbeddingDimensions, knowledgeEmbeddingModel, knowledgeEmbeddingProfile, knowledgeEmbeddingProvider, knowledgeEmbeddingRevision } from "@/lib/knowledge/config"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import mammoth from "mammoth"
 
 const CLAIM_LIMIT = 5
 const LEASE_SECONDS = 240
-const CHUNK_SIZE = 1000
-const CHUNK_OVERLAP = 150
+const CHUNK_SIZE = 800
+const CHUNK_OVERLAP = 120
 const MAX_CHUNKS = 2000
 const MAX_EXTRACTED_CHARACTERS = 2_000_000
 const INSERT_BATCH_SIZE = 100
@@ -44,7 +44,10 @@ type KnowledgeDocument = {
 }
 
 export function normalizeExtractedText(text: string): string {
-  const normalized = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").trim()
+  const normalized = text
+    .replace(/\u0000/g, "")
+    .replace(/\r\n?/g, "\n")
+    .trim()
   if (!normalized) throw new Error("The document contains no extractable text")
   if (normalized.length > MAX_EXTRACTED_CHARACTERS) {
     throw new Error(`The extracted document is too large (maximum ${MAX_EXTRACTED_CHARACTERS} characters)`)
@@ -82,7 +85,7 @@ export async function splitKnowledgeText(text: string): Promise<string[]> {
   return chunks
 }
 
-export function assertEmbeddingDimensions(embeddings: number[][], dimensions = 384): void {
+export function assertEmbeddingDimensions(embeddings: number[][], dimensions = knowledgeEmbeddingDimensions()): void {
   if (embeddings.length === 0 || embeddings.some((embedding) => embedding.length !== dimensions)) {
     throw new Error(`Embedding provider returned vectors that are not ${dimensions}-dimensional`)
   }
@@ -92,11 +95,7 @@ async function sourceText(admin: SupabaseClient, document: KnowledgeDocument): P
   if (document.source_type === "assignment") {
     const assignmentId = document.source_id?.split(":", 1)[0]
     if (!assignmentId) throw new Error("Assignment knowledge document has no source assignment")
-    const { data, error } = await admin
-      .from("assignments")
-      .select("title, description")
-      .eq("id", assignmentId)
-      .maybeSingle()
+    const { data, error } = await admin.from("assignments").select("title, description").eq("id", assignmentId).maybeSingle()
     if (error) throw error
     if (!data) throw new Error("The source assignment no longer exists")
     return {
@@ -138,66 +137,95 @@ async function failJob(admin: SupabaseClient, job: KnowledgeIngestionJob, worker
     return
   }
   const failedJob = Array.isArray(data) ? data[0] : data
-  await admin.from("knowledge_documents").update({
-    status: failedJob?.status === "failed" ? "failed" : "pending",
-    failure_reason: message.slice(0, 2000),
-    updated_at: new Date().toISOString(),
-  }).eq("id", job.document_id)
+  await admin
+    .from("knowledge_documents")
+    .update({
+      status: failedJob?.status === "failed" ? "failed" : "pending",
+      failure_reason: message.slice(0, 2000),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", job.document_id)
 }
 
 async function processJob(admin: SupabaseClient, job: KnowledgeIngestionJob, workerId: string): Promise<void> {
-  const { data: document, error: documentError } = await admin
-    .from("knowledge_documents")
-    .select("id, organization_id, institution_id, department_id, subject_id, section_id, owner_id, title, original_filename, storage_bucket, storage_path, visibility, allowed_roles, document_version, source_type, source_id, content_hash, mime_type")
-    .eq("id", job.document_id)
-    .maybeSingle() as { data: KnowledgeDocument | null; error: unknown }
+  const { data: document, error: documentError } = (await admin.from("knowledge_documents").select("id, organization_id, institution_id, department_id, subject_id, section_id, owner_id, title, original_filename, storage_bucket, storage_path, visibility, allowed_roles, document_version, source_type, source_id, content_hash, mime_type").eq("id", job.document_id).maybeSingle()) as { data: KnowledgeDocument | null; error: unknown }
   if (documentError) throw documentError
   if (!document) throw new Error("Knowledge document no longer exists")
 
-  await admin.from("knowledge_documents").update({ status: "processing", failure_reason: null, updated_at: new Date().toISOString() }).eq("id", document.id)
-  const source = await sourceText(admin, document)
-  const chunks = await splitKnowledgeText(source.text)
-  const { embeddings } = await embedMany({
-    model: openai.embeddingModel(process.env.KNOWLEDGE_EMBEDDING_MODEL || "text-embedding-3-small"),
-    values: chunks,
-    maxParallelCalls: 2,
-    maxRetries: 2,
-    providerOptions: { openai: { dimensions: Number(process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS || 384) } },
-  })
-  const dimensions = Number(process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS || 384)
-  assertEmbeddingDimensions(embeddings, dimensions)
+  await admin
+    .from("knowledge_documents")
+    .update({
+      status: "processing",
+      failure_reason: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", document.id)
+  let leaseError: Error | null = null
+  const leaseHeartbeat = setInterval(() => {
+    void admin
+      .rpc("renew_knowledge_ingestion_job", {
+        p_job_id: job.id,
+        p_worker_id: workerId,
+        p_lease_seconds: LEASE_SECONDS,
+      })
+      .then(({ error }) => {
+        if (error) leaseError = error
+      })
+  }, 60_000)
 
-  // Content is parsed and embedded before replacing chunks, so no database
-  // lock is held while external storage or embedding providers are called.
-  const { error: deleteError } = await admin.from("knowledge_chunks").delete().eq("document_id", document.id).eq("document_version", document.document_version)
-  if (deleteError) throw deleteError
-  for (let offset = 0; offset < chunks.length; offset += INSERT_BATCH_SIZE) {
-    const rows = chunks.slice(offset, offset + INSERT_BATCH_SIZE).map((content, index) => ({
-      document_id: document.id,
-      organization_id: document.organization_id,
-      institution_id: document.institution_id,
-      department_id: document.department_id,
-      subject_id: document.subject_id,
-      section_id: document.section_id,
-      owner_id: document.owner_id,
-      visibility: document.visibility,
-      allowed_roles: document.allowed_roles,
-      chunk_index: offset + index,
-      content,
-      embedding: embeddings[offset + index],
-      document_version: document.document_version,
-    }))
-    const { error } = await admin.from("knowledge_chunks").insert(rows)
-    if (error) throw error
+  try {
+    const source = await sourceText(admin, document)
+    const chunks = await splitKnowledgeText(source.text)
+    const embeddings = await embedKnowledgeMany(chunks)
+    assertEmbeddingDimensions(embeddings)
+    if (leaseError) throw leaseError
+
+    // Content is parsed and embedded before replacing chunks, so no database
+    // lock is held while storage or model work is running.
+    const { error: deleteError } = await admin.from("knowledge_chunks").delete().eq("document_id", document.id).eq("document_version", document.document_version)
+    if (deleteError) throw deleteError
+    for (let offset = 0; offset < chunks.length; offset += INSERT_BATCH_SIZE) {
+      const rows = chunks.slice(offset, offset + INSERT_BATCH_SIZE).map((content, index) => ({
+        document_id: document.id,
+        organization_id: document.organization_id,
+        institution_id: document.institution_id,
+        department_id: document.department_id,
+        subject_id: document.subject_id,
+        section_id: document.section_id,
+        owner_id: document.owner_id,
+        visibility: document.visibility,
+        allowed_roles: document.allowed_roles,
+        chunk_index: offset + index,
+        content,
+        embedding: embeddings[offset + index],
+        document_version: document.document_version,
+      }))
+      const { error } = await admin.from("knowledge_chunks").insert(rows)
+      if (error) throw error
+    }
+
+    if (leaseError) throw leaseError
+    const { error: metadataError } = await admin
+      .from("knowledge_documents")
+      .update({
+        embedding_provider: knowledgeEmbeddingProvider(),
+        embedding_model: knowledgeEmbeddingModel(),
+        embedding_revision: knowledgeEmbeddingRevision(),
+        embedding_dimensions: knowledgeEmbeddingDimensions(),
+        embedding_profile: knowledgeEmbeddingProfile(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", document.id)
+    if (metadataError) throw metadataError
+    if (leaseError) throw leaseError
+    const { error: finalizeError } = await admin.rpc("finalize_knowledge_ingestion_job", {
+      p_job_id: job.id,
+      p_worker_id: workerId,
+    })
+    if (finalizeError) throw finalizeError
+  } finally {
+    clearInterval(leaseHeartbeat)
   }
-
-  const { error: readyError } = await admin.from("knowledge_documents").update({ status: "ready", failure_reason: null, updated_at: new Date().toISOString() }).eq("id", document.id)
-  if (readyError) throw readyError
-  const { error: completeError } = await admin.rpc("complete_knowledge_ingestion_job", {
-    p_job_id: job.id,
-    p_worker_id: workerId,
-  })
-  if (completeError) throw completeError
 }
 
 export async function runKnowledgeWorker(admin = createSupabaseAdminClient()): Promise<{ claimed: number; completed: number; failed: number }> {
@@ -219,7 +247,11 @@ export async function runKnowledgeWorker(admin = createSupabaseAdminClient()): P
     } catch (error) {
       failed += 1
       await failJob(admin, job, workerId, error)
-      console.error("Knowledge ingestion failed", { jobId: job.id, documentId: job.document_id, error })
+      console.error("Knowledge ingestion failed", {
+        jobId: job.id,
+        documentId: job.document_id,
+        error,
+      })
     }
   }
   return { claimed: jobs.length, completed, failed }

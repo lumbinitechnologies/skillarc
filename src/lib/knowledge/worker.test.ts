@@ -16,6 +16,6 @@ test("extracts plain text and creates overlapping chunks", async () => {
 })
 
 test("rejects vectors with the wrong dimensions", () => {
-  assert.doesNotThrow(() => assertEmbeddingDimensions([[0, 1, 2]], 3))
-  assert.throws(() => assertEmbeddingDimensions([[0, 1]], 3), /not 3-dimensional/)
+  assert.doesNotThrow(() => assertEmbeddingDimensions([Array.from({ length: 384 }, () => 0)]))
+  assert.throws(() => assertEmbeddingDimensions([[0, 1]], 384), /not 384-dimensional/)
 })

@@ -13,7 +13,7 @@ The assistant calls `match_knowledge_chunks` only through the server-side Supaba
 1. Apply `migrations/024_ai_copilot.sql`, then `migrations/027_canonical_knowledge_ingestion.sql`.
 2. Create or verify the private `knowledge-documents` Storage bucket and service-role access. Do not expose Storage paths or service keys to clients.
 3. Configure `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `CRON_SECRET`, `KNOWLEDGE_EMBEDDING_MODEL=text-embedding-3-small`, `KNOWLEDGE_EMBEDDING_DIMENSIONS=384`, and leave `KNOWLEDGE_SEARCH_ENABLED=false`.
-4. Deploy the Next.js producer and worker. `vercel.json` schedules the worker every five minutes; Cron requests must still pass the secret check.
+4. Deploy the Next.js producer and worker. On Vercel Hobby, `vercel.json` schedules the worker once daily at 03:00 UTC (with Vercel's documented timing variance); Cron requests must still pass the secret check.
 5. Export the legacy SQLite/Chroma metadata, chunk text, and source files before removing or shutting down any legacy filesystem. Keep the export immutable.
 6. Run the backfill command in a controlled environment. It creates `legacy` source documents and jobs; it never copies incompatible legacy vectors and never deletes legacy data.
 7. Wait for jobs to finish, then run the verification gates below. Resolve failed, missing, unscoped, and orphaned records before enabling search.
