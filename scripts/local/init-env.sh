@@ -25,39 +25,16 @@ write_next_env() {
     "NEXT_PUBLIC_SUPABASE_URL=$api_url" \
     "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon_key" \
     "SUPABASE_SERVICE_ROLE_KEY=$service_key" \
-    "ARCA_BACKEND_SECRET=skillarc-local-only-change-me" \
-    "EDURAG_BACKEND_URL=http://127.0.0.1:8000" \
     "GROQ_API_KEY=" \
     "GROQ_MODEL=llama-3.3-70b-versatile" \
-    "UPSTASH_REDIS_REST_URL=" \
-    "UPSTASH_REDIS_REST_TOKEN=" > "$target"
-}
-
-write_backend_env() {
-  local target="$ROOT_DIR/arca-backend/.env.local"
-  if [[ -e "$target" ]]; then
-    echo "Keeping existing $target" >&2
-    return
-  fi
-  umask 077
-  printf '%s\n' \
-    "GROQ_API_KEY=" \
-    "GROQ_MODEL=llama-3.3-70b-versatile" \
-    "EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2" \
-    "UPLOAD_DIR=../.local/arca-backend/uploads" \
-    "CHROMA_DIR=../.local/arca-backend/chroma_db" \
-    "DATABASE_URL=sqlite:///../.local/arca-backend/edurag.db" \
-    "DEFAULT_CHUNK_SIZE=1000" \
-    "DEFAULT_CHUNK_OVERLAP=150" \
-    "DEFAULT_TOP_K=4" \
-    "FRONTEND_ORIGIN=http://127.0.0.1:3000" \
-    "ARCA_BACKEND_SECRET=skillarc-local-only-change-me" \
-    "SUPABASE_URL=$api_url" \
-    "SUPABASE_SERVICE_ROLE_KEY=$service_key" \
+    "KNOWLEDGE_SEARCH_ENABLED=false" \
+    "KNOWLEDGE_EMBEDDING_MODEL=text-embedding-3-small" \
+    "KNOWLEDGE_EMBEDDING_DIMENSIONS=384" \
+    "OPENAI_API_KEY=" \
+    "CRON_SECRET=skillarc-local-cron-secret" \
     "UPSTASH_REDIS_REST_URL=" \
     "UPSTASH_REDIS_REST_TOKEN=" > "$target"
 }
 
 write_next_env
-write_backend_env
-echo "Local environment files are ready. They are gitignored and contain local Supabase keys only."
+echo "Local Next.js environment is ready. It is gitignored and contains local Supabase keys only."
