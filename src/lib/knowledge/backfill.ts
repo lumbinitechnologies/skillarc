@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises"
 import { resolve, relative } from "node:path"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { KNOWLEDGE_BUCKET, safeFilename, sha256 } from "@/lib/knowledge/service"
+import { KNOWLEDGE_ALLOWED_EXTENSIONS, KNOWLEDGE_BUCKET, safeExtension, safeFilename, sha256 } from "@/lib/knowledge/service"
+import { knowledgeEmbeddingDimensions, knowledgeEmbeddingModel, knowledgeEmbeddingProfile, knowledgeEmbeddingProvider, knowledgeEmbeddingRevision } from "@/lib/knowledge/config"
 
 export type LegacyBackfillScope = {
   organization_id: string
@@ -20,8 +21,18 @@ export type LegacyBackfillRecord = {
   filename?: string | null
   file_path?: string | null
   content?: string | null
-  chunks?: Array<{ text?: string | null; content?: string | null; chunk_index?: number | null }> | null
+  chunks?: Array<{
+    text?: string | null
+    content?: string | null
+    chunk_index?: number | null
+  }> | null
   scope: LegacyBackfillScope
+}
+
+export type LegacyBackfillSource = {
+  bytes: Uint8Array
+  filename: string
+  mimeType: string
 }
 
 export type BackfillReport = {
@@ -29,11 +40,17 @@ export type BackfillReport = {
   finished_at?: string
   dry_run: boolean
   source_counts: { legacy_manifest: number; assignments: number }
-  imported_counts: { legacy: number; assignments: number; jobs: number; skipped: number }
+  imported_counts: {
+    legacy: number
+    assignments: number
+    jobs: number
+    skipped: number
+  }
   skipped_records: Array<{ source: string; id: string; reason: string }>
   failed_jobs: Array<{ source: string; id: string; error: string }>
   missing_files: Array<{ source: string; id: string; path?: string | null }>
   unscoped_records: Array<{ source: string; id: string; reason: string }>
+  warnings: Array<{ source: string; id: string; warning: string }>
 }
 
 export function createBackfillReport(dryRun = false): BackfillReport {
@@ -46,15 +63,12 @@ export function createBackfillReport(dryRun = false): BackfillReport {
     failed_jobs: [],
     missing_files: [],
     unscoped_records: [],
+    warnings: [],
   }
 }
 
 export function parseLegacyManifest(value: unknown): LegacyBackfillRecord[] {
-  const records = Array.isArray(value)
-    ? value
-    : value && typeof value === "object" && Array.isArray((value as { documents?: unknown }).documents)
-      ? (value as { documents: unknown[] }).documents
-      : null
+  const records = Array.isArray(value) ? value : value && typeof value === "object" && Array.isArray((value as { documents?: unknown }).documents) ? (value as { documents: unknown[] }).documents : null
   if (!records) throw new Error("Legacy manifest must be an array or an object with a documents array")
   return records.filter((record): record is LegacyBackfillRecord => {
     if (!record || typeof record !== "object") return false
@@ -86,13 +100,40 @@ export function resolveMigrationFile(sourceRoot: string, relativePath: string): 
 }
 
 export async function readLegacyContent(record: LegacyBackfillRecord, sourceRoot: string): Promise<{ content: string; filename: string }> {
-  const filename = safeFilename(record.filename || `${record.legacy_id}.txt`)
+  const source = await readLegacySource(record, sourceRoot)
+  if (source.mimeType !== "text/plain") throw new Error("Binary source files must be imported as raw bytes")
+  return {
+    content: new TextDecoder().decode(source.bytes).trim(),
+    filename: source.filename,
+  }
+}
+
+function mimeTypeFor(filename: string): string {
+  const extension = safeExtension(filename)
+  if (extension === "pdf") return "application/pdf"
+  if (extension === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  if (extension === "txt") return "text/plain"
+  throw new Error(`Unsupported legacy source extension; expected one of ${[...KNOWLEDGE_ALLOWED_EXTENSIONS].join(", ")}`)
+}
+
+export async function readLegacySource(record: LegacyBackfillRecord, sourceRoot: string): Promise<LegacyBackfillSource> {
+  const filename = safeFilename(record.filename || record.file_path || `${record.legacy_id}.txt`)
   const inline = legacyContent(record)
-  if (inline) return { content: inline, filename }
+  if (inline) {
+    return {
+      bytes: new TextEncoder().encode(inline),
+      filename,
+      mimeType: "text/plain",
+    }
+  }
   if (!record.file_path) throw new Error("No inline content, Chroma text, or source file was provided")
   const file = await readFile(resolveMigrationFile(sourceRoot, record.file_path))
   if (!file.length) throw new Error("Source file is empty")
-  return { content: file.toString("utf8").trim(), filename }
+  return {
+    bytes: new Uint8Array(file),
+    filename,
+    mimeType: mimeTypeFor(filename),
+  }
 }
 
 async function exists(query: PromiseLike<{ data: unknown }>): Promise<boolean> {
@@ -105,11 +146,7 @@ export async function validateLegacyScope(admin: SupabaseClient, scope: LegacyBa
   if (required.some((field) => !scope[field])) return "organization_id, institution_id, and owner_id are required"
   if (scope.visibility === "department" && !scope.department_id) return "department visibility requires department_id"
 
-  const [organization, institution, owner] = await Promise.all([
-    exists(admin.from("organizations").select("id").eq("id", scope.organization_id).maybeSingle()),
-    exists(admin.from("institutions").select("id").eq("id", scope.institution_id).eq("organization_id", scope.organization_id).maybeSingle()),
-    exists(admin.from("users").select("id").eq("id", scope.owner_id).eq("organization_id", scope.organization_id).eq("institution_id", scope.institution_id).maybeSingle()),
-  ])
+  const [organization, institution, owner] = await Promise.all([exists(admin.from("organizations").select("id").eq("id", scope.organization_id).maybeSingle()), exists(admin.from("institutions").select("id").eq("id", scope.institution_id).eq("organization_id", scope.organization_id).maybeSingle()), exists(admin.from("users").select("id").eq("id", scope.owner_id).eq("organization_id", scope.organization_id).eq("institution_id", scope.institution_id).maybeSingle())])
   if (!organization || !institution || !owner) return "organization, institution, or owner is not in the declared tenant"
 
   const checks: Array<[string, string | null | undefined, string]> = [
@@ -125,29 +162,20 @@ export async function validateLegacyScope(admin: SupabaseClient, scope: LegacyBa
   return null
 }
 
-export async function importLegacyRecord(
-  admin: SupabaseClient,
-  record: LegacyBackfillRecord,
-  content: { content: string; filename: string },
-): Promise<"imported" | "skipped"> {
+export async function importLegacyRecord(admin: SupabaseClient, record: LegacyBackfillRecord, source: LegacyBackfillSource): Promise<"imported" | "skipped"> {
   const scope = record.scope
-  const contentHash = sha256(content.content)
-  const { data: previous, error: previousError } = await admin
-    .from("knowledge_documents")
-    .select("id, document_version, content_hash, status")
-    .eq("source_type", "legacy")
-    .eq("source_id", record.legacy_id)
-    .order("document_version", { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const contentHash = sha256(source.bytes)
+  const profile = knowledgeEmbeddingProfile()
+  const { data: previous, error: previousError } = await admin.from("knowledge_documents").select("id, document_version, content_hash, embedding_profile, status").eq("source_type", "legacy").eq("source_id", record.legacy_id).order("document_version", { ascending: false }).limit(1).maybeSingle()
   if (previousError) throw previousError
-  if (previous?.content_hash === contentHash && previous.status !== "failed") return "skipped"
+  if (previous?.content_hash === contentHash && previous.status !== "failed" && previous.embedding_profile === profile) return "skipped"
 
   const documentId = crypto.randomUUID()
   const version = Number(previous?.document_version ?? 0) + 1
-  const storagePath = `${scope.organization_id}/${scope.institution_id}/legacy/${record.legacy_id}-${contentHash.slice(0, 12)}.txt`
-  const { error: uploadError } = await admin.storage.from(KNOWLEDGE_BUCKET).upload(storagePath, Buffer.from(content.content, "utf8"), {
-    contentType: "text/plain",
+  const extension = safeExtension(source.filename) || "txt"
+  const storagePath = `${scope.organization_id}/${scope.institution_id}/legacy/${record.legacy_id}-${contentHash.slice(0, 12)}.${extension}`
+  const { error: uploadError } = await admin.storage.from(KNOWLEDGE_BUCKET).upload(storagePath, source.bytes, {
+    contentType: source.mimeType,
     upsert: false,
   })
   if (uploadError) throw uploadError
@@ -160,8 +188,8 @@ export async function importLegacyRecord(
     subject_id: scope.subject_id ?? null,
     section_id: scope.section_id ?? null,
     owner_id: scope.owner_id,
-    title: content.filename,
-    original_filename: content.filename,
+    title: source.filename,
+    original_filename: source.filename,
     storage_bucket: KNOWLEDGE_BUCKET,
     storage_path: storagePath,
     visibility: scope.visibility ?? "institution",
@@ -170,7 +198,12 @@ export async function importLegacyRecord(
     source_type: "legacy",
     source_id: record.legacy_id,
     content_hash: contentHash,
-    mime_type: "text/plain",
+    mime_type: source.mimeType,
+    embedding_provider: knowledgeEmbeddingProvider(),
+    embedding_model: knowledgeEmbeddingModel(),
+    embedding_revision: knowledgeEmbeddingRevision(),
+    embedding_dimensions: knowledgeEmbeddingDimensions(),
+    embedding_profile: profile,
     status: "pending",
   })
   if (documentError) {
