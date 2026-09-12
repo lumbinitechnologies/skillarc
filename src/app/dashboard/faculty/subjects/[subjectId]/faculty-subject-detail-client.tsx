@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import {
   Book,
@@ -41,7 +41,11 @@ import {
   Layers,
   Sliders,
   Star,
-  Printer
+  Printer,
+  ChevronUp,
+  ChevronDown,
+  Download,
+  Check
 } from "lucide-react"
 
 import AttendancePrintModal from "@/modules/attendance/components/AttendancePrintModal"
@@ -729,6 +733,41 @@ export function FacultySubjectDetailClient({
   const [selectedGradingAssignment, setSelectedGradingAssignment] = useState<any | null>(null)
   const activeGradingSubmissions = selectedGradingAssignment ? getSubmissionsForAssignment(selectedGradingAssignment.id) : []
   const activeGradingNotSubmitted = selectedGradingAssignment ? getNotSubmittedForAssignment(selectedGradingAssignment) : []
+
+  const handleExportResultsCSV = () => {
+    if (!selectedGradingAssignment) return
+    const headers = ["Roll No", "Student Name", "Section", "Submission Status", "Score", "Max Score", "Submitted At", "Feedback"]
+    const rows = activeGradingSubmissions.map(s => [
+      `"${s.rollNo || ""}"`,
+      `"${s.studentName || ""}"`,
+      `"${s.sectionName || ""}"`,
+      `"${s.status || "pending"}"`,
+      `"${s.grade ?? "Not Graded"}"`,
+      `"${selectedGradingAssignment.max_score || 100}"`,
+      `"${s.submitted_at ? new Date(s.submitted_at).toLocaleString() : ""}"`,
+      `"${(s.feedback || "").replace(/"/g, '""')}"`
+    ])
+    activeGradingNotSubmitted.forEach(st => {
+      rows.push([
+        `"${st.rollNo || ""}"`,
+        `"${st.name || ""}"`,
+        `"${st.sectionName || ""}"`,
+        `"not_submitted"`,
+        `"0"`,
+        `"${selectedGradingAssignment.max_score || 100}"`,
+        `""`,
+        `"No submission"`
+      ])
+    })
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n")
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement("a")
+    link.setAttribute("href", encodedUri)
+    link.setAttribute("download", `${(selectedGradingAssignment.title || "Results").replace(/[^a-zA-Z0-9]/g, "_")}_results.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const pendingGrading = activeGradingSubmissions.filter(s => s.status === "pending")
   const gradedGrading = activeGradingSubmissions.filter(s => s.status === "graded")
@@ -1462,9 +1501,19 @@ export function FacultySubjectDetailClient({
                     >
                       <ArrowLeft size={14} /> Back to List
                     </button>
-                    <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full uppercase">
-                      {selectedGradingAssignment.type}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleExportResultsCSV}
+                        className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                        title="Export results to CSV"
+                      >
+                        <Download size={13} /> Export CSV
+                      </button>
+                      <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full uppercase">
+                        {selectedGradingAssignment.type}
+                      </span>
+                    </div>
                   </div>
                   <div className="p-4 border-b border-slate-200 bg-white space-y-3">
                     <div className="flex gap-2">
@@ -3495,6 +3544,15 @@ function CreateWorksheetModal({
   const [maxScore, setMaxScore] = useState(100)
   const [targetSectionIds, setTargetSectionIds] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
+  const isPastDueDateSelected = Boolean(
+    type !== "Material" &&
+    type !== "Syllabus" &&
+    dueDate &&
+    new Date(`${dueDate}T${dueTime || "23:59"}:00`).getTime() < Date.now()
+  )
 
   // Upload states for Faculty attachments
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([])
@@ -3503,7 +3561,31 @@ function CreateWorksheetModal({
   const [fileName, setFileName] = useState("")
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
+  const MAX_FILE_SIZE_MB = 50
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
   const uploadFileToSupabase = async (file: File) => {
+    // Check for duplicate files (ASG-066)
+    const isDuplicate = uploadedFiles.some(existingUrl => {
+      const existingName = existingUrl.substring(existingUrl.lastIndexOf("/") + 1).replace(/^\d+_/, "")
+      return existingName.toLowerCase() === file.name.toLowerCase() || existingUrl.toLowerCase().endsWith(`/${file.name.toLowerCase()}`)
+    })
+
+    if (isDuplicate) {
+      setFormError(`File "${file.name}" is already attached. Duplicate uploads are not allowed.`)
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setFormError(`File "${file.name}" exceeds the maximum allowed size of ${MAX_FILE_SIZE_MB}MB.`)
+      return
+    }
+
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      setFormError("Network offline. Please check your internet connection and try again.")
+      return
+    }
+
     setIsUploadingFile(true)
     setFileName(file.name)
     try {
@@ -3520,11 +3602,20 @@ function CreateWorksheetModal({
 
       const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath)
       setUploadedFiles(prev => [...prev, publicData.publicUrl])
+      setFormError(null)
     } catch (err: any) {
-      console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
-      setUploadedFiles(prev => [...prev, `https://mock-lms-storage.local/faculty-${facultyId}/${Date.now()}_${file.name}`])
+      if (typeof window !== "undefined" && !window.navigator.onLine) {
+        setFormError("Network disconnected during upload. Please check your connection.")
+      } else {
+        console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
+        setUploadedFiles(prev => [...prev, `https://mock-lms-storage.local/faculty-${facultyId}/${Date.now()}_${file.name}`])
+        setFormError(null)
+      }
     } finally {
       setIsUploadingFile(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
   }
 
@@ -3542,11 +3633,104 @@ function CreateWorksheetModal({
     }
   }
 
-
   // Quiz Builder states
   const [quizQuestions, setQuizQuestions] = useState<Array<{ q: string; options: string[]; answer: number }>>([
     { q: "", options: ["", "", "", ""], answer: 0 },
   ])
+
+  const handleAddMultipleChoice = () => {
+    setQuizQuestions(prev => [
+      ...prev,
+      { q: "", options: ["", "", "", ""], answer: 0 }
+    ])
+  }
+
+  const handleAddTrueFalse = () => {
+    setQuizQuestions(prev => [
+      ...prev,
+      { q: "", options: ["True", "False"], answer: 0 }
+    ])
+  }
+
+  const handleMoveQuestionUp = (idx: number) => {
+    if (idx <= 0) return
+    setQuizQuestions(prev => {
+      const next = [...prev]
+      const temp = next[idx]
+      next[idx] = next[idx - 1]
+      next[idx - 1] = temp
+      return next
+    })
+  }
+
+  const handleMoveQuestionDown = (idx: number) => {
+    if (idx >= quizQuestions.length - 1) return
+    setQuizQuestions(prev => {
+      const next = [...prev]
+      const temp = next[idx]
+      next[idx] = next[idx + 1]
+      next[idx + 1] = temp
+      return next
+    })
+  }
+
+  const handleToggleQuestionType = (idx: number, targetType: "mcq" | "tf") => {
+    setQuizQuestions(prev => {
+      const next = [...prev]
+      const current = next[idx]
+      if (targetType === "tf") {
+        next[idx] = {
+          ...current,
+          options: ["True", "False"],
+          answer: current.answer > 1 ? 0 : current.answer,
+        }
+      } else {
+        const existingOpts = current.options.filter(o => o.trim() !== "True" && o.trim() !== "False")
+        const newOpts = existingOpts.length >= 2 ? [...existingOpts] : ["", "", "", ""]
+        while (newOpts.length < 4) newOpts.push("")
+        next[idx] = {
+          ...current,
+          options: newOpts.slice(0, 4),
+          answer: 0,
+        }
+      }
+      return next
+    })
+  }
+
+  const handleAddOption = (qIdx: number) => {
+    setQuizQuestions(prev => {
+      const next = [...prev]
+      if (next[qIdx].options.length < 6) {
+        next[qIdx] = {
+          ...next[qIdx],
+          options: [...next[qIdx].options, ""],
+        }
+      }
+      return next
+    })
+  }
+
+  const handleRemoveOption = (qIdx: number, optIdx: number) => {
+    setQuizQuestions(prev => {
+      const next = [...prev]
+      const q = next[qIdx]
+      if (q.options.length <= 2) return prev
+      const newOpts = q.options.filter((_, i) => i !== optIdx)
+      let newAnswer = q.answer
+      if (q.answer === optIdx) {
+        newAnswer = 0
+      } else if (q.answer > optIdx) {
+        newAnswer = q.answer - 1
+      }
+      next[qIdx] = {
+        ...q,
+        options: newOpts,
+        answer: newAnswer,
+      }
+      return next
+    })
+  }
 
   // Coding states
   const [language, setLanguage] = useState("python")
@@ -3555,6 +3739,7 @@ function CreateWorksheetModal({
   ])
 
   useEffect(() => {
+    setFormError(null)
     if (editingAssignment) {
       setType(editingAssignment.type)
       setTitle(editingAssignment.title)
@@ -3567,10 +3752,15 @@ function CreateWorksheetModal({
         const d = new Date(editingAssignment.due_date)
         setDueDate(d.toISOString().split("T")[0])
         setDueTime(d.toTimeString().substring(0, 5))
+      } else {
+        setDueDate("")
+        setDueTime("23:59")
       }
 
-      if (editingAssignment.questions) {
+      if (editingAssignment.questions && Array.isArray(editingAssignment.questions) && editingAssignment.questions.length > 0) {
         setQuizQuestions(editingAssignment.questions)
+      } else {
+        setQuizQuestions([{ q: "", options: ["", "", "", ""], answer: 0 }])
       }
       if (editingAssignment.language) {
         setLanguage(editingAssignment.language)
@@ -3591,17 +3781,90 @@ function CreateWorksheetModal({
       setTestCases([{ input: "", output: "" }])
       setUploadedFiles([])
     }
-  }, [editingAssignment, initialType])
+  }, [editingAssignment, initialType, sections])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || targetSectionIds.length === 0) {
-      alert("Please provide a title and select at least one target section.")
+    setFormError(null)
+
+    if (!title.trim()) {
+      setFormError("Please enter an assignment title.")
       return
     }
 
+    if (targetSectionIds.length === 0) {
+      setFormError("Please select at least one target section.")
+      return
+    }
+
+    if (description.length > 10000) {
+      setFormError("Description exceeds maximum limit of 10,000 characters.")
+      return
+    }
+
+    let fullDueDateStr: string | null = null
+    if (type !== "Material" && type !== "Syllabus") {
+      if (dueDate) {
+        const fullDueDate = new Date(`${dueDate}T${dueTime || "23:59"}:00`)
+        if (isNaN(fullDueDate.getTime())) {
+          setFormError("Please provide a valid due date and time.")
+          return
+        }
+        if (fullDueDate.getTime() < Date.now()) {
+          setFormError("Due date and time cannot be in the past. Please select a future date and time.")
+          return
+        }
+        fullDueDateStr = fullDueDate.toISOString()
+      }
+    }
+
+    // Enforce mandatory/optional rules (ASG-003)
+    if (type === "Assignment") {
+      if (!description.trim() && uploadedFiles.length === 0) {
+        setFormError("Please provide instructions or attach at least one guideline/worksheet file.")
+        return
+      }
+    } else if (type === "Material" || type === "Syllabus") {
+      if (!description.trim() && uploadedFiles.length === 0) {
+        setFormError("Please provide resource details or attach at least one resource file.")
+        return
+      }
+    } else if (type === "Coding Assignment") {
+      if (!description.trim()) {
+        setFormError("Please provide the problem statement and constraints for the coding assignment.")
+        return
+      }
+      if (testCases.some(tc => !tc.input.trim() || !tc.output.trim())) {
+        setFormError("Please fill in both input parameters and expected output for all test cases.")
+        return
+      }
+    } else if (type === "Quiz") {
+      if (quizQuestions.length === 0) {
+        setFormError("Please add at least one question to the quiz.")
+        return
+      }
+      for (let i = 0; i < quizQuestions.length; i++) {
+        const q = quizQuestions[i]
+        if (!q.q.trim()) {
+          setFormError(`Question #${i + 1} prompt cannot be empty.`)
+          return
+        }
+        if (!q.options || q.options.length < 2) {
+          setFormError(`Question #${i + 1} must have at least 2 options.`)
+          return
+        }
+        if (q.options.some(opt => !opt.trim())) {
+          setFormError(`All options in Question #${i + 1} must be filled out.`)
+          return
+        }
+        if (q.answer === undefined || q.answer < 0 || q.answer >= q.options.length) {
+          setFormError(`Please select a valid correct answer for Question #${i + 1}.`)
+          return
+        }
+      }
+    }
+
     setIsSubmitting(true)
-    const fullDueDateStr = (type === "Material" || type === "Syllabus") ? null : (dueDate ? `${dueDate}T${dueTime}:00` : null)
 
     const data = {
       subject_id: subjectId,
@@ -3629,7 +3892,7 @@ function CreateWorksheetModal({
     if (res.success) {
       onClose()
     } else {
-      alert("Error saving assignment: " + res.error)
+      setFormError(res.error || "Error saving assignment.")
     }
   }
 
@@ -3639,6 +3902,7 @@ function CreateWorksheetModal({
     } else {
       setTargetSectionIds([...targetSectionIds, sectionId])
     }
+    setFormError(null)
   }
 
   const activeConfig = typeConfig[type] || typeConfig["Assignment"]
@@ -3664,7 +3928,16 @@ function CreateWorksheetModal({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-6">
-          
+          {formError && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in duration-200">
+              <AlertCircle size={16} className="text-rose-600 flex-shrink-0" />
+              <span className="flex-1">{formError}</span>
+              <button type="button" onClick={() => setFormError(null)} className="text-rose-400 hover:text-rose-600">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Form fields */}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -3673,7 +3946,10 @@ function CreateWorksheetModal({
                 type="text"
                 required
                 value={title}
-                onChange={e => setTitle(e.target.value)}
+                onChange={e => {
+                  setTitle(e.target.value)
+                  setFormError(null)
+                }}
                 placeholder="e.g. Worksheet 1: Stack implementation"
                 className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
               />
@@ -3685,9 +3961,13 @@ function CreateWorksheetModal({
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Due Date</label>
                   <input
                     type="date"
+                    min={todayStr}
                     value={dueDate}
-                    onChange={e => setDueDate(e.target.value)}
-                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
+                    onChange={e => {
+                      setDueDate(e.target.value)
+                      setFormError(null)
+                    }}
+                    className={`w-full bg-white border ${isPastDueDateSelected ? 'border-rose-400 focus:ring-rose-400' : 'border-slate-200 focus:ring-indigo-500'} focus:ring-2 rounded-xl px-4 py-2.5 text-sm text-slate-800`}
                   />
                 </div>
                 <div>
@@ -3695,10 +3975,21 @@ function CreateWorksheetModal({
                   <input
                     type="time"
                     value={dueTime}
-                    onChange={e => setDueTime(e.target.value)}
-                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-sm text-slate-800"
+                    onChange={e => {
+                      setDueTime(e.target.value)
+                      setFormError(null)
+                    }}
+                    className={`w-full bg-white border ${isPastDueDateSelected ? 'border-rose-400 focus:ring-rose-400' : 'border-slate-200 focus:ring-indigo-500'} focus:ring-2 rounded-xl px-4 py-2.5 text-sm text-slate-800`}
                   />
                 </div>
+
+                {isPastDueDateSelected && (
+                  <div className="col-span-2 text-rose-600 text-xs font-bold flex items-center gap-1.5 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+                    <AlertCircle size={14} className="text-rose-600 flex-shrink-0" />
+                    <span>Warning: The selected deadline is in the past. Please select a future date and time.</span>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Max Score</label>
                   <input
@@ -3741,18 +4032,25 @@ function CreateWorksheetModal({
           {type === "Assignment" && (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Instructions</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Instructions {!uploadedFiles.length && <span className="text-[#E57D37] text-[11px] font-semibold lowercase tracking-normal">(required if no attachment)</span>}
+                </label>
                 <textarea
                   rows={4}
                   value={description}
-                  onChange={e => setDescription(e.target.value)}
+                  onChange={e => {
+                    setDescription(e.target.value)
+                    setFormError(null)
+                  }}
                   placeholder="Paste homework guidelines, PDF links, or general instructions..."
                   className="w-full border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl p-4 text-sm text-slate-800"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Guidelines / Worksheet Files</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Guidelines / Worksheet Files {!description.trim() && <span className="text-[#E57D37] text-[11px] font-semibold lowercase tracking-normal">(required if no instructions)</span>}
+                </label>
                 <div
                   onDragOver={e => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
@@ -3818,12 +4116,15 @@ function CreateWorksheetModal({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  {type === "Syllabus" ? "Syllabus Overview" : "Resource Details"}
+                  {type === "Syllabus" ? "Syllabus Overview" : "Resource Details"} {!uploadedFiles.length && <span className="text-[#E57D37] text-[11px] font-semibold lowercase tracking-normal">(required if no attachment)</span>}
                 </label>
                 <textarea
                   rows={4}
                   value={description}
-                  onChange={e => setDescription(e.target.value)}
+                  onChange={e => {
+                    setDescription(e.target.value)
+                    setFormError(null)
+                  }}
                   placeholder={type === "Syllabus"
                     ? "Paste syllabus summary, curriculum outline, or key course modules..."
                     : "Paste resource descriptions, links to external drives, slides or notes..."
@@ -3834,7 +4135,7 @@ function CreateWorksheetModal({
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  {type === "Syllabus" ? "Syllabus Attachments" : "Resource File Attachments (Slides, Notes)"}
+                  {type === "Syllabus" ? "Syllabus Attachments" : "Resource File Attachments (Slides, Notes)"} {!description.trim() && <span className="text-[#E57D37] text-[11px] font-semibold lowercase tracking-normal">(required if no description)</span>}
                 </label>
                 <div
                   onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -3895,74 +4196,259 @@ function CreateWorksheetModal({
           {/* Quiz Builder */}
           {type === "Quiz" && (
             <div className="space-y-5">
-              <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl border">
-                <span className="text-xs font-extrabold text-slate-700">Quiz Question Builder</span>
-                <button
-                  type="button"
-                  onClick={() => setQuizQuestions([...quizQuestions, { q: "", options: ["", "", "", ""], answer: 0 }])}
-                  className="px-2.5 py-1 bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all"
-                >
-                  <Plus size={12} /> Add Question
-                </button>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/90 border border-slate-200/80 p-3.5 rounded-2xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center font-bold text-xs">
+                    <Brain size={15} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-slate-800">Quiz Question Builder</span>
+                    <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-200">
+                      {quizQuestions.length} {quizQuestions.length === 1 ? "Question" : "Questions"}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddMultipleChoice}
+                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 active:scale-95 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus size={13} /> Add Multiple Choice
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddTrueFalse}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Plus size={13} /> Add True / False
+                  </button>
+                </div>
               </div>
+
               <div className="space-y-4">
-                {quizQuestions.map((q, qi) => (
-                  <div key={qi} className="border border-slate-200 rounded-2xl p-4 bg-white shadow-sm space-y-3 relative">
-                    <div className="flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-xs">{qi + 1}</span>
-                      <input
-                        type="text"
-                        placeholder="Enter quiz question..."
-                        required
-                        value={q.q}
-                        onChange={e => {
-                          const updated = [...quizQuestions]
-                          updated[qi].q = e.target.value
-                          setQuizQuestions(updated)
-                        }}
-                        className="flex-grow bg-transparent border-b border-slate-200 focus:border-violet-500 focus:outline-none text-sm text-slate-800 py-1"
-                      />
-                      {quizQuestions.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setQuizQuestions(quizQuestions.filter((_, idx) => idx !== qi))}
-                          className="text-slate-300 hover:text-red-500 p-1"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {q.options.map((opt, oi) => (
-                        <div key={oi} className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-all ${q.answer === oi ? "bg-emerald-50 border-emerald-300 text-emerald-800" : "bg-slate-50 border-slate-100 text-slate-500"}`}>
+                {quizQuestions.map((q, qi) => {
+                  const isTrueFalse =
+                    q.options.length === 2 &&
+                    q.options[0]?.trim().toLowerCase() === "true" &&
+                    q.options[1]?.trim().toLowerCase() === "false"
+
+                  return (
+                    <div
+                      key={qi}
+                      className="border border-slate-200 rounded-3xl p-5 bg-white shadow-sm hover:border-slate-300 transition-all space-y-4 relative group"
+                    >
+                      {/* Question Card Header */}
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-7 h-7 rounded-xl bg-violet-100 text-violet-700 font-black text-xs flex items-center justify-center font-mono">
+                            {qi + 1}
+                          </span>
+                          {/* Question Type Toggle */}
+                          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200/60 text-[11px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleQuestionType(qi, "mcq")}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${
+                                !isTrueFalse
+                                  ? "bg-white text-slate-800 shadow-sm"
+                                  : "text-slate-500 hover:text-slate-700"
+                              }`}
+                            >
+                              Multiple Choice
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleToggleQuestionType(qi, "tf")}
+                              className={`px-2.5 py-1 rounded-lg transition-all ${
+                                isTrueFalse
+                                  ? "bg-white text-slate-800 shadow-sm"
+                                  : "text-slate-500 hover:text-slate-700"
+                              }`}
+                            >
+                              True / False
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Reordering Controls (Move Up / Down) & Delete (QUIZ-010) */}
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => {
-                              const updated = [...quizQuestions]
-                              updated[qi].answer = oi
-                              setQuizQuestions(updated)
-                            }}
-                            className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${q.answer === oi ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"}`}
+                            title="Move Question Up"
+                            disabled={qi === 0}
+                            onClick={() => handleMoveQuestionUp(qi)}
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                           >
-                            {q.answer === oi && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            <ChevronUp size={14} />
                           </button>
-                          <input
-                            type="text"
-                            placeholder={`Option ${oi + 1}`}
-                            required
-                            value={opt}
-                            onChange={e => {
-                              const updated = [...quizQuestions]
-                              updated[qi].options[oi] = e.target.value
-                              setQuizQuestions(updated)
-                            }}
-                            className="bg-transparent border-0 text-xs text-slate-700 focus:outline-none flex-grow"
-                          />
+                          <button
+                            type="button"
+                            title="Move Question Down"
+                            disabled={qi === quizQuestions.length - 1}
+                            onClick={() => handleMoveQuestionDown(qi)}
+                            className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                          >
+                            <ChevronDown size={14} />
+                          </button>
+
+                          {quizQuestions.length > 1 && (
+                            <button
+                              type="button"
+                              title="Delete Question"
+                              onClick={() => setQuizQuestions(quizQuestions.filter((_, idx) => idx !== qi))}
+                              className="w-7 h-7 rounded-lg border border-red-100 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 transition-all ml-1"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Question Text Input */}
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Question Prompt
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter question prompt (e.g., What is the time complexity of binary search?)..."
+                          required
+                          value={q.q}
+                          onChange={e => {
+                            const updated = [...quizQuestions]
+                            updated[qi].q = e.target.value
+                            setQuizQuestions(updated)
+                          }}
+                          className="w-full bg-slate-50/60 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none transition-all font-medium"
+                        />
+                      </div>
+
+                      {/* Options List */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Options & Correct Answer ({isTrueFalse ? "2 Choices" : `${q.options.length} Choices`})
+                          </label>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Click check circle to mark correct answer
+                          </span>
+                        </div>
+
+                        {isTrueFalse ? (
+                          // True / False options grid
+                          <div className="grid grid-cols-2 gap-3">
+                            {["True", "False"].map((optText, oi) => {
+                              const isCorrect = q.answer === oi
+                              return (
+                                <button
+                                  key={oi}
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...quizQuestions]
+                                    updated[qi].options = ["True", "False"]
+                                    updated[qi].answer = oi
+                                    setQuizQuestions(updated)
+                                  }}
+                                  className={`flex items-center justify-between px-4 py-3 rounded-2xl border-2 font-bold text-xs transition-all text-left ${
+                                    isCorrect
+                                      ? "bg-emerald-50 border-emerald-500 text-emerald-800 shadow-sm"
+                                      : "bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100/70"
+                                  }`}
+                                >
+                                  <span className="text-sm font-semibold">{optText}</span>
+                                  <div
+                                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 ${
+                                      isCorrect
+                                        ? "border-emerald-600 bg-emerald-600 text-white"
+                                        : "border-slate-300 bg-white"
+                                    }`}
+                                  >
+                                    {isCorrect && <Check size={12} strokeWidth={3} />}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          // Multiple Choice options grid
+                          <div className="space-y-2.5">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {q.options.map((opt, oi) => {
+                                const isCorrect = q.answer === oi
+                                return (
+                                  <div
+                                    key={oi}
+                                    className={`flex items-center gap-2 border rounded-2xl px-3 py-2 transition-all ${
+                                      isCorrect
+                                        ? "bg-emerald-50/70 border-emerald-400 text-emerald-900 shadow-sm ring-1 ring-emerald-300/50"
+                                        : "bg-slate-50/80 border-slate-200 text-slate-700 hover:bg-slate-100/50 focus-within:border-slate-300"
+                                    }`}
+                                  >
+                                    {/* Radio / Check selector */}
+                                    <button
+                                      type="button"
+                                      title="Set as correct answer"
+                                      onClick={() => {
+                                        const updated = [...quizQuestions]
+                                        updated[qi].answer = oi
+                                        setQuizQuestions(updated)
+                                      }}
+                                      className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+                                        isCorrect
+                                          ? "border-emerald-600 bg-emerald-600 text-white"
+                                          : "border-slate-300 bg-white hover:border-slate-400"
+                                      }`}
+                                    >
+                                      {isCorrect && <Check size={11} strokeWidth={3} />}
+                                    </button>
+
+                                    {/* Option text input */}
+                                    <input
+                                      type="text"
+                                      placeholder={`Option ${oi + 1}`}
+                                      required
+                                      value={opt}
+                                      onChange={e => {
+                                        const updated = [...quizQuestions]
+                                        updated[qi].options[oi] = e.target.value
+                                        setQuizQuestions(updated)
+                                      }}
+                                      className="bg-transparent border-0 text-xs text-slate-800 placeholder-slate-400 focus:outline-none flex-grow font-medium py-0.5"
+                                    />
+
+                                    {/* Remove option button (if > 2 options) */}
+                                    {q.options.length > 2 && (
+                                      <button
+                                        type="button"
+                                        title="Remove option"
+                                        onClick={() => handleRemoveOption(qi, oi)}
+                                        className="text-slate-300 hover:text-red-500 p-1 rounded-md transition-colors"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            {/* Add option button for MCQ (up to 6) */}
+                            {q.options.length < 6 && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddOption(qi)}
+                                className="text-xs font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-violet-50 transition-colors"
+                              >
+                                <Plus size={12} /> Add Choice (Max 6)
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

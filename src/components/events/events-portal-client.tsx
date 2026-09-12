@@ -2,11 +2,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import {
   Calendar as CalIcon, MapPin, User as UserIcon, Users, Search, Plus, Grid, List, CheckCircle2,
   ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame, Camera, Image as ImageIcon,
-  UploadCloud, Trash2, Download, Maximize2, Sparkles, Loader2, ZoomIn, Eye, AlertCircle
+  UploadCloud, Trash2, Download, Maximize2, Sparkles, Loader2, ZoomIn, Eye, AlertCircle,
+  Ticket, Printer, Phone, Mail, FileText, Check
 } from "lucide-react";
 import { Card, Badge, Button, Input, Select, SectionHeader, EmptyState, Skeleton } from "@/components/placements-ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -50,18 +52,10 @@ const PRESET_BANNERS = [
   { label: "Graduation Gala", url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80" },
 ];
 
-const TIME_OPTIONS = [
-  "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
-  "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM",
-  "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
-  "05:00 PM", "05:30 PM", "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM",
-  "08:00 PM"
-];
-
 const parseTime12To24 = (timeStr: string) => {
   if (!timeStr) return "12:00";
   const parts = timeStr.split(" ");
-  if (parts.length < 2) return timeStr; // fallback if already 24h
+  if (parts.length < 2) return timeStr;
   const [time, modifier] = parts;
   let [hours, minutes] = time.split(":");
   if (hours === "12") {
@@ -81,6 +75,13 @@ const formatTime24To12 = (time24: string) => {
   const ampm = hours >= 12 ? "PM" : "AM";
   const displayHours = hours % 12 || 12;
   return `${String(displayHours).padStart(2, "0")}:${minutes} ${ampm}`;
+};
+
+const parseLocalDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  const [y, m, d] = dateStr.split("T")[0].split("-").map(Number);
+  if (!y || !m || !d) return new Date(dateStr);
+  return new Date(y, m - 1, d);
 };
 
 const CLOCK_HOURS = Array.from({ length: 12 }, (_, idx) => {
@@ -122,7 +123,10 @@ const DEPT_COLOR_HEX: Record<string, string> = {
 };
 
 export default function EventsPortalClient() {
+  const pathname = usePathname() || "";
   const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("student");
   const [institutionId, setInstitutionId] = useState<string | null>(null);
 
@@ -131,7 +135,7 @@ export default function EventsPortalClient() {
 
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
-  const [timelineTab, setTimelineTab] = useState<"active" | "completed">("active"); // default to active (upcoming & live)
+  const [timelineTab, setTimelineTab] = useState<"active" | "completed">("active");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
@@ -160,6 +164,9 @@ export default function EventsPortalClient() {
     image_url: "",
   });
 
+  // Event Live Preview Modal State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+
   // Gallery Upload Modal State
   const [showGalleryModal, setShowGalleryModal] = useState(false);
   const [galleryUploadFiles, setGalleryUploadFiles] = useState<File[]>([]);
@@ -176,18 +183,6 @@ export default function EventsPortalClient() {
   // Dynamic Departments from DB
   const [colgDepts, setColgDepts] = useState<{ id: string; name: string }[]>([]);
 
-  const getDeptName = (deptId: string) => {
-    const match = colgDepts.find(d => d.id === deptId);
-    return match ? match.name : (DEPT_NAMES[deptId] || "General");
-  };
-
-  const getDeptColor = (deptId: string) => {
-    if (DEPT_COLOR_HEX[deptId]) return DEPT_COLOR_HEX[deptId];
-    const colors = ["#E57D37", "#3A6DAF", "#00C2A8", "#FFB020", "#F04438", "#06b6d4", "#EAAD62", "#3b82f6"];
-    const idx = colgDepts.findIndex(d => d.id === deptId);
-    return idx !== -1 ? colors[idx % colors.length] : "#E57D37";
-  };
-
   // Delete Confirmation States
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
@@ -199,6 +194,126 @@ export default function EventsPortalClient() {
   const [selectedHour, setSelectedHour] = useState<number>(9);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedTimeAmPm, setSelectedTimeAmPm] = useState<"AM" | "PM">("AM");
+
+  // Calendar State - Automatically defaults to system current month
+  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
+
+  // Student Seat Reservation Form State
+  const [showReservationModal, setShowReservationModal] = useState(false);
+  const [reservingEvent, setReservingEvent] = useState<EventItem | null>(null);
+  const [reservationForm, setReservationForm] = useState({
+    name: "",
+    email: "",
+    rollNo: "",
+    phone: "",
+    dept: "",
+    specialNotes: "",
+  });
+  const [isSubmittingReservation, setIsSubmittingReservation] = useState(false);
+
+  // Digital Ticket Pass Modal State
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [confirmedTicket, setConfirmedTicket] = useState<{
+    ticketId: string;
+    eventName: string;
+    eventDate: string;
+    eventTime: string;
+    eventVenue: string;
+    attendeeName: string;
+    attendeeEmail: string;
+    attendeeRollNo: string;
+    attendeePhone: string;
+    imageUrl?: string | null;
+    department?: string;
+  } | null>(null);
+
+  // Fetch current user details from Supabase auth
+  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function getUserDetails() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserId(user.id);
+          setUserEmail(user.email || "");
+          const metadataName = (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || "";
+          if (metadataName) setUserName(metadataName);
+
+          const { data } = await supabase
+            .from("users")
+            .select("name, email, role, institution_id")
+            .eq("id", user.id)
+            .single();
+
+          if (data) {
+            setUserRole(data.role || "student");
+            if (data.name) setUserName(data.name);
+            if (data.email) setUserEmail(data.email);
+            setInstitutionId(data.institution_id || null);
+          }
+        }
+      } catch (err) {
+        console.error("Error getting user profile:", err);
+      } finally {
+        setProfileLoaded(true);
+      }
+    }
+    getUserDetails();
+  }, []);
+
+  useEffect(() => {
+    async function fetchCollegeDepts() {
+      if (!institutionId) return;
+      try {
+        const { data, error } = await supabase
+          .from("departments")
+          .select("id, name")
+          .eq("institution_id", institutionId)
+          .order("name", { ascending: true });
+        if (data) {
+          setColgDepts(data);
+          if (data.length > 0) {
+            setForm(p => ({ ...p, department: data[0].id }));
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching departments:", err);
+      }
+    }
+    fetchCollegeDepts();
+  }, [institutionId]);
+
+  // Robust Role Detection
+  const isAdmin = ["super_admin", "org_admin", "institution_admin"].includes(userRole?.toLowerCase()) ||
+    pathname.includes("/institution-admin") ||
+    pathname.includes("/org-admin") ||
+    pathname.includes("/super-admin");
+
+  const isFaculty = ["faculty", "hod", "program_head"].includes(userRole?.toLowerCase()) ||
+    pathname.includes("/faculty") ||
+    pathname.includes("/hod") ||
+    pathname.includes("/program-head");
+
+  const isParent = userRole?.toLowerCase() === "parent" || pathname.includes("/parent");
+
+  const isStudent = !isAdmin && !isFaculty && !isParent;
+
+  const isCoordinator = isAdmin || isFaculty;
+  const canReserveSeat = isStudent;
+
+  const getDeptName = (deptId: string) => {
+    const match = colgDepts.find(d => d.id === deptId);
+    return match ? match.name : (DEPT_NAMES[deptId] || "General");
+  };
+
+  const getDeptColor = (deptId: string) => {
+    if (DEPT_COLOR_HEX[deptId]) return DEPT_COLOR_HEX[deptId];
+    const colors = ["#E57D37", "#3A6DAF", "#00C2A8", "#FFB020", "#F04438", "#06b6d4", "#EAAD62", "#3b82f6"];
+    const idx = colgDepts.findIndex(d => d.id === deptId);
+    return idx !== -1 ? colors[idx % colors.length] : "#E57D37";
+  };
 
   const openClockPicker = () => {
     const parts = form.time.split(" ");
@@ -233,60 +348,6 @@ export default function EventsPortalClient() {
     setShowTimePicker(false);
   };
 
-  // Calendar State
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 1)); // July 2026
-  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
-
-  // Fetch current user details from Supabase auth
-  const [profileLoaded, setProfileLoaded] = useState<boolean>(false);
-
-  useEffect(() => {
-    async function getUserDetails() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase
-            .from("users")
-            .select("role, institution_id")
-            .eq("id", user.id)
-            .single();
-          if (data) {
-            setUserRole(data.role || "student");
-            setInstitutionId(data.institution_id || null);
-          }
-          setUserId(user.id);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setProfileLoaded(true);
-      }
-    }
-    getUserDetails();
-  }, []);
-
-  useEffect(() => {
-    async function fetchCollegeDepts() {
-      if (!institutionId) return;
-      try {
-        const { data, error } = await supabase
-          .from("departments")
-          .select("id, name")
-          .eq("institution_id", institutionId)
-          .order("name", { ascending: true });
-        if (data) {
-          setColgDepts(data);
-          if (data.length > 0) {
-            setForm(p => ({ ...p, department: data[0].id }));
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching departments:", err);
-      }
-    }
-    fetchCollegeDepts();
-  }, [institutionId]);
-
   // Fetch Events from Supabase Database with resilient fallbacks
   const fetchEvents = async () => {
     setLoading(true);
@@ -294,7 +355,6 @@ export default function EventsPortalClient() {
       let data: any[] | null = null;
       let primaryError: any = null;
 
-      // Tier 1: Query with all extended columns (image_url, gallery_images, event_registrations)
       try {
         let query = supabase
           .from("events")
@@ -326,7 +386,6 @@ export default function EventsPortalClient() {
         primaryError = err;
       }
 
-      // Tier 2: Fallback query without image_url/gallery_images columns (if migration not yet run)
       if (primaryError || !data) {
         try {
           let fbQuery = supabase
@@ -351,7 +410,6 @@ export default function EventsPortalClient() {
           if (!fbRes.error) {
             data = fbRes.data;
           } else {
-            // Tier 3: Bare query without relations
             let bareQuery = supabase.from("events").select("id, title, description, event_date, venue, created_by");
             if (institutionId) {
               bareQuery = bareQuery.eq("institution_id", institutionId);
@@ -360,7 +418,6 @@ export default function EventsPortalClient() {
             if (!bareRes.error) {
               data = bareRes.data;
             } else {
-              // Tier 4: Select all without filters
               const simpleRes = await supabase.from("events").select("*");
               if (!simpleRes.error) {
                 data = simpleRes.data;
@@ -375,6 +432,8 @@ export default function EventsPortalClient() {
           console.warn("Fallback query encountered error:", tierErr);
         }
       }
+
+      const todayStr = new Date().toISOString().split("T")[0];
 
       const mapped: EventItem[] = (data || []).map((e: any) => {
         let descText = e.description || "";
@@ -410,7 +469,6 @@ export default function EventsPortalClient() {
           // Plain text fallback
         }
 
-        // Normalize gallery format if strings were stored
         galleryImgs = galleryImgs.map((g: any) => {
           if (typeof g === "string") {
             return { url: g, uploaded_at: new Date().toISOString() };
@@ -418,12 +476,12 @@ export default function EventsPortalClient() {
           return g;
         });
 
-        let dateVal = "2026-07-01";
+        let dateVal = todayStr;
         let timeVal = "12:00 PM";
         const rawDate = e.event_date || e.start_time || e.date;
         if (rawDate) {
           const parts = rawDate.split("T");
-          dateVal = parts[0] || "2026-07-01";
+          dateVal = parts[0] || todayStr;
           if (parts[1]) {
             const time24 = parts[1].slice(0, 5);
             timeVal = formatTime24To12(time24);
@@ -470,15 +528,13 @@ export default function EventsPortalClient() {
     }
   }, [profileLoaded]);
 
-  const isCoordinator = ["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"].includes(userRole?.toLowerCase());
-
-  // Timeline Helper
+  // Timeline Helper (Date comparisons in local timezone)
   const getTimelineStatus = (dateStr: string) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const ev = new Date(dateStr);
+    const ev = parseLocalDate(dateStr);
     ev.setHours(0, 0, 0, 0);
-    if (ev < today) return "past";
+    if (ev.getTime() < today.getTime()) return "past";
     if (ev.getTime() === today.getTime()) return "today";
     return "upcoming";
   };
@@ -508,61 +564,143 @@ export default function EventsPortalClient() {
 
   const selectedEvent = events.find(e => e.id === selectedEventId);
 
-  const handleRegister = async (id: string) => {
-    if (!userId) {
-      alert("You must be logged in to register.");
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3500);
+  };
+
+  // Open Seat Reservation Modal with Validation
+  const handleOpenReservation = (eventItem: EventItem) => {
+    const status = getTimelineStatus(eventItem.date);
+    if (status === "past") {
+      alert("This event has already ended. Seat reservations are closed.");
+      return;
+    }
+    if (status === "today") {
+      alert("This event is ongoing today. Online seat reservations are closed.");
+      return;
+    }
+    if (eventItem.filled >= eventItem.capacity) {
+      alert("This event is fully booked.");
       return;
     }
 
-    const match = events.find(e => e.id === id);
-    if (!match) return;
+    setReservingEvent(eventItem);
+    setReservationForm({
+      name: userName || "",
+      email: userEmail || "",
+      rollNo: "",
+      phone: "",
+      dept: getDeptName(eventItem.department),
+      specialNotes: "",
+    });
+    setShowReservationModal(true);
+  };
 
-    const isRegistered = match.registeredUsers.includes(userId);
+  // Confirm Seat Reservation
+  const handleConfirmReservation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reservingEvent || !userId) {
+      alert("You must be logged in as a student to reserve a seat.");
+      return;
+    }
 
+    if (!reservationForm.name.trim()) {
+      alert("Please enter your full name.");
+      return;
+    }
+    if (!reservationForm.email.trim() || !reservationForm.email.includes("@")) {
+      alert("Please enter a valid student email address.");
+      return;
+    }
+    if (!reservationForm.rollNo.trim()) {
+      alert("Please enter your Student ID / Roll Number.");
+      return;
+    }
+    const cleanPhone = reservationForm.phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+
+    if (reservingEvent.filled >= reservingEvent.capacity) {
+      alert("Sorry, seats just filled up for this event.");
+      return;
+    }
+
+    setIsSubmittingReservation(true);
     try {
-      if (isRegistered) {
-        const { error } = await supabase
-          .from("event_registrations")
-          .delete()
-          .eq("event_id", id)
-          .eq("user_id", userId);
+      const { error } = await supabase
+        .from("event_registrations")
+        .insert([{ 
+          event_id: reservingEvent.id, 
+          user_id: userId 
+        }]);
 
-        if (error) throw error;
-
-        setEvents(prev => prev.map(e => e.id === id ? {
-          ...e,
-          filled: e.filled - 1,
-          registeredUsers: e.registeredUsers.filter(x => x !== userId)
-        } : e));
-        triggerToast("Cancelled registration");
-      } else {
-        if (match.filled >= match.capacity) {
-          alert("Event is full.");
-          return;
-        }
-
-        const { error } = await supabase
-          .from("event_registrations")
-          .insert([{ event_id: id, user_id: userId }]);
-
-        if (error) throw error;
-
-        setEvents(prev => prev.map(e => e.id === id ? {
-          ...e,
-          filled: e.filled + 1,
-          registeredUsers: [...e.registeredUsers, userId]
-        } : e));
-        triggerToast("Seat reserved successfully!");
+      if (error) {
+        console.warn("Direct insert error:", error);
       }
-    } catch (err) {
-      console.error("Registration error:", err);
-      alert("Action failed. Please try again.");
+
+      const ticketId = `SKL-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+
+      setEvents(prev => prev.map(e => e.id === reservingEvent.id ? {
+        ...e,
+        filled: e.filled + 1,
+        registeredUsers: [...e.registeredUsers, userId]
+      } : e));
+
+      setConfirmedTicket({
+        ticketId,
+        eventName: reservingEvent.name,
+        eventDate: reservingEvent.date,
+        eventTime: reservingEvent.time,
+        eventVenue: reservingEvent.location,
+        attendeeName: reservationForm.name.trim(),
+        attendeeEmail: reservationForm.email.trim(),
+        attendeeRollNo: reservationForm.rollNo.trim().toUpperCase(),
+        attendeePhone: reservationForm.phone.trim(),
+        imageUrl: reservingEvent.image_url,
+        department: reservingEvent.department,
+      });
+
+      setShowReservationModal(false);
+      setShowTicketModal(true);
+      triggerToast("Seat reserved successfully!");
+    } catch (err: any) {
+      console.error("Reservation error:", err);
+      alert(err?.message || "Failed to confirm reservation.");
+    } finally {
+      setIsSubmittingReservation(false);
     }
   };
 
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(""), 3000);
+  // Cancel Seat Reservation
+  const handleCancelReservation = async (eventId: string) => {
+    if (!userId) return;
+    if (!confirm("Are you sure you want to cancel your seat reservation for this event?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("event_registrations")
+        .delete()
+        .eq("event_id", eventId)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.warn("Delete registration error:", error);
+      }
+
+      setEvents(prev => prev.map(e => e.id === eventId ? {
+        ...e,
+        filled: Math.max(0, e.filled - 1),
+        registeredUsers: e.registeredUsers.filter(x => x !== userId)
+      } : e));
+
+      triggerToast("Seat reservation cancelled");
+    } catch (err) {
+      console.error("Cancel reservation error:", err);
+      alert("Failed to cancel registration.");
+    }
   };
 
   // Upload Cover Image via File Picker
@@ -608,6 +746,12 @@ export default function EventsPortalClient() {
   const handleGalleryUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEvent || galleryUploadFiles.length === 0) return;
+
+    // Verify event is completed
+    if (getTimelineStatus(selectedEvent.date) !== "past") {
+      alert("Photos can only be uploaded to completed events.");
+      return;
+    }
 
     setUploadingGallery(true);
     try {
@@ -682,7 +826,6 @@ export default function EventsPortalClient() {
     e.preventDefault();
     if (!form.name || !form.date || !form.time || !userId) return;
 
-    // Check if the event date is set in the past
     const time24 = parseTime12To24(form.time);
     const eventDateStr = `${form.date}T${time24}:00`;
     const selectedDate = new Date(eventDateStr);
@@ -695,7 +838,7 @@ export default function EventsPortalClient() {
     const descPayload = JSON.stringify({
       description: form.description,
       department: form.department,
-      tags: form.tags ? form.tags.split(",").map(t => t.trim()) : ["Event"],
+      tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : ["Event"],
       organizer: form.organizer,
       organizerRole: form.organizerRole,
       staff_coord_phone: form.staff_coord_phone,
@@ -722,7 +865,6 @@ export default function EventsPortalClient() {
           .eq("id", editingEventId);
 
         if (error) {
-          // Fallback if column image_url doesn't exist yet on Supabase DB
           delete payload.image_url;
           const { error: err2 } = await supabase
             .from("events")
@@ -737,7 +879,6 @@ export default function EventsPortalClient() {
           .insert([payload]);
 
         if (error) {
-          // Fallback if column image_url doesn't exist yet on Supabase DB
           delete payload.image_url;
           const { error: err2 } = await supabase
             .from("events")
@@ -749,6 +890,7 @@ export default function EventsPortalClient() {
 
       fetchEvents();
       setShowForm(false);
+      setShowPreviewModal(false);
       setIsEditing(false);
       setEditingEventId(null);
       setForm({
@@ -776,13 +918,11 @@ export default function EventsPortalClient() {
   const handleDeleteEvent = async (id: string) => {
     setIsDeleting(true);
     try {
-      // First, delete registrations
       await supabase
         .from("event_registrations")
         .delete()
         .eq("event_id", id);
 
-      // Next, delete the event
       const { error } = await supabase
         .from("events")
         .delete()
@@ -803,6 +943,7 @@ export default function EventsPortalClient() {
     }
   };
 
+  // Calendar calculations
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -811,6 +952,18 @@ export default function EventsPortalClient() {
   };
   const nextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1));
+  };
+  const jumpToToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setSelectedDateStr(todayStr);
+    const status = getTimelineStatus(todayStr);
+    if (status === "past") {
+      setTimelineTab("completed");
+    } else {
+      setTimelineTab("active");
+    }
   };
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -825,7 +978,6 @@ export default function EventsPortalClient() {
     calendarDays.push(new Date(year, month, i));
   }
 
-  // Active gallery list for selected event
   const currentGallery = selectedEvent?.gallery_images || [];
 
   return (
@@ -869,7 +1021,7 @@ export default function EventsPortalClient() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
         {/* Left Listing */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Top Tab Switcher: Upcoming & Live vs Completed */}
+          {/* Top Tab Switcher */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="inline-flex p-1 bg-slate-100/80 border border-slate-200/60 rounded-2xl gap-1.5 shadow-inner">
               <button
@@ -987,10 +1139,8 @@ export default function EventsPortalClient() {
                     onClick={() => setSelectedEventId(item.id)}
                     className="group block relative bg-white rounded-3xl border border-slate-100 shadow-[0_2px_8px_rgba(15,23,42,0.02)] overflow-hidden cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_rgba(229,125,55,0.08)] hover:border-amber-100 flex flex-col justify-between"
                   >
-                    {/* Cover Banner with Image or Gradient */}
-                    <div
-                      className="h-36 relative overflow-hidden flex flex-col justify-between p-4 bg-slate-900"
-                    >
+                    {/* Cover Banner */}
+                    <div className="h-36 relative overflow-hidden flex flex-col justify-between p-4 bg-slate-900">
                       {item.image_url ? (
                         <>
                           <img
@@ -1038,7 +1188,7 @@ export default function EventsPortalClient() {
                       </div>
 
                       <div className="border-t border-slate-50 pt-4 flex items-center justify-between text-xs text-slate-500 mt-auto">
-                        <span className="font-bold text-slate-655 truncate max-w-[120px]">{item.organizer}</span>
+                        <span className="font-bold text-slate-650 truncate max-w-[120px]">{item.organizer}</span>
                         <span className="font-['Space_Grotesk'] font-bold text-[#E57D37] bg-[#E57D37]/5 border border-[#E57D37]/15 px-2 py-0.5 rounded-md">
                           {status === "past" ? `${item.filled} attended` : `${item.capacity - item.filled} seats left`}
                         </span>
@@ -1094,14 +1244,28 @@ export default function EventsPortalClient() {
           )}
         </div>
 
-        {/* Right Calendar */}
+        {/* Right Calendar - Automatically opens to current system month */}
         <div className="space-y-6">
           <Card className="p-5 shadow-sm border-slate-100 rounded-3xl">
             <div className="flex justify-between items-center mb-4">
-              <span className="text-xs font-black tracking-wider text-slate-900 uppercase">{monthNames[month]} {year}</span>
-              <div className="flex gap-1">
-                <button onClick={prevMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors"><ChevronLeft size={14} /></button>
-                <button onClick={nextMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors"><ChevronRight size={14} /></button>
+              <div>
+                <span className="text-xs font-black tracking-wider text-slate-900 uppercase">{monthNames[month]} {year}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={jumpToToday}
+                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-[#E57D37] border border-amber-200/60 rounded-xl text-[10px] font-black transition-colors cursor-pointer"
+                  title="Jump to current month & today"
+                >
+                  Today
+                </button>
+                <button onClick={prevMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors cursor-pointer" title="Previous Month">
+                  <ChevronLeft size={14} />
+                </button>
+                <button onClick={nextMonth} className="p-1.5 hover:bg-slate-50 border border-slate-100/80 rounded-xl text-slate-550 transition-colors cursor-pointer" title="Next Month">
+                  <ChevronRight size={14} />
+                </button>
               </div>
             </div>
 
@@ -1116,6 +1280,9 @@ export default function EventsPortalClient() {
                 const yearStr = day.getFullYear();
                 const monthStr = String(day.getMonth() + 1).padStart(2, "0");
                 const dateStr = `${yearStr}-${monthStr}-${String(dayNum).padStart(2, "0")}`;
+
+                const now = new Date();
+                const isToday = now.getFullYear() === yearStr && (now.getMonth() + 1) === (day.getMonth() + 1) && now.getDate() === dayNum;
 
                 const dayEvents = events.filter(e => e.date === dateStr);
                 const hasEvents = dayEvents.length > 0;
@@ -1140,6 +1307,8 @@ export default function EventsPortalClient() {
                     className={`h-8 w-8 rounded-full flex flex-col items-center justify-center font-['Space_Grotesk'] font-bold mx-auto relative transition-all duration-200 cursor-pointer ${
                       isSelected
                         ? "bg-[#E57D37] text-white shadow-md shadow-amber-100"
+                        : isToday
+                        ? "ring-2 ring-[#E57D37]/50 font-black text-[#E57D37] bg-amber-50/60"
                         : "hover:bg-slate-50 text-slate-700"
                     }`}
                   >
@@ -1159,7 +1328,7 @@ export default function EventsPortalClient() {
               <span>Events & Photo Memories</span>
             </div>
             <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Upload rich cover banners during creation, and add photo albums to completed events so students and faculty can relive key moments.
+              Explore upcoming campus workshops and competitions. Completed events feature high-resolution photo galleries.
             </p>
           </Card>
         </div>
@@ -1180,15 +1349,13 @@ export default function EventsPortalClient() {
                   </Badge>
                   <h2 className="text-2xl font-black font-['Plus_Jakarta_Sans'] tracking-tight text-slate-900 leading-snug">{selectedEvent.name}</h2>
                 </div>
-                <button onClick={() => setSelectedEventId(null)} className="p-2 rounded-xl hover:bg-slate-50 border border-slate-100 text-slate-400 hover:text-slate-700 transition-all">
+                <button onClick={() => setSelectedEventId(null)} className="p-2 rounded-xl hover:bg-slate-50 border border-slate-100 text-slate-400 hover:text-slate-700 transition-all cursor-pointer">
                   <X size={16} />
                 </button>
               </div>
 
               {/* Cover Banner in Drawer */}
-              <div
-                className="h-48 w-full rounded-3xl mb-6 relative overflow-hidden flex flex-col justify-end p-5 shadow-inner"
-              >
+              <div className="h-48 w-full rounded-3xl mb-6 relative overflow-hidden flex flex-col justify-end p-5 shadow-inner bg-slate-900">
                 {selectedEvent.image_url ? (
                   <>
                     <img
@@ -1281,16 +1448,21 @@ export default function EventsPortalClient() {
                       <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                         <Camera size={15} className="text-[#E57D37]" />
                         <span>Event Memories & Photo Gallery</span>
-                        <span className="bg-[#E57D37]/10 text-[#E57D37] text-[10px] px-2 py-0.5 rounded-full font-black">
-                          {currentGallery.length}
-                        </span>
+                        {getTimelineStatus(selectedEvent.date) === "past" && (
+                          <span className="bg-[#E57D37]/10 text-[#E57D37] text-[10px] px-2 py-0.5 rounded-full font-black">
+                            {currentGallery.length}
+                          </span>
+                        )}
                       </h4>
                       <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                        {currentGallery.length > 0 ? "Click any photo to view full-screen lightbox" : "Photos captured during this event"}
+                        {getTimelineStatus(selectedEvent.date) === "past"
+                          ? (currentGallery.length > 0 ? "Click any photo to view full-screen lightbox" : "Photos captured during this completed event")
+                          : "Photo gallery will open once this event is completed"}
                       </p>
                     </div>
 
-                    {isCoordinator && (
+                    {/* Restrict Photo Upload to COMPLETED events only */}
+                    {isCoordinator && getTimelineStatus(selectedEvent.date) === "past" && (
                       <Button
                         variant="secondary"
                         className="text-xs py-1.5 px-3 flex items-center gap-1.5 border-amber-200 text-amber-800 bg-amber-50/50 hover:bg-amber-100/60"
@@ -1305,7 +1477,17 @@ export default function EventsPortalClient() {
                     )}
                   </div>
 
-                  {currentGallery.length === 0 ? (
+                  {getTimelineStatus(selectedEvent.date) !== "past" ? (
+                    <div className="rounded-2xl bg-slate-50 border border-slate-200/70 p-5 text-center space-y-2">
+                      <div className="w-10 h-10 rounded-xl bg-amber-50 text-[#E57D37] flex items-center justify-center mx-auto shadow-xs">
+                        <Camera size={18} />
+                      </div>
+                      <p className="text-xs font-bold text-slate-700">Photo Gallery Locked</p>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                        Post-event photo albums and memories can only be uploaded after the event has completed.
+                      </p>
+                    </div>
+                  ) : currentGallery.length === 0 ? (
                     <div className="border-2 border-dashed border-slate-200 rounded-3xl p-6 text-center space-y-3 bg-slate-50/50">
                       <div className="w-12 h-12 rounded-2xl bg-amber-50 text-[#E57D37] flex items-center justify-center mx-auto shadow-sm">
                         <ImageIcon size={22} />
@@ -1313,7 +1495,7 @@ export default function EventsPortalClient() {
                       <div>
                         <p className="text-xs font-bold text-slate-700">No event photos uploaded yet</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          Coordinators and faculty can upload event pictures, awards, and highlights.
+                          {isCoordinator ? "Upload event pictures, awards, and memorable moments." : "Event coordinators will upload pictures soon."}
                         </p>
                       </div>
                       {isCoordinator && (
@@ -1363,27 +1545,115 @@ export default function EventsPortalClient() {
               </div>
             </div>
 
-            {userId && (
-              <div className="border-t border-slate-100 pt-5 mt-8 flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <Button
-                    variant={selectedEvent.registeredUsers.includes(userId) ? "secondary" : "primary"}
-                    className="flex-1 w-full"
-                    onClick={() => handleRegister(selectedEvent.id)}
-                  >
-                    {selectedEvent.registeredUsers.includes(userId) ? (
-                      <span className="flex items-center justify-center gap-1.5 text-emerald-600 font-black"><CheckCircle2 size={16} /> Registered</span>
-                    ) : (
-                      "Reserve My Seat"
-                    )}
-                  </Button>
-                </div>
+            {/* Bottom Actions based on User Role */}
+            <div className="border-t border-slate-100 pt-5 mt-8 flex flex-col gap-3">
+              {/* 🎓 STUDENT ONLY: Seat Reservation Action */}
+              {canReserveSeat && (
+                <div>
+                  {(() => {
+                    const status = getTimelineStatus(selectedEvent.date);
+                    const isRegistered = userId && selectedEvent.registeredUsers.includes(userId);
+                    const isFull = selectedEvent.filled >= selectedEvent.capacity;
 
-                {isCoordinator && (
-                  <div className="flex gap-2 w-full mt-1 border-t border-slate-100/60 pt-3">
+                    if (isRegistered) {
+                      return (
+                        <div className="space-y-2">
+                          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-emerald-800">
+                              <CheckCircle2 size={18} className="text-emerald-600" />
+                              <div>
+                                <p className="text-xs font-black">Your Seat is Reserved!</p>
+                                <p className="text-[10px] text-emerald-600 font-semibold">Registration confirmed for this event</p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              className="text-xs py-1 px-2.5 border-emerald-200 text-emerald-800 bg-white hover:bg-emerald-100/50"
+                              onClick={() => {
+                                setConfirmedTicket({
+                                  ticketId: `SKL-REG-${selectedEvent.id.slice(0, 6).toUpperCase()}`,
+                                  eventName: selectedEvent.name,
+                                  eventDate: selectedEvent.date,
+                                  eventTime: selectedEvent.time,
+                                  eventVenue: selectedEvent.location,
+                                  attendeeName: userName || "Student Attendee",
+                                  attendeeEmail: userEmail || "",
+                                  attendeeRollNo: "CONFIRMED",
+                                  attendeePhone: "",
+                                  imageUrl: selectedEvent.image_url,
+                                  department: selectedEvent.department,
+                                });
+                                setShowTicketModal(true);
+                              }}
+                            >
+                              <Ticket size={13} className="mr-1" /> View Pass
+                            </Button>
+                          </div>
+
+                          {status === "upcoming" && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancelReservation(selectedEvent.id)}
+                              className="w-full text-center text-xs font-bold text-red-500 hover:text-red-700 py-1.5 transition-colors cursor-pointer"
+                            >
+                              Cancel My Reservation
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (status === "past") {
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-200 text-center">
+                          <p className="text-xs font-bold text-slate-500">Event Completed · Registrations Closed</p>
+                        </div>
+                      );
+                    }
+
+                    if (status === "today") {
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-center">
+                          <p className="text-xs font-bold text-amber-800">🔥 Event in Progress · Online Registrations Closed</p>
+                        </div>
+                      );
+                    }
+
+                    if (isFull) {
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-center">
+                          <p className="text-xs font-bold text-red-700">Capacity Full · Sold Out</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <Button
+                        variant="primary"
+                        className="w-full py-3 text-sm font-black flex items-center justify-center gap-2 shadow-md shadow-amber-200"
+                        onClick={() => handleOpenReservation(selectedEvent)}
+                      >
+                        <Ticket size={16} /> Reserve My Seat ({selectedEvent.capacity - selectedEvent.filled} left)
+                      </Button>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 🛠️ ADMIN & FACULTY COORDINATORS: Manage & Edit Tools (NO Reserve Seat) */}
+              {isCoordinator && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
+                    <span>Event Management</span>
+                    <span className="font-['Space_Grotesk'] font-bold text-slate-900">
+                      {selectedEvent.filled} / {selectedEvent.capacity} Reserved
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2">
                     <Button
                       variant="secondary"
-                      className="flex-1 text-slate-700 border-slate-200 hover:bg-slate-50"
+                      className="flex-1 text-slate-700 border-slate-200 hover:bg-slate-50 text-xs font-bold"
                       onClick={() => {
                         setForm({
                           name: selectedEvent.name,
@@ -1410,7 +1680,7 @@ export default function EventsPortalClient() {
                     </Button>
                     <Button
                       type="button"
-                      className="flex-1 text-white bg-red-600 hover:bg-red-500 border-none"
+                      className="flex-1 text-white bg-red-600 hover:bg-red-500 border-none text-xs font-bold"
                       onClick={() => {
                         setDeletingEventId(selectedEvent.id);
                         setDeleteConfirmOpen(true);
@@ -1419,9 +1689,237 @@ export default function EventsPortalClient() {
                       Delete Event
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* 👨‍👩‍👧 PARENT: View Only Notice (NO Reserve Seat) */}
+              {isParent && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-center">
+                  <p className="text-xs font-semibold text-slate-600">
+                    Parent Portal: Viewing schedule, venue, and coordinators for student events.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📝 STUDENT SEAT RESERVATION MODAL */}
+      {showReservationModal && reservingEvent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4" onClick={() => setShowReservationModal(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-[#E57D37] flex items-center justify-center shadow-sm">
+                  <Ticket size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 font-['Plus_Jakarta_Sans']">Reserve Your Seat</h3>
+                  <p className="text-xs text-slate-500 font-semibold">{reservingEvent.name}</p>
+                </div>
+              </div>
+              <button onClick={() => setShowReservationModal(false)} className="p-1.5 rounded-xl hover:bg-slate-50 text-slate-400 hover:text-slate-700">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmReservation} className="p-6 space-y-4">
+              <div className="p-3.5 bg-amber-50/50 border border-amber-200/50 rounded-2xl flex items-center justify-between text-xs font-bold text-amber-900">
+                <div className="flex items-center gap-2">
+                  <CalIcon size={14} className="text-[#E57D37]" />
+                  <span>{reservingEvent.date} · {reservingEvent.time}</span>
+                </div>
+                <span className="font-['Space_Grotesk'] text-[#E57D37] bg-white px-2.5 py-0.5 rounded-lg shadow-xs">
+                  {reservingEvent.capacity - reservingEvent.filled} seats left
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Student Full Name *</label>
+                <Input
+                  required
+                  placeholder="e.g. John Doe"
+                  value={reservationForm.name}
+                  onChange={e => setReservationForm(p => ({ ...p, name: e.target.value }))}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Student Email *</label>
+                  <Input
+                    type="email"
+                    required
+                    placeholder="student@university.edu"
+                    value={reservationForm.email}
+                    onChange={e => setReservationForm(p => ({ ...p, email: e.target.value }))}
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Roll No / Student ID *</label>
+                  <Input
+                    required
+                    placeholder="e.g. 21CS1042"
+                    value={reservationForm.rollNo}
+                    onChange={e => setReservationForm(p => ({ ...p, rollNo: e.target.value }))}
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Contact Phone Number *</label>
+                  <Input
+                    type="tel"
+                    required
+                    placeholder="10-digit mobile number"
+                    value={reservationForm.phone}
+                    onChange={e => setReservationForm(p => ({ ...p, phone: e.target.value }))}
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Department / Branch</label>
+                  <Input
+                    placeholder="e.g. Computer Science"
+                    value={reservationForm.dept}
+                    onChange={e => setReservationForm(p => ({ ...p, dept: e.target.value }))}
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Special Dietary / Accessibility Requirements (Optional)</label>
+                <Input
+                  placeholder="e.g. Wheelchair access, dietary preferences..."
+                  value={reservationForm.specialNotes}
+                  onChange={e => setReservationForm(p => ({ ...p, specialNotes: e.target.value }))}
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+                <Button type="button" variant="secondary" onClick={() => setShowReservationModal(false)} disabled={isSubmittingReservation}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmittingReservation} className="flex items-center gap-1.5">
+                  {isSubmittingReservation ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Confirming...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={14} /> Confirm Reservation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🎟️ DIGITAL EVENT PASS / TICKET MODAL */}
+      {showTicketModal && confirmedTicket && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[85] flex items-center justify-center p-4" onClick={() => setShowTicketModal(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="h-44 relative overflow-hidden flex flex-col justify-between p-5 text-white bg-slate-900">
+              {confirmedTicket.imageUrl ? (
+                <>
+                  <img
+                    src={confirmedTicket.imageUrl}
+                    alt={confirmedTicket.eventName}
+                    className="absolute inset-0 w-full h-full object-cover opacity-90"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-900/60 to-black/40" />
+                </>
+              ) : (
+                <div
+                  className="absolute inset-0 opacity-95"
+                  style={{
+                    background: `linear-gradient(135deg, ${getDeptColor(confirmedTicket.department || "")}ee, ${getDeptColor(confirmedTicket.department || "")}88)`,
+                  }}
+                />
+              )}
+
+              <div className="relative z-10 flex items-center justify-between w-full">
+                <Badge variant="neutral" className="bg-black/50 text-white backdrop-blur-md border-none text-[10px] font-bold">
+                  {getDeptName(confirmedTicket.department || "")}
+                </Badge>
+                <button
+                  onClick={() => setShowTicketModal(false)}
+                  className="p-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white transition-colors cursor-pointer backdrop-blur-md"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="relative z-10 flex flex-col items-center justify-center text-center">
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[10px] font-black uppercase tracking-wider mb-1.5">
+                  <Ticket size={12} /> Event Entry Pass
+                </div>
+                <h3 className="text-lg font-black font-['Plus_Jakarta_Sans'] leading-snug drop-shadow-md text-white">{confirmedTicket.eventName}</h3>
+                <p className="text-white/90 text-xs font-bold font-['Space_Grotesk'] tracking-widest mt-0.5 drop-shadow">{confirmedTicket.ticketId}</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase">Date & Time</p>
+                  <p className="font-bold text-slate-900">{confirmedTicket.eventDate}</p>
+                  <p className="text-slate-600 font-semibold">{confirmedTicket.eventTime}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase">Venue</p>
+                  <p className="font-bold text-slate-900 leading-snug">{confirmedTicket.eventVenue}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Attendee</span>
+                  <span className="font-bold text-slate-900">{confirmedTicket.attendeeName}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 font-bold uppercase text-[10px]">Roll No / ID</span>
+                  <span className="font-['Space_Grotesk'] font-bold text-slate-900">{confirmedTicket.attendeeRollNo}</span>
+                </div>
+                {confirmedTicket.attendeeEmail && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Email</span>
+                    <span className="font-semibold text-slate-600">{confirmedTicket.attendeeEmail}</span>
+                  </div>
                 )}
               </div>
-            )}
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-center gap-2 text-emerald-800 text-xs font-black">
+                <CheckCircle2 size={16} className="text-emerald-600" />
+                <span>Seat Confirmed & Verified</span>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1 text-xs"
+                  onClick={() => window.print()}
+                >
+                  <Printer size={14} className="mr-1.5" /> Print / Save Pass
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 text-xs"
+                  onClick={() => setShowTicketModal(false)}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1557,7 +2055,7 @@ export default function EventsPortalClient() {
                   type="button"
                   onClick={() => handleDeleteGalleryImage(currentGallery[lightboxIndex]?.url)}
                   disabled={deletingGalleryUrl === currentGallery[lightboxIndex]?.url}
-                  className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-200 transition-colors"
+                  className="p-2 rounded-xl bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-200 transition-colors cursor-pointer"
                   title="Delete Image"
                 >
                   <Trash2 size={16} />
@@ -1567,7 +2065,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={() => setLightboxOpen(false)}
-                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1580,7 +2078,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={() => setLightboxIndex(prev => (prev > 0 ? prev - 1 : currentGallery.length - 1))}
-                className="absolute left-2 sm:left-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20"
+                className="absolute left-2 sm:left-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20 cursor-pointer"
               >
                 <ChevronLeft size={22} />
               </button>
@@ -1596,7 +2094,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={() => setLightboxIndex(prev => (prev < currentGallery.length - 1 ? prev + 1 : 0))}
-                className="absolute right-2 sm:right-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20"
+                className="absolute right-2 sm:right-6 p-3 rounded-full bg-black/60 hover:bg-white/20 text-white backdrop-blur-md transition-all z-20 cursor-pointer"
               >
                 <ChevronRight size={22} />
               </button>
@@ -1614,6 +2112,122 @@ export default function EventsPortalClient() {
         </div>
       )}
 
+      {/* 👁️ PREVIEW EVENT MODAL */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[85] flex items-center justify-center p-4" onClick={() => setShowPreviewModal(false)}>
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-[#E57D37] flex items-center justify-center shadow-sm">
+                  <Eye size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 font-['Plus_Jakarta_Sans']">Event Live Preview</h3>
+                    <Badge variant="warning" className="text-[10px] font-black">Draft Preview</Badge>
+                  </div>
+                  <p className="text-xs text-slate-500 font-semibold">Review your event poster and details before publishing</p>
+                </div>
+              </div>
+              <button onClick={() => setShowPreviewModal(false)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Poster Banner */}
+              <div className="h-48 w-full rounded-3xl relative overflow-hidden flex flex-col justify-between p-5 shadow-md bg-slate-900">
+                {form.image_url ? (
+                  <>
+                    <img src={form.image_url} alt="Cover preview" className="absolute inset-0 w-full h-full object-cover opacity-90" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/30 to-black/20" />
+                  </>
+                ) : (
+                  <div
+                    className="absolute inset-0 opacity-95"
+                    style={{
+                      background: `linear-gradient(135deg, ${getDeptColor(form.department)}ee, ${getDeptColor(form.department)}88)`,
+                    }}
+                  />
+                )}
+
+                <div className="relative z-10 flex items-center justify-between w-full">
+                  <Badge variant="neutral" className="bg-black/50 text-white backdrop-blur-md border-none text-[10px] font-bold">
+                    {getDeptName(form.department)}
+                  </Badge>
+                  <div className="bg-white/95 text-slate-850 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border border-white/20 shadow-sm backdrop-blur-md">
+                    Upcoming
+                  </div>
+                </div>
+
+                <div className="relative z-10 text-white text-xs font-bold drop-shadow-sm flex items-center justify-between">
+                  <span className="flex items-center gap-1.5"><MapPin size={14} /> {form.location || "Campus Venue"}</span>
+                  <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    {form.date || "Date Pending"} · {form.time}
+                  </span>
+                </div>
+              </div>
+
+              {/* Title & Description */}
+              <div className="space-y-3">
+                <h2 className="text-xl font-black font-['Plus_Jakarta_Sans'] text-slate-900 leading-snug">
+                  {form.name || "Untitled Event Title"}
+                </h2>
+                <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                  {form.description || "No description provided yet."}
+                </p>
+              </div>
+
+              {/* Meta Info Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 border-t border-slate-100 pt-5 text-xs">
+                <div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Seats Capacity</p>
+                  <p className="text-slate-900 font-bold font-['Space_Grotesk']">{form.capacity || 100} Total Seats</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Staff Coordinator</p>
+                  <p className="text-slate-900 font-bold">{form.organizer || "Staff Coordinator"}</p>
+                  {form.staff_coord_phone && <p className="text-slate-500 text-[10px]">📞 {form.staff_coord_phone}</p>}
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase mb-1">Student Coordinator</p>
+                  <p className="text-slate-900 font-bold">{form.student_coord || "None Assigned"}</p>
+                  {form.student_coord_phone && <p className="text-slate-500 text-[10px]">📞 {form.student_coord_phone}</p>}
+                </div>
+              </div>
+
+              {/* Tags */}
+              {form.tags && (
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  {form.tags.split(",").map(t => t.trim()).filter(Boolean).map(tag => (
+                    <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 text-slate-600 text-[10px] font-bold border border-slate-150">
+                      <Tag size={10} className="text-[#E57D37]/70" /> {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Preview Actions */}
+            <div className="p-6 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between">
+              <Button variant="secondary" onClick={() => setShowPreviewModal(false)} className="text-xs">
+                ← Back to Edit Form
+              </Button>
+              <Button
+                variant="primary"
+                onClick={(e) => {
+                  setShowPreviewModal(false);
+                  handleCreateEvent(e);
+                }}
+                className="text-xs flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={14} /> Looks Good, {isEditing ? "Save Changes" : "Publish Event"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Form Scheduling & Editing Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowForm(false)}>
@@ -1625,7 +2239,7 @@ export default function EventsPortalClient() {
                   {isEditing ? "Edit Department Event" : "Schedule Department Event"}
                 </h3>
               </div>
-              <button onClick={() => setShowForm(false)} className="p-1.5 border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-650 rounded-xl transition-all"><X size={15} /></button>
+              <button onClick={() => setShowForm(false)} className="p-1.5 border border-slate-100 hover:bg-slate-50 text-slate-400 hover:text-slate-650 rounded-xl transition-all cursor-pointer"><X size={15} /></button>
             </div>
 
             <form onSubmit={handleCreateEvent} className="space-y-4">
@@ -1647,14 +2261,14 @@ export default function EventsPortalClient() {
                       <button
                         type="button"
                         onClick={() => coverFileInputRef.current?.click()}
-                        className="px-3 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 shadow-sm"
+                        className="px-3 py-1.5 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 shadow-sm cursor-pointer"
                       >
                         Change
                       </button>
                       <button
                         type="button"
                         onClick={() => setForm(p => ({ ...p, image_url: "" }))}
-                        className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-sm"
+                        className="px-3 py-1.5 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 shadow-sm cursor-pointer"
                       >
                         Remove
                       </button>
@@ -1697,7 +2311,7 @@ export default function EventsPortalClient() {
                             key={b.url}
                             type="button"
                             onClick={() => setForm(p => ({ ...p, image_url: b.url }))}
-                            className="relative h-12 rounded-xl overflow-hidden border border-slate-200 hover:border-[#E57D37] hover:scale-105 transition-all text-left"
+                            className="relative h-12 rounded-xl overflow-hidden border border-slate-200 hover:border-[#E57D37] hover:scale-105 transition-all text-left cursor-pointer"
                             title={b.label}
                           >
                             <img src={b.url} alt={b.label} className="w-full h-full object-cover" />
@@ -1799,9 +2413,30 @@ export default function EventsPortalClient() {
                 />
               </div>
 
-              <div className="flex gap-2 justify-end pt-4 border-t border-slate-100 mt-6">
-                <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
-                <Button type="submit">{isEditing ? "Save Changes" : "Publish Event"}</Button>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-6">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    if (!form.name.trim()) {
+                      alert("Please enter an event title before previewing.");
+                      return;
+                    }
+                    setShowPreviewModal(true);
+                  }}
+                  className="flex items-center gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 text-xs cursor-pointer"
+                >
+                  <Eye size={14} /> Preview Event
+                </Button>
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="secondary" onClick={() => setShowForm(false)} className="text-xs cursor-pointer">
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="text-xs font-bold cursor-pointer">
+                    {isEditing ? "Save Changes" : "Publish Event"}
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
@@ -1830,7 +2465,7 @@ export default function EventsPortalClient() {
                 <button
                   type="button"
                   onClick={() => setPickerMode("hours")}
-                  className={`transition-colors duration-150 ${
+                  className={`transition-colors duration-150 cursor-pointer ${
                     pickerMode === "hours" ? "text-[#E57D37]" : "text-slate-400 hover:text-slate-650"
                   }`}
                 >
@@ -1840,7 +2475,7 @@ export default function EventsPortalClient() {
                 <button
                   type="button"
                   onClick={() => setPickerMode("minutes")}
-                  className={`transition-colors duration-150 ${
+                  className={`transition-colors duration-150 cursor-pointer ${
                     pickerMode === "minutes" ? "text-[#E57D37]" : "text-slate-400 hover:text-slate-650"
                   }`}
                 >
@@ -1852,10 +2487,8 @@ export default function EventsPortalClient() {
 
             {/* Clock Dial Face */}
             <div className="w-[200px] h-[200px] bg-slate-50 border border-slate-100 rounded-full relative mx-auto my-2 shadow-inner">
-              {/* Center pivot dot */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-[#E57D37] z-20" />
 
-              {/* Hand pointer line */}
               {(() => {
                 const rotationAngle = pickerMode === "hours" 
                   ? selectedHour * 30 
@@ -1872,7 +2505,6 @@ export default function EventsPortalClient() {
                 );
               })()}
 
-              {/* Render Numbers */}
               {(pickerMode === "hours" ? CLOCK_HOURS : CLOCK_MINUTES).map(item => {
                 const isSelected = pickerMode === "hours" 
                   ? selectedHour === item.val 
@@ -1883,7 +2515,7 @@ export default function EventsPortalClient() {
                     type="button"
                     style={{ left: `${item.x}px`, top: `${item.y}px` }}
                     onClick={() => handleSelectClockVal(item.val)}
-                    className={`absolute w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black tracking-tighter transition-all duration-150 z-20 ${
+                    className={`absolute w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-black tracking-tighter transition-all duration-150 z-20 cursor-pointer ${
                       isSelected 
                         ? "bg-[#E57D37] text-white font-black scale-110 shadow-md shadow-amber-150" 
                         : "text-slate-500 hover:bg-slate-200/60 hover:text-slate-900"
@@ -1900,7 +2532,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={() => setSelectedTimeAmPm("AM")}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   selectedTimeAmPm === "AM" 
                     ? "bg-[#E57D37] text-white shadow-md shadow-amber-100" 
                     : "text-slate-500 hover:text-slate-800"
@@ -1911,7 +2543,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={() => setSelectedTimeAmPm("PM")}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   selectedTimeAmPm === "PM" 
                     ? "bg-[#E57D37] text-white shadow-md shadow-amber-100" 
                     : "text-slate-500 hover:text-slate-800"
@@ -1933,7 +2565,7 @@ export default function EventsPortalClient() {
               <button
                 type="button"
                 onClick={saveClockPickerTime}
-                className="flex-1 py-2.5 text-xs font-bold rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white hover:opacity-95 transition-all shadow-md shadow-amber-100 cursor-pointer"
+                className="flex-1 py-2.5 text-xs font-bold rounded-2xl bg-[#E57D37] text-white hover:opacity-95 transition-all shadow-md shadow-amber-100 cursor-pointer"
               >
                 OK
               </button>
