@@ -11,6 +11,7 @@ export type UserContext = {
   department_id?: string | null
   name: string
   email: string
+  created_at?: string
   phone: string | null
   profile_image_url?: string | null
   is_active: boolean
@@ -44,7 +45,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
 
   const { data: actualProfile, error: profileError } = await supabase
     .from("users")
-    .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url")
+    .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
     .eq("id", userId)
     .single()
 
@@ -82,7 +83,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     const targetProfileData = impUserId
       ? await supabase
           .from("users")
-          .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url")
+          .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
           .eq("id", impUserId)
           .single()
       : { data: null, error: null }
@@ -97,6 +98,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       department_id: targetProfile?.department_id ?? actualProfile.department_id ?? null,
       name: targetProfile?.name ?? actualProfile.name ?? "",
       email: targetProfile?.email ?? actualProfile.email ?? "",
+      created_at: targetProfile?.created_at ?? actualProfile.created_at,
       phone: targetProfile?.phone ?? actualProfile.phone ?? null,
       profile_image_url: targetProfile?.profile_image_url ?? actualProfile.profile_image_url ?? null,
       is_active: targetProfile?.is_active ?? true,
@@ -124,6 +126,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     department_id: actualProfile.department_id,
     name: actualProfile.name ?? "",
     email: actualProfile.email ?? "",
+    created_at: actualProfile.created_at,
     phone: actualProfile.phone ?? null,
     profile_image_url: actualProfile.profile_image_url ?? null,
     is_active: actualProfile.is_active ?? true,

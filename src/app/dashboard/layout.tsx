@@ -4,14 +4,14 @@ import ImpersonationBanner from "@/components/impersonation-banner"
 import DashboardRouteTransition from "@/components/dashboard-route-transition"
 import { DashboardSessionProvider } from "@/components/dashboard-session-provider"
 import { CourseProvider } from "@/modules/courses/course-context"
-import { getCurrentUserContext } from "@/lib/user-context"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const userContext = await getCurrentUserContext()
+  const userContext = await getCurrentDashboardSession()
 
   return (
     <DashboardSessionProvider value={userContext}>

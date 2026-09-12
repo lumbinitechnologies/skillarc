@@ -1,15 +1,15 @@
 "use client"
 
 import { createContext, useContext } from "react"
-import type { UserContext } from "@/lib/user-context"
+import type { DashboardSession } from "@/lib/dashboard-session"
 
-const DashboardSessionContext = createContext<UserContext | null>(null)
+const DashboardSessionContext = createContext<DashboardSession | null>(null)
 
 export function DashboardSessionProvider({
   value,
   children,
 }: {
-  value: UserContext | null
+  value: DashboardSession | null
   children: React.ReactNode
 }) {
   return (

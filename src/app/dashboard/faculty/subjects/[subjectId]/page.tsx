@@ -8,7 +8,7 @@ import {
   getGradeColumnsBySubjectAction,
   getGradeEntriesBySubjectAction,
 } from "@/app/actions/gradebook"
-import { getCurrentUserContext } from "@/lib/user-context"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export const dynamic = "force-dynamic"
 
@@ -20,7 +20,7 @@ interface PageProps {
 
 export default async function FacultySubjectDetailPage({ params }: PageProps) {
   const { subjectId } = await params
-  const context = await getCurrentUserContext()
+  const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
   if (![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(context.role as any)) redirect("/dashboard")
 

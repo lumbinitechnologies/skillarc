@@ -3,6 +3,8 @@ import Link from "next/link"
 import { BookOpen, Mail, School, UserCircle2, Calendar, UserCheck, Settings, ArrowRight } from "lucide-react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
@@ -16,51 +18,40 @@ function getInitials(name: string) {
 }
 
 export default async function FacultyProfilePage() {
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const profile = context
 
-  if (!user) redirect("/auth/login")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("id, name, email, role, institution_id, profile_image_url, created_at")
-    .eq("id", user.id)
-    .single()
+  const [institutionResult, assignmentResult, subjectsResult, timetableResult] = await measureServer("dashboard.faculty.profile.data", () => Promise.all([
+    supabase.from("institutions").select("name").eq("id", profile.institution_id).single(),
+    supabase.from("faculty_subjects").select("subject_id").eq("faculty_id", profile.id),
+    supabase
+      .from("subjects")
+      .select("id, name, code, faculty_id")
+      .eq("institution_id", profile.institution_id)
+      .order("name"),
+    supabase
+      .from("timetable_slots")
+      .select("section_id, sections!inner(name)")
+      .eq("institution_id", profile.institution_id)
+      .eq("faculty_id", profile.id),
+  ]))
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
-
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("name")
-    .eq("id", profile.institution_id)
-    .single()
-
-  const { data: assignmentRows } = await supabase
-    .from("faculty_subjects")
-    .select("subject_id")
-    .eq("faculty_id", user.id)
-
+  const institution = institutionResult.data
+  const assignmentRows = assignmentResult.data
   const assignedSubjectIds = new Set(
     ((assignmentRows ?? []).map((row: any) => row.subject_id).filter(Boolean) as string[]),
   )
 
-  const { data: subjectsData = [] } = await supabase
-    .from("subjects")
-    .select("id, name, code, faculty_id")
-    .eq("institution_id", profile?.institution_id)
-    .order("name")
-
-  const subjects = Array.isArray(subjectsData)
-    ? subjectsData.filter((subject: any) => subject.faculty_id === user.id || assignedSubjectIds.has(subject.id))
+  const subjects = Array.isArray(subjectsResult.data)
+    ? subjectsResult.data.filter((subject: any) => subject.faculty_id === profile.id || assignedSubjectIds.has(subject.id))
     : []
 
-  const { data: timetableRows = [] } = await supabase
-    .from("timetable_slots")
-    .select("section_id, sections!inner(name)")
-    .eq("institution_id", profile.institution_id)
-    .eq("faculty_id", user.id)
+  const timetableRows = timetableResult.data ?? []
 
   const sectionNames = Array.from(
     new Set(
@@ -137,7 +128,7 @@ export default async function FacultyProfilePage() {
             </div>
             <div className="flex items-center gap-1.5">
               <Calendar size={14} className="text-white/70" />
-              <span>Member since {new Date(profile.created_at).getFullYear()}</span>
+              <span>Member since {profile.created_at ? new Date(profile.created_at).getFullYear() : "—"}</span>
             </div>
           </div>
         </div>

@@ -2,78 +2,69 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import StudentTimetableClient from "./student-timetable-client"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudentTimetablePage() {
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, role, institution_id, organization_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const { data: studentData } = await supabase
     .from("students")
     .select("id, section_id, sections(name, program:program_id(name))")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = { ...context, ...studentData }
   const sectionName = (studentData as any)?.sections?.name || "Your Section"
   const programName = (studentData as any)?.sections?.program?.name || "Enrolled Qualification"
 
   // Check organization features for multi_week_timetable
-  let multiWeekEnabled = false
-  if (profile.organization_id) {
-    const { data: orgData } = await supabase
-      .from("organizations")
-      .select("features")
-      .eq("id", profile.organization_id)
-      .single()
-    multiWeekEnabled = Boolean(orgData?.features?.includes("multi_week_timetable"))
-  }
+  const multiWeekEnabled = context.features.includes("multi_week_timetable")
 
   // Fetch weeks if multi-week is enabled
-  let weeks: any[] = []
-  if (multiWeekEnabled && profile.section_id) {
-    const { data: weeksData } = await supabase
-      .from("timetable_weeks")
-      .select("*")
-      .eq("institution_id", profile.institution_id)
-      .eq("section_id", profile.section_id)
-      .order("week_number", { ascending: true })
-    weeks = weeksData ?? []
-  }
+  const [weeksResult, eventsResult, timetableResult, settingsResult] = await measureServer("dashboard.student.timetable.data", () => Promise.all([
+    multiWeekEnabled && profile.section_id
+      ? supabase
+          .from("timetable_weeks")
+          .select("id, week_number, title, start_date, end_date")
+          .eq("institution_id", profile.institution_id)
+          .eq("section_id", profile.section_id)
+          .order("week_number", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    profile.institution_id
+      ? supabase
+          .from("academic_calendar_events")
+          .select("id, institution_id, title, event_type, start_date, end_date, description, affects_classes")
+          .eq("institution_id", profile.institution_id)
+          .order("start_date", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    profile.section_id
+      ? supabase
+          .from("timetable_slots")
+          .select("id, day, period, subject_id, faculty_id, room, delivery_mode, meeting_link, notes, week_id")
+          .eq("institution_id", profile.institution_id)
+          .eq("section_id", profile.section_id)
+          .order("day")
+          .order("period")
+      : Promise.resolve({ data: [] }),
+    profile.institution_id
+      ? supabase
+          .from("institution_timetable_settings")
+          .select("period_timings")
+          .eq("institution_id", profile.institution_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]))
 
-  // Fetch academic calendar events / holidays
-  let academicEvents: any[] = []
-  if (profile.institution_id) {
-    const { data: eventsData } = await supabase
-      .from("academic_calendar_events")
-      .select("*")
-      .eq("institution_id", profile.institution_id)
-      .order("start_date", { ascending: true })
-    academicEvents = eventsData ?? []
-  }
-
-  const { data: timetableRows = [] } = profile.section_id
-    ? await supabase
-        .from("timetable_slots")
-        .select("id, day, period, subject_id, faculty_id, room, delivery_mode, meeting_link, notes, week_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-        .order("day")
-        .order("period")
-    : { data: [] }
+  const weeks = weeksResult.data ?? []
+  const academicEvents = eventsResult.data ?? []
+  const timetableRows = timetableResult.data ?? []
 
   const subjectIds = Array.from(new Set((timetableRows ?? []).map((slot: any) => slot.subject_id).filter(Boolean))) as string[]
   const subjectObj: Record<string, { name: string; code: string }> = {}
@@ -93,14 +84,7 @@ export default async function StudentTimetablePage() {
     })
   }
 
-  // Fetch timetable settings
-  const { data: settings } = await supabase
-    .from("institution_timetable_settings")
-    .select("period_timings")
-    .eq("institution_id", profile.institution_id)
-    .maybeSingle()
-
-  const periodTimings = settings?.period_timings as Array<{ id: string; label: string; time: string }> || [
+  const periodTimings = settingsResult.data?.period_timings as Array<{ id: string; label: string; time: string }> || [
     { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
     { id: "P2", label: "Period 2", time: "9:45 – 10:45" },
     { id: "P3", label: "Period 3", time: "11:00 – 12:00" },

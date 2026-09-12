@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import Link from "next/link"
 import { Clock, FileText, Brain, FileCode, AlertCircle, CheckCircle2, BookOpen } from "lucide-react"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export const dynamic = "force-dynamic"
 
@@ -54,28 +55,19 @@ function getDueDateStatus(dueDate: string | null) {
 }
 
 export default async function StudentTodoPage() {
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("id, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const { data: studentData } = await supabase
     .from("students")
     .select("id, section_id, program_id, semester")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = { ...context, ...studentData }
 
   // 1. Fetch enrolled subjects to filter assignments
   const { data: timetableRows = [] } = profile.section_id
@@ -142,7 +134,7 @@ export default async function StudentTodoPage() {
   const { data: submissions = [] } = await supabase
     .from("submissions")
     .select("assignment_id")
-    .eq("student_id", user.id)
+    .eq("student_id", context.id)
 
   const submittedSet = new Set((submissions ?? []).map(s => s.assignment_id))
 
