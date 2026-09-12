@@ -225,7 +225,7 @@ test("enabled document search delegates authorization and ranking to the canonic
       similarity: 0.91,
     }],
   })
-  const result = await searchPermittedDocuments(supabase, { ...student, role: "SUPER_ADMIN" }, "syllabus", supabase, async () => [0, 1, 2])
+  const result = await searchPermittedDocuments(supabase, { ...student, role: "SUPER_ADMIN" }, "syllabus", supabase, async () => Array.from({ length: 384 }, () => 0.01))
   assert.match(result.context ?? "", /algorithms/)
   assert.equal(result.sources[0]?.score, 0.91)
   assert.equal(result.sources[0]?.title, "Algorithms syllabus")

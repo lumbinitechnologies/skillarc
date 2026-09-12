@@ -28,9 +28,10 @@ write_next_env() {
     "GROQ_API_KEY=" \
     "GROQ_MODEL=llama-3.3-70b-versatile" \
     "KNOWLEDGE_SEARCH_ENABLED=false" \
-    "KNOWLEDGE_EMBEDDING_MODEL=text-embedding-3-small" \
+    "KNOWLEDGE_EMBEDDING_PROVIDER=huggingface-local" \
+    "KNOWLEDGE_EMBEDDING_MODEL=Xenova/all-MiniLM-L6-v2" \
+    "KNOWLEDGE_EMBEDDING_REVISION=751bff3" \
     "KNOWLEDGE_EMBEDDING_DIMENSIONS=384" \
-    "OPENAI_API_KEY=" \
     "CRON_SECRET=skillarc-local-cron-secret" \
     "UPSTASH_REDIS_REST_URL=" \
     "UPSTASH_REDIS_REST_TOKEN=" > "$target"
