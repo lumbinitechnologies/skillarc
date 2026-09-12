@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import test from "node:test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { readAuthorizedDashboard } from "./read-service"
+import { readAuthorizedDashboard, searchPermittedDocuments } from "./read-service"
 import { createAssistantTools } from "./tools"
 import type { AssistantPrincipal } from "./types"
 
@@ -196,4 +196,42 @@ test("assistant tools memoize repeated reads for the same scope", async () => {
 
   assert.equal(supabase.calls.filter((call) => call.startsWith("students.select:")).length, 1)
   assert.equal(supabase.calls.filter((call) => call.startsWith("timetable_slots.select:")).length, 1)
+})
+
+test("document search is disabled until migration readiness is explicitly enabled", async () => {
+  const previous = process.env.KNOWLEDGE_SEARCH_ENABLED
+  delete process.env.KNOWLEDGE_SEARCH_ENABLED
+  const supabase = mockSupabase()
+  const result = await searchPermittedDocuments(supabase, student, "syllabus", supabase, async () => [0, 1, 2])
+  assert.deepEqual(result, { context: null, sources: [] })
+  if (previous === undefined) delete process.env.KNOWLEDGE_SEARCH_ENABLED
+  else process.env.KNOWLEDGE_SEARCH_ENABLED = previous
+})
+
+test("enabled document search delegates authorization and ranking to the canonical RPC", async () => {
+  const previous = process.env.KNOWLEDGE_SEARCH_ENABLED
+  const previousDimensions = process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS
+  process.env.KNOWLEDGE_SEARCH_ENABLED = "true"
+  process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS = "3"
+  const supabase = mockSupabase({
+    "rpc:match_knowledge_chunks": [{
+      id: "chunk-1",
+      document_id: "document-1",
+      chunk_index: 2,
+      content: "The syllabus covers algorithms.",
+      title: "Algorithms syllabus",
+      original_filename: "algorithms.txt",
+      similarity: 0.91,
+    }],
+  })
+  const result = await searchPermittedDocuments(supabase, { ...student, role: "SUPER_ADMIN" }, "syllabus", supabase, async () => [0, 1, 2])
+  assert.match(result.context ?? "", /algorithms/)
+  assert.equal(result.sources[0]?.score, 0.91)
+  const rpcCall = supabase.calls.find((call) => call.startsWith("rpc:match_knowledge_chunks:")) ?? ""
+  assert.match(rpcCall, /query_embedding/)
+  assert.match(rpcCall, /p_organization_id/)
+  if (previous === undefined) delete process.env.KNOWLEDGE_SEARCH_ENABLED
+  else process.env.KNOWLEDGE_SEARCH_ENABLED = previous
+  if (previousDimensions === undefined) delete process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS
+  else process.env.KNOWLEDGE_EMBEDDING_DIMENSIONS = previousDimensions
 })
