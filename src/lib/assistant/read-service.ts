@@ -2,9 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { ACADEMIC_CONTEXT_LIMITS, fetchAcademicContext } from "@/lib/academic-context"
 import type { AssistantPrincipal, AssistantReadResult, AssistantReadScope, SourceCitation } from "@/lib/assistant/types"
-import { embed } from "ai"
-import { openai } from "@ai-sdk/openai"
-import { knowledgeEmbeddingDimensions, knowledgeEmbeddingModel, knowledgeSearchEnabled } from "@/lib/knowledge/config"
+import { embedKnowledgeQuery } from "@/lib/knowledge/embeddings"
+import { knowledgeEmbeddingDimensions, knowledgeEmbeddingProfile, knowledgeSearchEnabled } from "@/lib/knowledge/config"
 
 /**
  * The only dashboard-data entry point exposed to assistant orchestration.
@@ -259,6 +258,7 @@ export async function searchPermittedDocuments(
     p_role: principal.role,
     p_subject_ids: [...relationships.subjectIds],
     p_section_ids: [...relationships.sectionIds],
+    p_embedding_profile: knowledgeEmbeddingProfile(),
   })
   if (error || !Array.isArray(data)) return { context: null, sources: [] }
 
@@ -270,7 +270,7 @@ export async function searchPermittedDocuments(
     const document = row.document && typeof row.document === "object" ? row.document as Record<string, unknown> : {}
     return {
       id: String(row.id),
-      title: String(document.title ?? document.original_filename ?? "Academic document"),
+      title: String(row.title ?? row.original_filename ?? document.title ?? document.original_filename ?? "Academic document"),
       sourceType: "document",
       snippet: String(row.content ?? "").slice(0, 320),
       documentId: String(row.document_id),
@@ -288,13 +288,7 @@ export async function searchPermittedDocuments(
 }
 
 async function defaultQueryEmbedding(value: string): Promise<number[]> {
-  const { embedding } = await embed({
-    model: openai.embeddingModel(knowledgeEmbeddingModel()),
-    value,
-    maxRetries: 2,
-    providerOptions: { openai: { dimensions: knowledgeEmbeddingDimensions() } },
-  })
-  return embedding
+  return embedKnowledgeQuery(value)
 }
 
 type DocumentRelationships = {
