@@ -16,6 +16,7 @@
 # next.js
 /.next/
 /out/
+/.local/
 
 # production
 /build
@@ -34,6 +35,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
+!arca-backend/.env.local.example
+
+# Supabase local migration files are generated from the canonical repo migrations
+/supabase/.branches/
+/supabase/.temp/
+/supabase/migrations/*
+!/supabase/migrations/.gitignore
 
 # vercel
 .vercel
@@ -43,3 +52,5 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+/.local/arca-backend
+/supabase/migrations

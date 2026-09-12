@@ -1,5 +1,4 @@
 // src/app/api/ai/chat/route.ts — AI endpoint for Placements, Mock Interviews, and Career Analytics
-
 import { NextResponse } from "next/server";
 
 const MODELS_TO_TRY = [
@@ -131,8 +130,14 @@ const DOMAIN_QUESTIONS: Record<string, InterviewQuestionFallback[]> = {
 
 export async function POST(req: Request) {
   try {
-    const { prompt, mode, role, questionIndex } = await req.json();
-    if (!prompt) return NextResponse.json({ error: "No prompt provided" }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const { prompt, mode, role, questionIndex, task } = body;
+    const effectivePrompt = prompt || "";
+    const effectiveMode = mode || task || "general";
+
+    if (!effectivePrompt.trim()) {
+      return NextResponse.json({ error: "No prompt provided" }, { status: 400 });
+    }
 
     const key =
       process.env.GEMINI_API_KEY ||
@@ -141,7 +146,7 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
       process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
 
-    const lowerPrompt = prompt.toLowerCase();
+    const lowerPrompt = effectivePrompt.toLowerCase();
 
     // 1. If Gemini API Key is configured, attempt live model inference with fallback models
     if (key && !key.includes("placeholder") && !key.includes("your_") && key.trim().length > 10) {
@@ -152,12 +157,13 @@ export async function POST(req: Request) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
+              contents: [{ parts: [{ text: effectivePrompt }] }],
               generationConfig: {
                 temperature: 0.85,
                 maxOutputTokens: 1400,
               },
             }),
+            signal: AbortSignal.timeout(15000),
           });
 
           if (res.ok) {
@@ -165,14 +171,13 @@ export async function POST(req: Request) {
             const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
             if (text) {
               const trimmed = text.trim();
-              
+
               // If Gemini responded to interview_question, extract clean category & question
-              if (mode === "interview_question" || lowerPrompt.includes("interview question")) {
+              if (effectiveMode === "interview_question" || lowerPrompt.includes("interview question")) {
                 let category = "Technical Screening";
                 let questionText = trimmed;
                 let hintText = "Consider algorithmic complexity, architecture patterns, and practical edge cases.";
 
-                // Check for JSON inside code blocks or raw
                 const jsonMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || [null, trimmed];
                 try {
                   const parsed = JSON.parse(jsonMatch[1] || trimmed);
@@ -182,7 +187,6 @@ export async function POST(req: Request) {
                     hintText = parsed.hint || hintText;
                   }
                 } catch {
-                  // If bracket format [Category] Question
                   const bracketMatch = trimmed.match(/^\[(.*?)\]\s*([\s\S]*)$/);
                   if (bracketMatch) {
                     category = bracketMatch[1].trim();
@@ -202,9 +206,6 @@ export async function POST(req: Request) {
 
               return NextResponse.json({ text: trimmed, isLiveAi: true, modelUsed: model });
             }
-          } else {
-            const errText = await res.text();
-            console.warn(`[Gemini API Model ${model} returned ${res.status}]`, errText);
           }
         } catch (geminiError) {
           console.warn(`[Gemini API ${model} fetch failed]`, geminiError);
@@ -212,12 +213,11 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Intelligent Domain-Aware Mock & Fallback Responses
+    // 2. Intelligent Domain-Aware Fallback Responses
     let responseText = "";
 
-    // Case A: Formulating an Interview Question
     if (
-      mode === "interview_question" ||
+      effectiveMode === "interview_question" ||
       lowerPrompt.includes("formulate") ||
       lowerPrompt.includes("interview question") ||
       lowerPrompt.includes("next interview question")
@@ -231,7 +231,6 @@ export async function POST(req: Request) {
         pool = DOMAIN_QUESTIONS.behavioral_hr;
       }
 
-      // Pick question based on hash of questionIndex or random
       const randOffset = Math.floor(Math.random() * pool.length);
       const idx = typeof questionIndex === "number" ? (questionIndex + randOffset) % pool.length : randOffset;
       const selected = pool[idx] || pool[0];
@@ -243,14 +242,10 @@ export async function POST(req: Request) {
         text: selected.question,
         isLiveAi: false,
       });
-    }
-    // Case B: Evaluating a Candidate Response
-    else if (lowerPrompt.includes("evaluate") || lowerPrompt.includes("spoken response") || lowerPrompt.includes("rating score")) {
-      // Extract candidate text from prompt
-      const candidateMatch = prompt.match(/Candidate (?:Spoken\/Written )?Response:\s*"([\s\S]*?)"/i) || [null, prompt];
-      const candidateText = (candidateMatch[1] || prompt).toLowerCase();
+    } else if (lowerPrompt.includes("evaluate") || lowerPrompt.includes("spoken response") || lowerPrompt.includes("rating score")) {
+      const candidateMatch = effectivePrompt.match(/Candidate (?:Spoken\/Written )?Response:\s*"([\s\S]*?)"/i) || [null, effectivePrompt];
+      const candidateText = (candidateMatch[1] || effectivePrompt).toLowerCase();
 
-      // Red flags and anti-patterns
       const severeFlaws: string[] = [];
       if (candidateText.includes("json file") || candidateText.includes("flat file") || candidateText.includes("single file") || candidateText.includes("text file")) {
         severeFlaws.push("Using a flat local JSON file instead of a distributed NoSQL / Relational database creates an unscalable Single Point of Failure (SPOF) and corrupts under concurrent writes.");
@@ -264,11 +259,7 @@ export async function POST(req: Request) {
       if (candidateText.includes("fits in basic ram") || candidateText.includes("no cache") || candidateText.includes("no database") || candidateText.includes("no need for cache")) {
         severeFlaws.push("Incorrectly assuming 100 million growing records fit in basic RAM without persistent distributed storage or indexing.");
       }
-      if (candidateText.length < 30 || candidateText.includes("i don't know") || candidateText.includes("idk") || candidateText.includes("no idea")) {
-        severeFlaws.push("The response is severely underdeveloped and misses the core architectural principles.");
-      }
 
-      // Positive engineering keywords
       const positiveKeywords = [
         "base62", "redis", "cassandra", "dynamodb", "sharding", "snowflake", "load balancer",
         "dns", "tcp", "tls", "handshake", "dom", "cssom", "render tree", "layout", "paint",
@@ -315,9 +306,7 @@ ${foundPositives.length > 0 ? `- **Relevant Concepts Mentioned**: ${foundPositiv
 2. **Key Generation Service (KGS)**: Generate unique 64-bit integer IDs encoded via Base62 (e.g. 7 characters = 62⁷ ≈ 3.5 trillion URLs).
 3. **Storage Tier**: Use distributed NoSQL (Cassandra / DynamoDB) partitioned on the short key hash.
 4. **Caching Layer**: Redis cluster with LRU eviction for hot 20% URLs handling 80% read traffic.`;
-    }
-    // Case C: Compiling Final Summary Report
-    else if (lowerPrompt.includes("final report") || lowerPrompt.includes("performance summary") || lowerPrompt.includes("roadmap")) {
+    } else if (lowerPrompt.includes("final report") || lowerPrompt.includes("performance summary") || lowerPrompt.includes("roadmap")) {
       responseText = `### 🏆 Overall Assessment: Strong Candidate (8.5/10)
 
 #### 🎯 Core Competencies Breakdown
@@ -334,9 +323,7 @@ ${foundPositives.length > 0 ? `- **Relevant Concepts Mentioned**: ${foundPositiv
 - **Week 2: Low-Level & High-Level System Design**: Practice caching (Redis), distributed rate limiting, and database indexing (B+ Trees).
 - **Week 3: Core Computer Science Deep Dive**: Review OS concurrency (deadlocks, thread pools) and ACID transactions in PostgreSQL.
 - **Week 4: Mock Behavioral & Executive Presence**: Practice 6 core Amazon/Google leadership principle stories using the STAR format with quantitative business metrics.`;
-    }
-    // Case D: General Analytics or Placement Query
-    else {
+    } else {
       responseText = "SkillArc Placement Analytics confirms active recruitment across Tier-1 technology, consulting, and product firms. Average package benchmark is ₹12.5 LPA with strong hiring volume in Software Engineering, Data Analytics, and Cloud Infrastructure.";
     }
 
@@ -349,4 +336,3 @@ ${foundPositives.length > 0 ? `- **Relevant Concepts Mentioned**: ${foundPositiv
     });
   }
 }
-

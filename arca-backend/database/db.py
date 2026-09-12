@@ -4,16 +4,18 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Load .env from backend/ directory
+# Load local overrides first. A developer can run the compatibility service
+# without accidentally inheriting the normal .env file's hosted credentials.
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BACKEND_DIR / ".env.local")
 load_dotenv(BACKEND_DIR / ".env")
 
 
 class Settings:
     """Central app settings loaded from environment variables."""
 
-    # Arca's active provider is Groq. Gemini remains isolated in the
-    # independent Next.js Placements AI route.
+    # Arca's active provider is Groq. Next.js and this temporary compatibility
+    # service use the same provider configuration.
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv(
         "GROQ_MODEL",
@@ -34,6 +36,11 @@ class Settings:
     DEFAULT_TOP_K: int = int(os.getenv("DEFAULT_TOP_K", "4"))
 
     FRONTEND_ORIGIN: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+
+    # Shared rate limiting for multi-instance deployments. The Next.js gateway
+    # uses the same Upstash REST variables.
+    UPSTASH_REDIS_REST_URL: str = os.getenv("UPSTASH_REDIS_REST_URL", "")
+    UPSTASH_REDIS_REST_TOKEN: str = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
 
 settings = Settings()

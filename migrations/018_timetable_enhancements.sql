@@ -8,6 +8,7 @@ ALTER TABLE public.timetable_slots
   ADD COLUMN IF NOT EXISTS delivery_mode text DEFAULT 'ON_CAMPUS',
   ADD COLUMN IF NOT EXISTS meeting_link text,
   ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS week_id uuid,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now(),
   ADD COLUMN IF NOT EXISTS updated_by uuid REFERENCES public.users(id);
 

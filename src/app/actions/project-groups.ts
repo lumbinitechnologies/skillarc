@@ -2,7 +2,10 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
-import https from "https"
+import { getCurrentUserContext } from "@/lib/user-context"
+import { runAssistantTask, type TeamSuggestion } from "@/lib/assistant/tasks"
+
+const PROJECT_PUBLISHER_ROLES = ["FACULTY", "HOD", "PROGRAM_HEAD"] as const
 
 export async function createProjectWithGroupsAction(data: {
   title: string
@@ -18,26 +21,56 @@ export async function createProjectWithGroupsAction(data: {
 }) {
   const supabase = await createSupabaseServerClient()
 
-  // 1. Insert Project (with fallback if subject_id column doesn't exist)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: "You must be signed in to publish project teams." }
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile || !PROJECT_PUBLISHER_ROLES.includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
+    return { success: false, error: "You are not allowed to publish project teams." }
+  }
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("faculty_subjects")
+    .select("id")
+    .eq("faculty_id", user.id)
+    .eq("subject_id", data.subject_id)
+    .limit(1)
+    .maybeSingle()
+
+  if (assignmentError || !assignment) {
+    return { success: false, error: "You are not assigned to this subject." }
+  }
+
+  // Never trust a caller-supplied faculty_id from the client.
+  const facultyId = user.id
+
+  // 1. Insert Project. Older deployments do not have subject_id on projects.
   let projectRes = await supabase
     .from("projects")
     .insert({
       title: data.title,
       description: data.description,
-      faculty_id: data.faculty_id,
+      faculty_id: facultyId,
       subject_id: data.subject_id,
     })
     .select("id")
     .single()
 
-  if (projectRes.error && projectRes.error.code === "42703") {
+  if (projectRes.error && ["42703", "PGRST204"].includes(projectRes.error.code || "")) {
     // Retry without subject_id column
     projectRes = await supabase
       .from("projects")
       .insert({
         title: data.title,
         description: data.description,
-        faculty_id: data.faculty_id,
+        faculty_id: facultyId,
       })
       .select("id")
       .single()
@@ -271,88 +304,26 @@ export async function getSubjectStudentsAction(sectionId: string) {
 }
 
 export async function suggestTeamsAIAction(members: any[], settings: { teamCount: number; theme: string; focus: string }) {
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  if (!apiKey) {
-    console.warn("⚠️ GEMINI_API_KEY is not configured on the server.");
-    return { success: false, error: "API Key not configured." }
+  const profile = await getCurrentUserContext()
+  if (!profile || ![...PROJECT_PUBLISHER_ROLES].includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
+    return { success: false, error: "You are not allowed to request project team suggestions." }
   }
 
   const prompt = `
-    As an expert Team Segregator, divide these students into ${settings.teamCount} teams:
+    Divide these students into ${settings.teamCount} project teams:
     Students: ${JSON.stringify(members)}
     Theme: ${settings.theme}
     Optimization: ${settings.focus}
-
-    Respond ONLY in valid JSON format:
-    {
-      "teams": [
-        {
-          "name": "Team Name",
-          "description": "Team project desc",
-          "motto": "Team motto",
-          "memberIds": ["id1", "id2"],
-          "strengths": ["list"],
-          "synergyScore": 90
-        }
-      ],
-      "overallFeedback": "Feedback text"
-    }
+    Return suggestions only. Do not publish or persist anything.
   `;
 
-  const requestBody = {
-    contents: [
-      {
-        parts: [
-          {
-            text: prompt
-          }
-        ]
-      }
-    ],
-    generationConfig: {
-      responseMimeType: "application/json"
-    }
-  };
-
-  return new Promise((resolve) => {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-    const req = https.request(
-      url,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-      (res) => {
-        let responseData = "";
-        res.on("data", (chunk) => (responseData += chunk));
-        res.on("end", () => {
-          try {
-            const resultJson = JSON.parse(responseData);
-            const textResponse = resultJson.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!textResponse) {
-              resolve({ success: false, error: "Empty AI response" });
-              return;
-            }
-            const cleanJson = JSON.parse(textResponse.replace(/```json|```/g, "").trim());
-            resolve({ success: true, data: cleanJson });
-          } catch (err: any) {
-            console.error("AI parse error:", err, responseData);
-            resolve({ success: false, error: "Failed to parse AI response" });
-          }
-        });
-      }
-    );
-
-    req.on("error", (err) => {
-      console.error("Gemini request error:", err);
-      resolve({ success: false, error: err.message });
-    });
-
-    req.write(JSON.stringify(requestBody));
-    req.end();
-  });
+  try {
+    const result = await runAssistantTask("team_suggestion", prompt)
+    return { success: true, data: result.data as TeamSuggestion }
+  } catch (error) {
+    console.error("Team suggestion task failed", error instanceof Error ? error.message : "unknown")
+    return { success: false, error: "The team suggestion service is unavailable." }
+  }
 }
 
 export async function getProjectsBySubjectAction(subjectId: string) {
