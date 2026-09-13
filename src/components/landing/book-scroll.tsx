@@ -174,35 +174,31 @@ export default function BookScrollAnimation() {
       ctx.globalAlpha = 1
     }
 
-    // Continuous RAF Lerp loop for display-refresh synchronized rendering
-    const renderLoop = () => {
-      const delta = targetFrameRef.current - renderedFrameRef.current
-      if (Math.abs(delta) > 0.0005) {
-        // High-precision lerp smoothing (14% convergence per frame)
-        renderedFrameRef.current += delta * 0.14
-        render(renderedFrameRef.current)
-      }
-      rafId = requestAnimationFrame(renderLoop)
-    }
-
-    // Initialize layout sizing and start render loop
-    resizeCanvas()
-    rafId = requestAnimationFrame(renderLoop)
-
-    // Single ScrollTrigger timeline with explicit duration units to guarantee 0% overlap
+    // Instantaneous direct canvas rendering on scroll update
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
         start: "top top",
         end: "+=380%",
-        scrub: 0.8,
+        scrub: 0.2,
         pin: true,
         pinSpacing: true,
       },
     })
 
-    // 1. Frame progression from 0 to 10 units
-    tl.to(targetFrameRef, { current: totalFrames - 1, ease: "none", duration: 10 }, 0)
+    // 1. Frame progression with direct frame update (0 input lag)
+    tl.to(
+      targetFrameRef,
+      {
+        current: totalFrames - 1,
+        ease: "none",
+        duration: 10,
+        onUpdate: () => {
+          render(targetFrameRef.current)
+        },
+      },
+      0
+    )
 
     // 2. Scroll indicator fade out (0 -> 0.8)
     tl.to(".scroll-indicator", { opacity: 0, y: 15, ease: "none", duration: 0.8 }, 0)
@@ -223,11 +219,13 @@ export default function BookScrollAnimation() {
     tl.fromTo(".beat-d-top", { opacity: 0, y: -25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.2)
     tl.fromTo(".beat-d-bottom", { opacity: 0, y: 25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.2)
 
+    // Initialize layout sizing and initial frame
+    resizeCanvas()
+
     window.addEventListener("resize", resizeCanvas)
 
     return () => {
       tl.kill()
-      if (rafId !== null) cancelAnimationFrame(rafId)
       window.removeEventListener("resize", resizeCanvas)
     }
   }, [loading, images, totalFrames])

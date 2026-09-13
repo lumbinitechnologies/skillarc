@@ -14,14 +14,12 @@ export default function SmoothScrollProvider({
   children: React.ReactNode
 }) {
   useEffect(() => {
-    // Initialize high-precision Lenis smooth inertia scrolling
+    // Initialize high-precision responsive Lenis smooth scrolling
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: 0.8,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      orientation: "vertical",
-      gestureOrientation: "vertical",
       smoothWheel: true,
-      wheelMultiplier: 0.85,
+      wheelMultiplier: 1.0,
       touchMultiplier: 1.0,
       syncTouch: false,
       infinite: false,
@@ -30,16 +28,16 @@ export default function SmoothScrollProvider({
     // Sync Lenis scroll updates with GSAP ScrollTrigger
     lenis.on("scroll", ScrollTrigger.update)
 
-    // Drive Lenis directly via GSAP ticker for 60/120Hz lockstep animation
-    const updateTicker = (time: number) => {
-      lenis.raf(time * 1000)
+    let rafId: number
+    function raf(time: number) {
+      lenis.raf(time)
+      rafId = requestAnimationFrame(raf)
     }
 
-    gsap.ticker.add(updateTicker)
-    gsap.ticker.lagSmoothing(500, 33)
+    rafId = requestAnimationFrame(raf)
 
     return () => {
-      gsap.ticker.remove(updateTicker)
+      cancelAnimationFrame(rafId)
       lenis.destroy()
     }
   }, [])
