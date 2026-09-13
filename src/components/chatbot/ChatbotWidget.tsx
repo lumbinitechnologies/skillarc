@@ -314,7 +314,7 @@ export function ChatbotWidget() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 font-sans sm:bottom-6 sm:left-auto sm:right-6">
+    <div className="fixed bottom-[max(1.5rem,calc(env(safe-area-inset-bottom,0px)+1rem))] left-4 right-4 z-50 font-sans sm:bottom-6 sm:left-auto sm:right-6 pointer-events-none">
       <div className="flex flex-col items-end gap-3.5">
         <AnimatePresence>
           {open && (
@@ -323,7 +323,7 @@ export function ChatbotWidget() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 30, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 250, damping: 25 }}
-              className={`relative flex h-[min(680px,calc(100dvh-96px))] max-h-[680px] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-xl transition-[width] duration-200 ${expanded ? "sm:w-[min(92vw,700px)]" : "sm:w-[min(92vw,460px)]"}`}
+              className={`pointer-events-auto relative flex h-[min(680px,calc(100dvh-96px))] max-h-[680px] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-xl transition-[width] duration-200 ${expanded ? "sm:w-[min(92vw,700px)]" : "sm:w-[min(92vw,460px)]"}`}
             >
               <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
                 <div className="flex items-center gap-3">
@@ -412,7 +412,7 @@ export function ChatbotWidget() {
           )}
         </AnimatePresence>
 
-        <motion.button onClick={() => setOpen((value) => !value)} aria-label="Open AI assistant" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="group flex h-14 w-14 items-center justify-center rounded-full border-2 border-slate-800 bg-slate-900 text-[#ECDFCB] shadow-xl shadow-slate-950/20 transition-all">
+        <motion.button onClick={() => setOpen((value) => !value)} aria-label="Open AI assistant" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="pointer-events-auto group flex h-14 w-14 items-center justify-center rounded-full border-2 border-slate-800 bg-slate-900 text-[#ECDFCB] shadow-xl shadow-slate-950/20 transition-all">
           <AnimatePresence mode="wait">
             {open ? <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}><X size={20} /></motion.div> : <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}><Sparkles size={20} className="animate-pulse text-[#EAAD62]" /></motion.div>}
           </AnimatePresence>
