@@ -388,27 +388,6 @@ export default function Hero() {
                 </motion.div>
               </div>
             </div>
-
-            {/* Brand Ticker */}
-            <div className="pt-20 mt-16 border-t border-[#0B132B]/15 text-center">
-              <span className="inline-block text-xs font-bold tracking-[0.25em] text-[#0B132B]/60 uppercase mb-8">
-                TRUSTED BY LEADING ACADEMIC INSTITUTIONS
-              </span>
-              <div className="flex flex-wrap justify-center items-center gap-10 md:gap-20 opacity-85">
-                <span className="text-xs sm:text-sm font-black tracking-widest uppercase hover:text-[#E57D37] transition-colors">
-                  VERCEL UNIV
-                </span>
-                <span className="text-xs sm:text-sm font-black tracking-widest uppercase hover:text-[#E57D37] transition-colors">
-                  SUPABASE TECH
-                </span>
-                <span className="text-xs sm:text-sm font-black tracking-widest uppercase hover:text-[#E57D37] transition-colors">
-                  NEXTPOLYTECH
-                </span>
-                <span className="text-xs sm:text-sm font-black tracking-widest uppercase hover:text-[#E57D37] transition-colors">
-                  Y-COMBINATOR ED
-                </span>
-              </div>
-            </div>
           </div>
         </section>
       </div>

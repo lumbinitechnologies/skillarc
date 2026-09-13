@@ -12,7 +12,7 @@ type DrawableFrame = ImageBitmap | HTMLImageElement
 export default function BookScrollAnimation() {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const framesRef = useRef<DrawableFrame[]>([])
+  const framesRef = useRef<(DrawableFrame | null)[]>([])
   const drawDimsRef = useRef<{
     x: number
     y: number
@@ -20,18 +20,17 @@ export default function BookScrollAnimation() {
     drawHeight: number
   }>({ x: 0, y: 0, drawWidth: 0, drawHeight: 0 })
 
-  const [loading, setLoading] = useState(true)
-  const [loadProgress, setLoadProgress] = useState(0)
+  const [isInitialReady, setIsInitialReady] = useState(false)
 
   const startFrame = 26
   const endFrame = 137
   const totalFrames = endFrame - startFrame + 1
 
-  // Preload frames with touch/tablet detection, GPU ImageBitmap acceleration and memory cleanup
+  // 2-Pass Interleaved Ingestion: Instant Keyframe Spine + Bounded Concurrency Infill
   useEffect(() => {
     let isCancelled = false
-    let loadedCount = 0
-    const loadedFrames: DrawableFrame[] = new Array(totalFrames)
+    const loadedFrames: (DrawableFrame | null)[] = new Array(totalFrames).fill(null)
+    framesRef.current = loadedFrames
 
     const isMobile =
       typeof window !== "undefined" &&
@@ -42,6 +41,8 @@ export default function BookScrollAnimation() {
     const basePath = isMobile ? "/sequence/mobile" : "/sequence"
 
     const loadSingleFrame = async (frameNumber: number, index: number): Promise<void> => {
+      if (loadedFrames[index] || isCancelled) return
+
       const frameNum = String(frameNumber).padStart(3, "0")
       const src = `${basePath}/ezgif-frame-${frameNum}.jpg`
 
@@ -56,22 +57,19 @@ export default function BookScrollAnimation() {
           })
         }
 
-        // Create zero-copy GPU bitmap preserving true source aspect ratio
         if (typeof createImageBitmap !== "undefined") {
           try {
-            const targetWidth = 720
+            const targetWidth = isMobile ? 600 : 960
             const targetHeight =
               img.width > 0 && img.height > 0
                 ? Math.round(targetWidth * (img.height / img.width))
-                : 405
+                : Math.round(targetWidth * 0.5625)
 
-            const bitmap = isMobile
-              ? await createImageBitmap(img, {
-                  resizeWidth: targetWidth,
-                  resizeHeight: targetHeight,
-                  resizeQuality: "high",
-                })
-              : await createImageBitmap(img)
+            const bitmap = await createImageBitmap(img, {
+              resizeWidth: targetWidth,
+              resizeHeight: targetHeight,
+              resizeQuality: "high",
+            })
 
             if (!isCancelled) {
               loadedFrames[index] = bitmap
@@ -84,39 +82,72 @@ export default function BookScrollAnimation() {
         } else {
           try {
             await img.decode()
-          } catch {
-            // Fallback for older browsers
-          }
+          } catch {}
           if (!isCancelled) loadedFrames[index] = img
         }
       } catch {
-        // Fallback placeholder
-      } finally {
-        if (!isCancelled) {
-          loadedCount++
-          setLoadProgress(Math.round((loadedCount / totalFrames) * 100))
-        }
+        // Silent graceful fallback
       }
     }
 
-    const preloadAll = async () => {
-      const batchSize = isMobile ? 8 : 16
-      for (let i = startFrame; i <= endFrame; i += batchSize) {
-        if (isCancelled) break
-        const batchPromises = []
-        for (let j = i; j < Math.min(i + batchSize, endFrame + 1); j++) {
-          batchPromises.push(loadSingleFrame(j, j - startFrame))
+    // Bounded concurrency pool to prevent network congestion and transient mobile memory spikes
+    const runConcurrentPool = async (tasks: (() => Promise<void>)[], concurrency: number) => {
+      let taskIdx = 0
+      const executeWorker = async () => {
+        while (taskIdx < tasks.length && !isCancelled) {
+          const current = tasks[taskIdx++]
+          if (current) await current()
         }
-        await Promise.all(batchPromises)
       }
-
-      if (!isCancelled) {
-        framesRef.current = loadedFrames
-        setLoading(false)
+      const workers = []
+      for (let i = 0; i < Math.min(concurrency, tasks.length); i++) {
+        workers.push(executeWorker())
       }
+      await Promise.all(workers)
     }
 
-    void preloadAll()
+    const startStreaming = async () => {
+      // 1. FAST INITIAL PAINT: Load frame 0 immediately (< 40ms) and activate canvas
+      await loadSingleFrame(startFrame, 0)
+      if (isCancelled) return
+
+      setIsInitialReady(true)
+
+      // 2. PASS 1 (Keyframe Spine): Fetch keyframes every 6th frame across timeline
+      // This creates an immediate 15fps skeleton end-to-end so rapid scrolls on slow 3G never freeze
+      const stride = 6
+      const spineTasks: (() => Promise<void>)[] = []
+      for (let i = 0; i < totalFrames; i += stride) {
+        if (i !== 0) {
+          const frameNum = startFrame + i
+          const frameIdx = i
+          spineTasks.push(() => loadSingleFrame(frameNum, frameIdx))
+        }
+      }
+      // Ensure the very last frame is also in the spine
+      if (!loadedFrames[totalFrames - 1]) {
+        spineTasks.push(() => loadSingleFrame(endFrame, totalFrames - 1))
+      }
+
+      // Concurrency bounded to 3 on mobile / 6 on desktop (preserves HTTP bandwidth for fonts/CSS)
+      const maxConcurrency = isMobile ? 3 : 6
+      await runConcurrentPool(spineTasks, maxConcurrency)
+      if (isCancelled) return
+
+      // 3. PASS 2 (High-Density 60fps Infill): Stream remaining intermediate frames in the background
+      const infillTasks: (() => Promise<void>)[] = []
+      for (let i = 1; i < totalFrames; i++) {
+        if (!loadedFrames[i]) {
+          const frameNum = startFrame + i
+          const frameIdx = i
+          infillTasks.push(() => loadSingleFrame(frameNum, frameIdx))
+        }
+      }
+
+      await runConcurrentPool(infillTasks, maxConcurrency)
+    }
+
+    void startStreaming()
 
     return () => {
       isCancelled = true
@@ -146,7 +177,7 @@ export default function BookScrollAnimation() {
 
   // Setup GSAP Timeline and Zero-Jank Hardware Canvas Rendering
   useEffect(() => {
-    if (loading || framesRef.current.length === 0) return
+    if (!isInitialReady) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -160,8 +191,9 @@ export default function BookScrollAnimation() {
         (navigator.maxTouchPoints && navigator.maxTouchPoints > 0))
 
     const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, isMobile ? 1.5 : 2)
-    
+
     let currentFrameIndex = -1
+    let lastRenderedFrame: DrawableFrame | null = null
     const targetFrameRef = { current: 0 }
 
     // Calculate containment dimensions once on resize instead of every frame
@@ -200,34 +232,51 @@ export default function BookScrollAnimation() {
       ctx.imageSmoothingQuality = "high"
 
       currentFrameIndex = -1
+      lastRenderedFrame = null
       render(targetFrameRef.current)
     }
 
-    // High-performance single-pass GPU hardware blit (skips redundant draws)
+    // High-performance single-pass GPU hardware blit with smart nearest-frame fallback
     const render = (frameFloat: number) => {
       const currentFrames = framesRef.current
-      const total = currentFrames.length
+      const total = totalFrames
       if (total === 0) return
 
-      const index = Math.max(0, Math.min(total - 1, Math.round(frameFloat)))
-      if (index === currentFrameIndex) return
-      currentFrameIndex = index
+      const targetIndex = Math.max(0, Math.min(total - 1, Math.round(frameFloat)))
 
-      const frame = currentFrames[index]
+      // Find exact target frame or closest loaded frame
+      let frame = currentFrames[targetIndex]
+      if (!frame) {
+        for (let offset = 1; offset < total; offset++) {
+          if (targetIndex - offset >= 0 && currentFrames[targetIndex - offset]) {
+            frame = currentFrames[targetIndex - offset]
+            break
+          }
+          if (targetIndex + offset < total && currentFrames[targetIndex + offset]) {
+            frame = currentFrames[targetIndex + offset]
+            break
+          }
+        }
+      }
+
       if (!frame) return
+      if (targetIndex === currentFrameIndex && frame === lastRenderedFrame) return
+
+      currentFrameIndex = targetIndex
+      lastRenderedFrame = frame
 
       const dims = drawDimsRef.current
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(frame, dims.x, dims.y, dims.drawWidth, dims.drawHeight)
     }
 
-    // Single ScrollTrigger timeline with smooth Apple-style scrub
+    // Single ScrollTrigger timeline tuned for a smooth, natural cinematic scroll pass
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
         start: "top top",
-        end: "+=220%",
-        scrub: 0.4,
+        end: isMobile ? "+=125%" : "+=145%",
+        scrub: 0.55,
         pin: true,
         pinSpacing: true,
       },
@@ -247,24 +296,24 @@ export default function BookScrollAnimation() {
       0
     )
 
-    // 2. Scroll indicator fade out (0 -> 0.8)
-    tl.to(".scroll-indicator", { opacity: 0, y: 15, ease: "none", duration: 0.8 }, 0)
+    // 2. Scroll indicator fade out (0 -> 0.6)
+    tl.to(".scroll-indicator", { opacity: 0, y: 15, ease: "none", duration: 0.6 }, 0)
 
-    // 3. Beat A: Visible at start, clean slide-out to flanks from 1.0 -> 1.8
-    tl.to(".beat-a-left", { opacity: 0, x: -40, ease: "power1.in", duration: 0.8 }, 1.0)
-    tl.to(".beat-a-right", { opacity: 0, x: 40, ease: "power1.in", duration: 0.8 }, 1.0)
+    // 3. Beat A: Visible at start, clean slide-out to flanks from 0.8 -> 1.8
+    tl.to(".beat-a-left", { opacity: 0, x: -35, ease: "power1.in", duration: 0.9 }, 0.8)
+    tl.to(".beat-a-right", { opacity: 0, x: 35, ease: "power1.in", duration: 0.9 }, 0.8)
 
-    // 4. Beat B: Fades in at 2.2 -> 3.0, stays until 4.2, fades out completely 4.2 -> 5.0
-    tl.fromTo(".beat-b", { opacity: 0, y: 30 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 2.2)
-    tl.to(".beat-b", { opacity: 0, y: -25, ease: "power1.in", duration: 0.8 }, 4.2)
+    // 4. Beat B: Fades in at 2.0 -> 2.8, holds until 4.0, fades out completely 4.0 -> 4.8
+    tl.fromTo(".beat-b", { opacity: 0, y: 25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 2.0)
+    tl.to(".beat-b", { opacity: 0, y: -20, ease: "power1.in", duration: 0.8 }, 4.0)
 
-    // 5. Beat C: Fades in at 5.4 -> 6.2, stays until 7.2, fades out completely 7.2 -> 8.0
-    tl.fromTo(".beat-c", { opacity: 0, y: 30 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 5.4)
-    tl.to(".beat-c", { opacity: 0, y: -25, ease: "power1.in", duration: 0.8 }, 7.2)
+    // 5. Beat C: Fades in at 5.0 -> 5.8, holds until 7.0, fades out completely 7.0 -> 7.8
+    tl.fromTo(".beat-c", { opacity: 0, y: 25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 5.0)
+    tl.to(".beat-c", { opacity: 0, y: -20, ease: "power1.in", duration: 0.8 }, 7.0)
 
-    // 6. Beat D: Fades in at 8.2 -> 9.0, stays until 10.0
-    tl.fromTo(".beat-d-top", { opacity: 0, y: -25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.2)
-    tl.fromTo(".beat-d-bottom", { opacity: 0, y: 25 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.2)
+    // 6. Beat D: Fades in at 8.0 -> 8.8, stays until 10.0
+    tl.fromTo(".beat-d-top", { opacity: 0, y: -20 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.0)
+    tl.fromTo(".beat-d-bottom", { opacity: 0, y: 20 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 8.0)
 
     // Initialize layout sizing and initial frame
     resizeCanvas()
@@ -275,7 +324,7 @@ export default function BookScrollAnimation() {
       tl.kill()
       window.removeEventListener("resize", resizeCanvas)
     }
-  }, [loading, totalFrames])
+  }, [isInitialReady, totalFrames])
 
   return (
     <div
@@ -283,21 +332,6 @@ export default function BookScrollAnimation() {
       className="relative w-full h-screen bg-[#050505] text-white overflow-hidden select-none font-sans"
       id="scrollytelling-section"
     >
-      {/* Loading Overlay */}
-      {loading && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050505]">
-          <div className="w-64 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
-            <div
-              className="bg-gradient-to-r from-[#1690C7] to-[#E57D37] h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${loadProgress}%` }}
-            />
-          </div>
-          <span className="text-xs uppercase tracking-widest text-white/60 font-semibold">
-            Loading Knowledge Base // {loadProgress}%
-          </span>
-        </div>
-      )}
-
       {/* Canvas Centered Container with GPU Radial Edge Dissolve Mask */}
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden z-10 pointer-events-none">
         <canvas
