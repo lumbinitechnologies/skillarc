@@ -19,29 +19,42 @@ export default function EditorialNavbar() {
   return (
     <div className="relative">
       {/* Fixed Ultra-Minimal Screen Frame */}
-      <header className="fixed top-0 left-0 w-full z-50 px-6 lg:px-12 py-3 md:py-4 flex justify-between items-center pointer-events-none mix-blend-difference">
-        {/* Brand Logo Container */}
-        <Link href="/" className="pointer-events-auto cursor-pointer group flex items-center">
-          <img
-            src="/skillarc_logo.svg"
-            alt="SkillArc Logo"
-            className="h-14 w-auto sm:h-18 md:h-24 object-contain group-hover:scale-105 transition-transform duration-200"
+      <header className="fixed top-0 left-0 w-full z-50 px-6 lg:px-12 py-3 md:py-4 flex justify-between items-center pointer-events-none">
+        {/* Brand Logo Container with Form-Fitted Silhouette Blur */}
+        <div className="relative pointer-events-auto flex items-center">
+          {/* Ultra-smooth multi-stop radial fade blur - zero hard edges, dissolves naturally */}
+          <div
+            className="absolute -inset-12 sm:-inset-20 pointer-events-none -z-10 backdrop-blur-xl"
+            style={{
+              WebkitMaskImage:
+                "radial-gradient(ellipse 75% 65% at 48% 50%, #000 0%, rgba(0,0,0,0.75) 25%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.12) 75%, transparent 100%)",
+              maskImage:
+                "radial-gradient(ellipse 75% 65% at 48% 50%, #000 0%, rgba(0,0,0,0.75) 25%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.12) 75%, transparent 100%)",
+            }}
           />
-        </Link>
+
+          <Link href="/" className="cursor-pointer group flex items-center">
+            <img
+              src="/skillarc_logo.svg"
+              alt="SkillArc Logo"
+              className="h-16 sm:h-20 md:h-24 w-auto object-contain group-hover:scale-105 transition-transform duration-200 drop-shadow-[0_4px_24px_rgba(0,0,0,0.85)] drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]"
+            />
+          </Link>
+        </div>
 
         {/* Unique Magnetic "Menu" Trigger & Log In Pills */}
         <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 font-sans">
           <Link
             href="/auth/login"
             onClick={() => setIsOpen(false)}
-            className="flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
+            className="flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold shadow-sm"
           >
             <span>Log In</span>
           </Link>
 
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`group relative flex items-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${
+            className={`group relative flex items-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden shadow-sm ${
               isOpen
                 ? "border-[#E57D37] text-[#E57D37]"
                 : "border-[#3A6DAF]/30 hover:border-[#EAAD62]"
