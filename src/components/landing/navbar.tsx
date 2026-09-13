@@ -13,16 +13,13 @@ const NAV_ITEMS = [
   { label: "About", index: "05" },
 ]
 
-const MotionLink = motion.create(Link)
-
 export default function EditorialNavbar() {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <>
+    <div className="relative">
       {/* Fixed Ultra-Minimal Screen Frame */}
       <header className="fixed top-0 left-0 w-full z-50 px-6 lg:px-12 py-3 md:py-4 flex justify-between items-center pointer-events-none mix-blend-difference">
-
         {/* Brand Logo Container */}
         <Link href="/" className="pointer-events-auto cursor-pointer group flex items-center">
           <img
@@ -44,26 +41,30 @@ export default function EditorialNavbar() {
 
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`group relative flex items-center gap-3 px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${isOpen
+            className={`group relative flex items-center gap-3 px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${
+              isOpen
                 ? "border-[#E57D37] text-[#E57D37]"
                 : "border-[#3A6DAF]/30 hover:border-[#EAAD62]"
-              }`}
+            }`}
           >
             {/* Glow Indicator: Orange when open, Amber when closed */}
             <span
-              className={`w-1.5 h-1.5 rounded-full ${isOpen ? "bg-[#E57D37]" : "bg-[#EAAD62]"
-                } animate-pulse`}
+              className={`w-1.5 h-1.5 rounded-full ${
+                isOpen ? "bg-[#E57D37]" : "bg-[#EAAD62]"
+              } animate-pulse`}
             />
 
             <span
-              className={`font-mono text-xs uppercase tracking-widest transition-transform duration-300 group-hover:-translate-y-6 ${isOpen ? "text-[#E57D37]" : "text-[#ECDFCB]"
-                }`}
+              className={`font-mono text-xs uppercase tracking-widest transition-transform duration-300 group-hover:-translate-y-6 ${
+                isOpen ? "text-[#E57D37]" : "text-[#ECDFCB]"
+              }`}
             >
               {isOpen ? "Close" : "Index"}
             </span>
             <span
-              className={`font-mono text-xs uppercase tracking-widest absolute left-8 translate-y-6 transition-transform duration-300 group-hover:translate-y-0 ${isOpen ? "text-[#E57D37]" : "text-[#EAAD62]"
-                }`}
+              className={`font-mono text-xs uppercase tracking-widest absolute left-8 translate-y-6 transition-transform duration-300 group-hover:translate-y-0 ${
+                isOpen ? "text-[#E57D37]" : "text-[#EAAD62]"
+              }`}
             >
               {isOpen ? "Close" : "Menu"}
             </span>
@@ -71,12 +72,14 @@ export default function EditorialNavbar() {
             {/* Kinetic Hamburger Lines */}
             <div className="flex flex-col gap-1 w-4">
               <span
-                className={`h-[1px] transition-all duration-300 ${isOpen ? "bg-[#E57D37] rotate-45 translate-y-[2.5px]" : "bg-[#ECDFCB]"
-                  }`}
+                className={`h-[1px] transition-all duration-300 ${
+                  isOpen ? "bg-[#E57D37] rotate-45 translate-y-[2.5px]" : "bg-[#ECDFCB]"
+                }`}
               />
               <span
-                className={`h-[1px] transition-all duration-300 ${isOpen ? "bg-[#E57D37] -rotate-45 -translate-y-[2.5px]" : "bg-[#ECDFCB]"
-                  }`}
+                className={`h-[1px] transition-all duration-300 ${
+                  isOpen ? "bg-[#E57D37] -rotate-45 -translate-y-[2.5px]" : "bg-[#ECDFCB]"
+                }`}
               />
             </div>
           </button>
@@ -84,20 +87,20 @@ export default function EditorialNavbar() {
       </header>
 
       {/* Full-Screen Kinetic Editorial Curtain Menu */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isOpen && (
           <motion.div
+            key="editorial-curtain-menu"
             initial={{ y: "-100%" }}
             animate={{ y: "0%" }}
             exit={{ y: "-100%" }}
-            transition={{ duration: 0.7, ease: [0.76, 0, 0.24, 1] }}
+            transition={{ duration: 0.6, ease: [0.76, 0, 0.24, 1] }}
             className="fixed inset-0 bg-[#14234B] z-40 pt-28 pb-12 flex flex-col justify-between text-[#ECDFCB] font-sans"
           >
             {/* Fine Wireframe Lines */}
             <div className="absolute inset-0 border-x border-[#3A6DAF]/20 max-w-7xl mx-auto pointer-events-none" />
 
             <div className="max-w-7xl mx-auto px-6 lg:px-8 w-full flex flex-col justify-between h-full relative z-10">
-
               {/* Main Navigation List: Vertically Centered */}
               <div className="flex-1 flex flex-col justify-center my-auto">
                 <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
@@ -108,22 +111,25 @@ export default function EditorialNavbar() {
 
                   <nav className="md:col-span-9 flex flex-col gap-2">
                     {NAV_ITEMS.map((item) => (
-                      <MotionLink
+                      <motion.div
                         key={item.label}
-                        href={`/${item.label.toLowerCase()}`}
-                        onClick={() => setIsOpen(false)}
-                        className="group relative flex items-baseline gap-6 border-b border-[#3A6DAF]/30 py-4 overflow-hidden"
                         whileHover={{ x: 12 }}
                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
                       >
-                        <span className="font-mono text-xs text-[#94BAC4] group-hover:text-[#EAAD62] transition-colors">
-                          {item.index}
-                        </span>
-                        <span className="font-sans font-bold uppercase tracking-tight text-4xl sm:text-6xl md:text-7xl text-[#ECDFCB] group-hover:text-[#E57D37] transition-colors duration-300">
-                          {item.label}
-                        </span>
-                        <ArrowUpRight className="opacity-0 group-hover:opacity-100 text-[#E57D37] transition-all duration-300 transform -translate-x-4 group-hover:translate-x-0" />
-                      </MotionLink>
+                        <Link
+                          href={`/${item.label.toLowerCase()}`}
+                          onClick={() => setIsOpen(false)}
+                          className="group relative flex items-baseline gap-6 border-b border-[#3A6DAF]/30 py-4 overflow-hidden"
+                        >
+                          <span className="font-mono text-xs text-[#94BAC4] group-hover:text-[#EAAD62] transition-colors">
+                            {item.index}
+                          </span>
+                          <span className="font-sans font-bold uppercase tracking-tight text-4xl sm:text-6xl md:text-7xl text-[#ECDFCB] group-hover:text-[#E57D37] transition-colors duration-300">
+                            {item.label}
+                          </span>
+                          <ArrowUpRight className="opacity-0 group-hover:opacity-100 text-[#E57D37] transition-all duration-300 transform -translate-x-4 group-hover:translate-x-0" />
+                        </Link>
+                      </motion.div>
                     ))}
                   </nav>
                 </div>
@@ -143,11 +149,10 @@ export default function EditorialNavbar() {
                   </Link>
                 </div>
               </div>
-
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </div>
   )
 }
