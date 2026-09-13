@@ -16,13 +16,14 @@ export default function SmoothScrollProvider({
   useEffect(() => {
     // Initialize high-precision Lenis smooth inertia scrolling
     const lenis = new Lenis({
-      duration: 1.3,
+      duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       orientation: "vertical",
       gestureOrientation: "vertical",
       smoothWheel: true,
       wheelMultiplier: 0.85,
-      touchMultiplier: 1.2,
+      touchMultiplier: 1.0,
+      syncTouch: false,
       infinite: false,
     })
 
@@ -35,7 +36,7 @@ export default function SmoothScrollProvider({
     }
 
     gsap.ticker.add(updateTicker)
-    gsap.ticker.lagSmoothing(0)
+    gsap.ticker.lagSmoothing(500, 33)
 
     return () => {
       gsap.ticker.remove(updateTicker)

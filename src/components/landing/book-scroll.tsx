@@ -25,44 +25,52 @@ export default function BookScrollAnimation() {
   const endFrame = 137
   const totalFrames = endFrame - startFrame + 1
 
-  // Preload and asynchronously decode all frames for zero-stutter rendering
+  // Preload frames with mobile detection, batched requests and memory optimization
   useEffect(() => {
     let isCancelled = false
     let loadedCount = 0
     const loadedImages: HTMLImageElement[] = new Array(totalFrames)
 
     const preloadFrames = async () => {
-      const promises = []
+      const isMobile =
+        typeof window !== "undefined" &&
+        (window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+      const basePath = isMobile ? "/sequence/mobile" : "/sequence"
 
-      for (let i = startFrame; i <= endFrame; i++) {
-        const index = i - startFrame
-        const frameNum = String(i).padStart(3, "0")
-        const img = new Image()
-        img.src = `/sequence/ezgif-frame-${frameNum}.jpg`
+      const loadSingleImage = (frameNumber: number, index: number): Promise<void> => {
+        return new Promise<void>((resolve) => {
+          const frameNum = String(frameNumber).padStart(3, "0")
+          const img = new Image()
+          img.src = `${basePath}/ezgif-frame-${frameNum}.jpg`
 
-        const p = (async () => {
-          try {
-            await img.decode()
-          } catch {
-            if (!img.complete) {
-              await new Promise<void>((resolve) => {
-                img.onload = () => resolve()
-                img.onerror = () => resolve()
-              })
-            }
-          } finally {
+          const onComplete = () => {
             if (!isCancelled) {
               loadedImages[index] = img
               loadedCount++
               setLoadProgress(Math.round((loadedCount / totalFrames) * 100))
             }
+            resolve()
           }
-        })()
 
-        promises.push(p)
+          if (img.complete) {
+            onComplete()
+          } else {
+            img.onload = onComplete
+            img.onerror = onComplete
+          }
+        })
       }
 
-      await Promise.all(promises)
+      // Batch requests to prevent mobile network choking and memory surges
+      const batchSize = isMobile ? 8 : 16
+      for (let i = startFrame; i <= endFrame; i += batchSize) {
+        if (isCancelled) break
+        const batchPromises = []
+        for (let j = i; j < Math.min(i + batchSize, endFrame + 1); j++) {
+          batchPromises.push(loadSingleImage(j, j - startFrame))
+        }
+        await Promise.all(batchPromises)
+      }
 
       if (!isCancelled) {
         setImages(loadedImages)
@@ -83,10 +91,13 @@ export default function BookScrollAnimation() {
 
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext("2d", { alpha: false })
+    const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: false })
     if (!ctx) return
 
-    const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 2)
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+    const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, isMobile ? 1.5 : 2)
     
     // Lerp state for physics-based frame momentum
     const targetFrameRef = { current: 0 }
