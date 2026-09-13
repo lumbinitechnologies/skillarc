@@ -92,15 +92,12 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
     >
       <div className="max-w-7xl mx-auto px-6 lg:px-8 grid grid-cols-2 md:grid-cols-5 gap-8">
         <div className="col-span-2 space-y-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center">
             <img
               src="/skillarc_logo.svg"
               alt="SkillArc Logo"
-              className="h-8 w-auto object-contain brightness-0 contrast-200"
+              className="h-16 md:h-20 w-auto object-contain brightness-0 contrast-200"
             />
-            <div>
-              <span className="text-[13px] font-mono text-[#0B132B]/50 uppercase tracking-widest font-black">Academic OS</span>
-            </div>
           </div>
           <p className="text-xs text-[#0B132B]/70 max-w-xs leading-relaxed font-mono font-bold">
             The complete academic operating system for modern educational institutions.
@@ -161,7 +158,7 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
         ))}
       </div>
       <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-12 mt-12 border-t border-[#0B132B]/10 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-[#0B132B]/60 font-mono font-bold">
-        <p>© {new Date().getFullYear()} SkillArc Academic OS. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} SkillArc. All rights reserved.</p>
         <p className="flex gap-4">
           <a href="#" className="hover:text-[#0B132B] transition-colors">Privacy Policy</a>
           <span>•</span>

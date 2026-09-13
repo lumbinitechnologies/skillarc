@@ -53,18 +53,15 @@ export default function LoginPage() {
           <div className="absolute -top-10 -left-10 w-64 h-64 rounded-full bg-[#3A6DAF]/10 blur-[80px]" />
           <div className="absolute bottom-10 right-10 w-72 h-72 rounded-full bg-[#E57D37]/10 blur-[100px]" />
 
-          {/* Top Branding Tag */}
-          <div className="flex items-center gap-3 relative z-10 font-['Space_Mono',monospace] text-xs uppercase tracking-widest text-[#94BAC4] font-bold">
-            <Link href="/" className="flex items-center gap-2 group">
+          {/* Top Branding Logo */}
+          <div className="flex items-center relative z-10">
+            <Link href="/" className="inline-block group">
               <img
                 src="/skillarc_logo.svg"
                 alt="SkillArc Logo"
-                className="h-8 w-auto object-contain group-hover:scale-105 transition-transform duration-200"
+                className="h-16 lg:h-20 w-auto object-contain group-hover:scale-105 transition-transform duration-200 drop-shadow-[0_0_24px_rgba(229,125,55,0.2)]"
               />
-              <span className="text-[#ECDFCB] hover:text-[#EAAD62] transition-colors">SKILLARC OS</span>
             </Link>
-            <span>//</span>
-            <span>AUTH_GATEWAY</span>
           </div>
 
           {/* Main Typographic Headline */}
@@ -120,14 +117,13 @@ export default function LoginPage() {
           
           {/* Top Navigation Row (Mobile Brand Visible) */}
           <div className="flex justify-between items-center w-full relative z-10">
-            <div className="lg:hidden flex items-center gap-2 font-['Space_Mono',monospace] text-xs uppercase tracking-widest text-[#94BAC4] font-bold">
+            <Link href="/" className="lg:hidden flex items-center group">
               <img
                 src="/skillarc_logo.svg"
                 alt="SkillArc Logo"
-                className="h-7 w-auto object-contain"
+                className="h-12 w-auto object-contain"
               />
-              <span className="text-[#ECDFCB]">SKILLARC OS</span>
-            </div>
+            </Link>
             <Link
               href="/"
               className="text-xs font-['Space_Mono',monospace] text-[#94BAC4] hover:text-[#EAAD62] transition-colors uppercase tracking-widest font-bold flex items-center gap-1.5 ml-auto"
@@ -252,8 +248,7 @@ export default function LoginPage() {
           </motion.div>
 
           {/* Footer Row */}
-          <div className="w-full flex justify-between items-center text-[10px] font-['Space_Mono',monospace] text-[#94BAC4] pt-8 relative z-10 font-bold border-t border-[#3A6DAF]/10">
-            <span>SKILLARC ACADEMIC OS // 2026 EDITION</span>
+          <div className="w-full flex justify-end items-center text-[10px] font-['Space_Mono',monospace] text-[#94BAC4] pt-8 relative z-10 font-bold border-t border-[#3A6DAF]/10">
             <span>STATUS: ONLINE</span>
           </div>
 

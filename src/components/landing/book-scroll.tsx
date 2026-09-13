@@ -196,9 +196,9 @@ export default function BookScrollAnimation() {
     // 2. Scroll indicator fade out (0 -> 0.8)
     tl.to(".scroll-indicator", { opacity: 0, y: 15, ease: "none", duration: 0.8 }, 0)
 
-    // 3. Beat A: Visible at start, clean fade out from 1.0 -> 1.8
-    tl.to(".beat-a-top", { opacity: 0, y: -25, ease: "power1.in", duration: 0.8 }, 1.0)
-    tl.to(".beat-a-bottom", { opacity: 0, y: 25, ease: "power1.in", duration: 0.8 }, 1.0)
+    // 3. Beat A: Visible at start, clean slide-out to flanks from 1.0 -> 1.8
+    tl.to(".beat-a-left", { opacity: 0, x: -40, ease: "power1.in", duration: 0.8 }, 1.0)
+    tl.to(".beat-a-right", { opacity: 0, x: 40, ease: "power1.in", duration: 0.8 }, 1.0)
 
     // 4. Beat B: Fades in at 2.2 -> 3.0, stays until 4.2, fades out completely 4.2 -> 5.0
     tl.fromTo(".beat-b", { opacity: 0, y: 30 }, { opacity: 1, y: 0, ease: "power2.out", duration: 0.8 }, 2.2)
@@ -261,29 +261,56 @@ export default function BookScrollAnimation() {
         </div>
       </div>
 
-      {/* --- PURE EDITORIAL SCROLLYTELLING OVERLAYS --- */}
+      {/* --- PURE EDITORIAL SCROLLYTELLING OVERLAYS WITH GLASSMORPHIC TYPOGRAPHY --- */}
 
-      {/* Beat A (0% - 18%) - Top Title: Positioned high in the upper third */}
-      <div className="beat-a-top absolute inset-x-6 top-16 sm:top-20 md:top-24 flex flex-col items-center text-center pointer-events-none z-20">
-        <h2 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tight text-white leading-none drop-shadow-2xl">
-          KNOWLEDGE <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#E57D37] to-[#EAAD62]">UNFOLDS.</span>
+      {/* Beat A (0% - 18%) - Left Flank: "KNOWLEDGE" */}
+      <div className="beat-a-left absolute left-6 sm:left-10 md:left-12 lg:left-16 xl:left-24 top-24 md:top-[46%] md:-translate-y-1/2 flex flex-col items-start text-left max-w-[240px] sm:max-w-xs md:max-w-sm pointer-events-none z-20">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] backdrop-blur-md border border-white/10 mb-3 sm:mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#EAAD62] animate-pulse" />
+          <span className="text-[10px] uppercase tracking-[0.25em] text-[#EAAD62] font-mono font-bold">
+            ARCH // CORE
+          </span>
+        </div>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/95 via-white/40 to-white/10 [-webkit-text-stroke:1px_rgba(255,255,255,0.25)]">
+            KNOWLEDGE
+          </span>
         </h2>
+        <p className="mt-4 text-xs sm:text-sm text-white/60 font-mono font-medium max-w-[240px] leading-relaxed hidden sm:block">
+          A living database architecture for modern universities and colleges.
+        </p>
       </div>
 
-      {/* Beat A (0% - 18%) - Bottom Subtitle: Positioned cleanly on the lower third */}
-      <div className="beat-a-bottom absolute inset-x-6 bottom-16 sm:bottom-20 md:bottom-24 flex flex-col items-center text-center pointer-events-none z-20">
-        <p className="text-xs sm:text-sm md:text-base text-white/70 max-w-md font-medium leading-relaxed">
-          A living database architecture for modern universities and colleges.
+      {/* Beat A (0% - 18%) - Right Flank: "UNFOLDS." */}
+      <div className="beat-a-right absolute right-6 sm:right-10 md:right-12 lg:right-16 xl:right-24 bottom-24 md:top-[46%] md:-translate-y-1/2 md:bottom-auto flex flex-col items-start md:items-end text-left md:text-right max-w-[240px] sm:max-w-xs md:max-w-sm pointer-events-none z-20 ml-auto">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E57D37]/15 backdrop-blur-md border border-[#E57D37]/30 mb-3 sm:mb-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#E57D37] animate-pulse" />
+          <span className="text-[10px] uppercase tracking-[0.25em] text-[#E57D37] font-mono font-bold">
+            OS // TELEMETRY
+          </span>
+        </div>
+        <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(229,125,55,0.3)]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#FFB074]/95 via-[#E57D37]/50 to-[#E57D37]/10 [-webkit-text-stroke:1px_rgba(229,125,55,0.35)]">
+            UNFOLDS.
+          </span>
+        </h2>
+        <p className="mt-4 text-xs sm:text-sm text-[#ECDFCB]/60 font-mono font-medium max-w-[240px] leading-relaxed hidden sm:block">
+          Unified operational engine orchestrating schedules, placements & telemetry.
         </p>
       </div>
 
       {/* Beat B (22% - 50%) - Responsive: Top on mobile, Left on desktop */}
       <div className="beat-b absolute left-6 sm:left-10 md:left-20 top-20 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left">
-        <span className="text-xs uppercase tracking-[0.25em] text-[#E57D37] font-bold block mb-2 sm:mb-3">
-          01 // SCHEDULING
-        </span>
-        <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white mb-3 sm:mb-4 leading-tight">
-          FLUID <br className="hidden sm:inline" />TIMETABLES
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E57D37]/15 backdrop-blur-md border border-[#E57D37]/30 mb-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#E57D37] animate-pulse" />
+          <span className="text-[10px] uppercase tracking-[0.2em] text-[#EAAD62] font-mono font-bold">
+            01 // SCHEDULING
+          </span>
+        </div>
+        <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight mb-3 sm:mb-4 leading-tight">
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/95 via-white/60 to-white/20 [-webkit-text-stroke:1px_rgba(255,255,255,0.2)]">
+            FLUID <br className="hidden sm:inline" />TIMETABLES
+          </span>
         </h2>
         <p className="text-xs sm:text-sm md:text-base text-white/70 leading-relaxed font-normal">
           Interactive visual timetable scheduling with automated conflict detection. Zero room clashes, balanced faculty workloads.
@@ -292,11 +319,16 @@ export default function BookScrollAnimation() {
 
       {/* Beat C (54% - 80%) - Responsive: Top on mobile, Right on desktop */}
       <div className="beat-c absolute right-6 sm:right-10 md:right-20 top-20 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left md:text-right ml-auto">
-        <span className="text-xs uppercase tracking-[0.25em] text-[#38BDF8] font-bold block mb-2 sm:mb-3">
-          02 // TELEMETRY
-        </span>
-        <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight text-white mb-3 sm:mb-4 leading-tight">
-          REAL-TIME <br className="hidden sm:inline" />INTELLIGENCE
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#38BDF8]/15 backdrop-blur-md border border-[#38BDF8]/30 mb-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
+          <span className="text-[10px] uppercase tracking-[0.2em] text-[#7DD3FC] font-mono font-bold">
+            02 // TELEMETRY
+          </span>
+        </div>
+        <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight mb-3 sm:mb-4 leading-tight">
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/95 via-white/60 to-white/20 [-webkit-text-stroke:1px_rgba(255,255,255,0.2)]">
+            REAL-TIME <br className="hidden sm:inline" />INTELLIGENCE
+          </span>
         </h2>
         <p className="text-xs sm:text-sm md:text-base text-white/70 leading-relaxed font-normal">
           Automated class attendance, direct student engagement telemetry, and real-time corporate recruitment sync.
@@ -305,12 +337,16 @@ export default function BookScrollAnimation() {
 
       {/* Beat D (82% - 100%) - Top Headline & Bottom CTA */}
       <div className="beat-d-top absolute inset-x-6 top-16 sm:top-20 md:top-24 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-2xl mx-auto">
-        <span className="text-xs uppercase tracking-[0.25em] text-[#E57D37] font-bold mb-3">
-          INTEGRATE SKILLARC
-        </span>
-        <h2 className="text-3xl sm:text-5xl md:text-7xl font-black uppercase tracking-tight text-white leading-tight">
-          ELEVATE YOUR <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#E57D37] to-[#EAAD62]">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/[0.05] backdrop-blur-md border border-white/15 mb-3">
+          <span className="text-[10px] uppercase tracking-[0.25em] text-[#EAAD62] font-mono font-bold">
+            INTEGRATE SKILLARC
+          </span>
+        </div>
+        <h2 className="text-3xl sm:text-5xl md:text-7xl font-black uppercase tracking-tight leading-tight">
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/90 via-white/40 to-white/10 [-webkit-text-stroke:1px_rgba(255,255,255,0.2)]">
+            ELEVATE YOUR <br />
+          </span>
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#FFA366] via-[#E57D37]/50 to-[#E57D37]/10 [-webkit-text-stroke:1px_rgba(229,125,55,0.35)]">
             ACADEMICS.
           </span>
         </h2>
