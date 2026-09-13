@@ -25,7 +25,7 @@ export default function EditorialNavbar() {
           <img
             src="/skillarc_logo.svg"
             alt="SkillArc Logo"
-            className="h-10 w-auto md:h-12 object-contain group-hover:scale-105 transition-transform duration-200"
+            className="h-20 w-auto md:h-24 object-contain group-hover:scale-105 transition-transform duration-200"
           />
         </Link>
 
@@ -137,7 +137,7 @@ export default function EditorialNavbar() {
 
               {/* Editorial Curtain Footer */}
               <div className="w-full flex flex-col sm:flex-row justify-between items-start sm:items-center pt-8 border-t border-[#3A6DAF]/30 font-mono text-xs text-[#94BAC4]">
-                <div>SKILLARC ACADEMIC OS // 2026 EDITION</div>
+                <div>SKILLARC</div>
                 <div className="flex gap-6 mt-4 sm:mt-0 text-[#ECDFCB]">
                   <Link
                     href="/auth/login"
