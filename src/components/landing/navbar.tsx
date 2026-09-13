@@ -25,7 +25,7 @@ export default function EditorialNavbar() {
           <img
             src="/skillarc_logo.svg"
             alt="SkillArc Logo"
-            className="h-20 w-auto md:h-24 object-contain group-hover:scale-105 transition-transform duration-200"
+            className="h-14 w-auto sm:h-18 md:h-24 object-contain group-hover:scale-105 transition-transform duration-200"
           />
         </Link>
 
@@ -34,14 +34,14 @@ export default function EditorialNavbar() {
           <Link
             href="/auth/login"
             onClick={() => setIsOpen(false)}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
+            className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
           >
             <span>Log In</span>
           </Link>
 
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`group relative flex items-center gap-3 px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${
+            className={`group relative flex items-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-2 rounded-full border bg-[#14234B]/60 backdrop-blur-md transition-all duration-500 overflow-hidden ${
               isOpen
                 ? "border-[#E57D37] text-[#E57D37]"
                 : "border-[#3A6DAF]/30 hover:border-[#EAAD62]"
@@ -59,10 +59,10 @@ export default function EditorialNavbar() {
                 isOpen ? "text-[#E57D37]" : "text-[#ECDFCB]"
               }`}
             >
-              {isOpen ? "Close" : "Index"}
+              {isOpen ? "Close" : "Menu"}
             </span>
             <span
-              className={`font-mono text-xs uppercase tracking-widest absolute left-8 translate-y-6 transition-transform duration-300 group-hover:translate-y-0 ${
+              className={`font-mono text-xs uppercase tracking-widest absolute left-7 sm:left-8 translate-y-6 transition-transform duration-300 group-hover:translate-y-0 ${
                 isOpen ? "text-[#E57D37]" : "text-[#EAAD62]"
               }`}
             >

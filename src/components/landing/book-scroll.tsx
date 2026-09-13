@@ -150,7 +150,7 @@ export default function BookScrollAnimation() {
 
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext("2d", { alpha: false, willReadFrequently: false })
+    const ctx = canvas.getContext("2d", { alpha: true, willReadFrequently: false })
     if (!ctx) return
 
     const isMobile =
@@ -169,28 +169,32 @@ export default function BookScrollAnimation() {
       const w = window.innerWidth
       const h = window.innerHeight
 
-      canvas.width = Math.round(w * dpr)
-      canvas.height = Math.round(h * dpr)
-      canvas.style.width = `${w}px`
-      canvas.style.height = `${h}px`
-
       const sampleFrame = framesRef.current[0]
       const imgRatio = sampleFrame ? sampleFrame.width / sampleFrame.height : 16 / 9
       const screenRatio = w / h
 
-      let drawWidth = w * dpr
-      let drawHeight = h * dpr
+      let cssWidth = w
+      let cssHeight = h
 
       if (screenRatio > imgRatio) {
-        drawWidth = h * imgRatio * dpr
+        cssHeight = h
+        cssWidth = Math.round(h * imgRatio)
       } else {
-        drawHeight = (w / imgRatio) * dpr
+        cssWidth = w
+        cssHeight = Math.round(w / imgRatio)
       }
 
-      const x = Math.round((canvas.width - drawWidth) / 2)
-      const y = Math.round((canvas.height - drawHeight) / 2)
+      canvas.width = Math.round(cssWidth * dpr)
+      canvas.height = Math.round(cssHeight * dpr)
+      canvas.style.width = `${cssWidth}px`
+      canvas.style.height = `${cssHeight}px`
 
-      drawDimsRef.current = { x, y, drawWidth, drawHeight }
+      drawDimsRef.current = {
+        x: 0,
+        y: 0,
+        drawWidth: canvas.width,
+        drawHeight: canvas.height,
+      }
 
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = "high"
@@ -213,6 +217,7 @@ export default function BookScrollAnimation() {
       if (!frame) return
 
       const dims = drawDimsRef.current
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(frame, dims.x, dims.y, dims.drawWidth, dims.drawHeight)
     }
 
@@ -293,10 +298,27 @@ export default function BookScrollAnimation() {
         </div>
       )}
 
-      {/* Canvas Centered Container */}
-      <div className="absolute inset-0 flex items-center justify-center overflow-hidden z-10">
-        <canvas ref={canvasRef} className="block pointer-events-none" />
+      {/* Canvas Centered Container with GPU Radial Edge Dissolve Mask */}
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden z-10 pointer-events-none">
+        <canvas
+          ref={canvasRef}
+          className="block pointer-events-none"
+          style={{
+            WebkitMaskImage:
+              "radial-gradient(ellipse 88% 80% at 50% 50%, #000 45%, rgba(0,0,0,0.5) 75%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%)",
+            WebkitMaskComposite: "source-in",
+            maskImage:
+              "radial-gradient(ellipse 88% 80% at 50% 50%, #000 45%, rgba(0,0,0,0.5) 75%, transparent 100%), linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%), linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%)",
+            maskComposite: "intersect",
+          }}
+        />
       </div>
+
+      {/* Soft Edge Dissolve Overlays (Top, Bottom, and Lateral Feathering) */}
+      <div className="absolute top-0 inset-x-0 h-24 sm:h-36 bg-gradient-to-b from-[#050505] via-[#050505]/70 to-transparent pointer-events-none z-[14]" />
+      <div className="absolute bottom-0 inset-x-0 h-28 sm:h-44 bg-gradient-to-t from-[#050505] via-[#050505]/80 to-transparent pointer-events-none z-[14]" />
+      <div className="absolute inset-y-0 left-0 w-12 sm:w-28 bg-gradient-to-r from-[#050505] to-transparent pointer-events-none z-[14]" />
+      <div className="absolute inset-y-0 right-0 w-12 sm:w-28 bg-gradient-to-l from-[#050505] to-transparent pointer-events-none z-[14]" />
 
       {/* Ambient Void Overlay & Warm Radial Light */}
       <div className="absolute inset-0 bg-radial from-transparent via-[#050505]/20 to-[#050505]/75 pointer-events-none z-[15]" />
@@ -314,11 +336,11 @@ export default function BookScrollAnimation() {
 
       {/* --- PURE EDITORIAL SCROLLYTELLING OVERLAYS WITH GLASSMORPHIC TYPOGRAPHY --- */}
 
-      {/* Beat A (0% - 18%) - Left Flank: "KNOWLEDGE" */}
-      <div className="beat-a-left absolute left-6 sm:left-10 md:left-12 lg:left-16 xl:left-24 top-24 md:top-[46%] md:-translate-y-1/2 flex flex-col items-start text-left max-w-[240px] sm:max-w-xs md:max-w-sm pointer-events-none z-20">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] backdrop-blur-md border border-white/10 mb-3 sm:mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#EAAD62] animate-pulse" />
-          <span className="text-[10px] uppercase tracking-[0.25em] text-[#EAAD62] font-mono font-bold">
+      {/* Beat A (0% - 18%) - Left Flank: "KNOWLEDGE" (Lowered closer to animation) */}
+      <div className="beat-a-left absolute left-6 sm:left-10 md:left-12 lg:left-16 xl:left-24 top-36 sm:top-40 md:top-[46%] md:-translate-y-1/2 flex flex-col items-start text-left max-w-[260px] sm:max-w-xs md:max-w-sm pointer-events-none z-20">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 backdrop-blur-md border border-amber-400/40 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FCD34D] animate-pulse shadow-[0_0_8px_#FCD34D]" />
+          <span className="text-[10px] uppercase tracking-[0.25em] text-[#FCD34D] font-mono font-bold">
             ARCH // CORE
           </span>
         </div>
@@ -327,16 +349,16 @@ export default function BookScrollAnimation() {
             KNOWLEDGE
           </span>
         </h2>
-        <p className="mt-4 text-xs sm:text-sm text-white/60 font-mono font-medium max-w-[240px] leading-relaxed hidden sm:block">
+        <p className="mt-4 text-xs sm:text-sm text-white/75 font-mono font-medium max-w-[260px] leading-[1.65] hidden sm:block">
           A living database architecture for modern universities and colleges.
         </p>
       </div>
 
-      {/* Beat A (0% - 18%) - Right Flank: "UNFOLDS." */}
-      <div className="beat-a-right absolute right-6 sm:right-10 md:right-12 lg:right-16 xl:right-24 bottom-24 md:top-[46%] md:-translate-y-1/2 md:bottom-auto flex flex-col items-start md:items-end text-left md:text-right max-w-[240px] sm:max-w-xs md:max-w-sm pointer-events-none z-20 ml-auto">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E57D37]/15 backdrop-blur-md border border-[#E57D37]/30 mb-3 sm:mb-4">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#E57D37] animate-pulse" />
-          <span className="text-[10px] uppercase tracking-[0.25em] text-[#E57D37] font-mono font-bold">
+      {/* Beat A (0% - 18%) - Right Flank: "UNFOLDS." (Raised closer to animation) */}
+      <div className="beat-a-right absolute right-6 sm:right-10 md:right-12 lg:right-16 xl:right-24 bottom-36 sm:bottom-40 md:top-[46%] md:-translate-y-1/2 md:bottom-auto flex flex-col items-start md:items-end text-left md:text-right max-w-[260px] sm:max-w-xs md:max-w-sm pointer-events-none z-20 ml-auto">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E57D37]/20 backdrop-blur-md border border-[#E57D37]/60 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(229,125,55,0.3)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FFA366] animate-pulse shadow-[0_0_8px_#FFA366]" />
+          <span className="text-[10px] uppercase tracking-[0.25em] text-[#FFA366] font-mono font-bold">
             OS // TELEMETRY
           </span>
         </div>
@@ -345,16 +367,16 @@ export default function BookScrollAnimation() {
             UNFOLDS.
           </span>
         </h2>
-        <p className="mt-4 text-xs sm:text-sm text-[#ECDFCB]/60 font-mono font-medium max-w-[240px] leading-relaxed hidden sm:block">
+        <p className="mt-4 text-xs sm:text-sm text-[#ECDFCB]/75 font-mono font-medium max-w-[260px] leading-[1.65] hidden sm:block">
           Unified operational engine orchestrating schedules, placements & telemetry.
         </p>
       </div>
 
       {/* Beat B (22% - 50%) - Responsive: Top on mobile, Left on desktop */}
-      <div className="beat-b absolute left-6 sm:left-10 md:left-20 top-20 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E57D37]/15 backdrop-blur-md border border-[#E57D37]/30 mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#E57D37] animate-pulse" />
-          <span className="text-[10px] uppercase tracking-[0.2em] text-[#EAAD62] font-mono font-bold">
+      <div className="beat-b absolute left-6 sm:left-10 md:left-20 top-36 sm:top-40 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E57D37]/20 backdrop-blur-md border border-[#E57D37]/60 mb-3.5 shadow-[0_0_15px_rgba(229,125,55,0.3)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#FFB074] animate-pulse shadow-[0_0_8px_#FFB074]" />
+          <span className="text-[10px] uppercase tracking-[0.2em] text-[#FFB074] font-mono font-bold">
             01 // SCHEDULING
           </span>
         </div>
@@ -363,16 +385,16 @@ export default function BookScrollAnimation() {
             FLUID <br className="hidden sm:inline" />TIMETABLES
           </span>
         </h2>
-        <p className="text-xs sm:text-sm md:text-base text-white/70 leading-relaxed font-normal">
+        <p className="text-xs sm:text-sm md:text-base text-white/80 leading-[1.65] font-normal">
           Interactive visual timetable scheduling with automated conflict detection. Zero room clashes, balanced faculty workloads.
         </p>
       </div>
 
       {/* Beat C (54% - 80%) - Responsive: Top on mobile, Right on desktop */}
-      <div className="beat-c absolute right-6 sm:right-10 md:right-20 top-20 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left md:text-right ml-auto">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#38BDF8]/15 backdrop-blur-md border border-[#38BDF8]/30 mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse" />
-          <span className="text-[10px] uppercase tracking-[0.2em] text-[#7DD3FC] font-mono font-bold">
+      <div className="beat-c absolute right-6 sm:right-10 md:right-20 top-36 sm:top-40 md:top-1/2 md:-translate-y-1/2 max-w-xs sm:max-w-sm md:max-w-md pointer-events-none opacity-0 z-20 text-left md:text-right ml-auto">
+        <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-sky-500/20 backdrop-blur-md border border-sky-400/60 mb-3.5 shadow-[0_0_15px_rgba(56,189,248,0.35)]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8]" />
+          <span className="text-[10px] uppercase tracking-[0.2em] text-[#38BDF8] font-mono font-bold">
             02 // TELEMETRY
           </span>
         </div>
@@ -381,18 +403,13 @@ export default function BookScrollAnimation() {
             REAL-TIME <br className="hidden sm:inline" />INTELLIGENCE
           </span>
         </h2>
-        <p className="text-xs sm:text-sm md:text-base text-white/70 leading-relaxed font-normal">
+        <p className="text-xs sm:text-sm md:text-base text-white/80 leading-[1.65] font-normal">
           Automated class attendance, direct student engagement telemetry, and real-time corporate recruitment sync.
         </p>
       </div>
 
       {/* Beat D (82% - 100%) - Top Headline & Bottom CTA */}
-      <div className="beat-d-top absolute inset-x-6 top-16 sm:top-20 md:top-24 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/[0.05] backdrop-blur-md border border-white/15 mb-3">
-          <span className="text-[10px] uppercase tracking-[0.25em] text-[#EAAD62] font-mono font-bold">
-            INTEGRATE SKILLARC
-          </span>
-        </div>
+      <div className="beat-d-top absolute inset-x-6 top-36 sm:top-40 md:top-28 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-2xl mx-auto">
         <h2 className="text-3xl sm:text-5xl md:text-7xl font-black uppercase tracking-tight leading-tight">
           <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/90 via-white/40 to-white/10 [-webkit-text-stroke:1px_rgba(255,255,255,0.2)]">
             ELEVATE YOUR <br />
@@ -403,15 +420,15 @@ export default function BookScrollAnimation() {
         </h2>
       </div>
 
-      <div className="beat-d-bottom absolute inset-x-6 bottom-16 sm:bottom-20 md:bottom-24 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-md mx-auto">
-        <p className="text-xs sm:text-sm text-white/70 mb-5 sm:mb-6 leading-relaxed font-normal">
+      <div className="beat-d-bottom absolute inset-x-6 bottom-20 sm:bottom-24 md:bottom-20 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-sm sm:max-w-lg mx-auto">
+        <p className="text-xs sm:text-sm md:text-base text-white/85 mb-5 sm:mb-6 leading-[1.65] font-normal max-w-xs sm:max-w-md">
           Deploy SkillArc across your institution with unified curriculum structures and zero operational downtime.
         </p>
         <button
           onClick={() => {
             window.location.href = "/auth/login"
           }}
-          className="pointer-events-auto px-8 sm:px-9 py-3.5 sm:py-4 rounded-full bg-[#E57D37] text-white hover:bg-white hover:text-[#0B132B] font-bold text-xs uppercase tracking-wider shadow-[0_0_35px_rgba(229,125,55,0.6)] hover:shadow-[0_0_50px_rgba(255,255,255,0.8)] transition-all duration-300 transform hover:scale-105 active:scale-95 border-none cursor-pointer flex items-center gap-2.5"
+          className="pointer-events-auto px-8 sm:px-9 py-3.5 sm:py-4 rounded-full bg-[#E57D37] text-white hover:bg-white hover:text-[#0B132B] font-bold text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_35px_rgba(229,125,55,0.6)] hover:shadow-[0_0_50px_rgba(255,255,255,0.8)] transition-all duration-300 transform hover:scale-105 active:scale-95 border-none cursor-pointer flex items-center gap-2.5"
         >
           <span>Access Gateway</span>
           <ArrowRight size={14} />
