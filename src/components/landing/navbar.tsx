@@ -29,12 +29,12 @@ export default function EditorialNavbar() {
           />
         </Link>
 
-        {/* Unique Magnetic "Menu" Trigger Pill */}
-        <div className="pointer-events-auto flex items-center gap-3 font-sans">
+        {/* Unique Magnetic "Menu" Trigger & Log In Pills */}
+        <div className="pointer-events-auto flex items-center gap-2 sm:gap-3 font-sans">
           <Link
             href="/auth/login"
             onClick={() => setIsOpen(false)}
-            className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
+            className="flex items-center gap-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full border border-[#3A6DAF]/30 bg-[#14234B]/60 hover:bg-[#14234B]/80 text-[#ECDFCB] hover:border-[#EAAD62] hover:text-[#EAAD62] backdrop-blur-md transition-all duration-300 font-mono text-[10px] sm:text-xs uppercase tracking-widest font-bold"
           >
             <span>Log In</span>
           </Link>
