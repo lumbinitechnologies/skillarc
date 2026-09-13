@@ -5,6 +5,8 @@ import { Subject, Faculty, Slot, TimetableWeek, AcademicEvent, TimetableClash } 
 import { timetableService } from "../services/timetableService"
 import { clashDetectionService } from "../services/clashDetectionService"
 import { supabase } from "@/lib/supabase"
+import { useDashboardSession } from "@/components/dashboard-session-provider"
+import { startClientTiming } from "@/lib/client-perf"
 
 interface TimetableContextType {
   loading: boolean
@@ -55,8 +57,8 @@ export function TimetableProvider({
   sectionId,
   programId,
 }: TimetableProviderProps) {
+  const session = useDashboardSession()
   const [loading, setLoading] = useState(true)
-  const [multiWeekEnabled, setMultiWeekEnabled] = useState(false)
   const [institutionId, setInstitutionId] = useState<string | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [faculty, setFaculty] = useState<Faculty[]>([])
@@ -66,6 +68,7 @@ export function TimetableProvider({
   const [academicEvents, setAcademicEvents] = useState<AcademicEvent[]>([])
   const [clashes, setClashes] = useState<TimetableClash[]>([])
   const [isScanningClashes, setIsScanningClashes] = useState(false)
+  const multiWeekEnabled = Boolean(session?.features.includes("multi_week_timetable"))
 
   const [periods, setPeriods] = useState<Array<{ id: string; label: string; time: string }>>([
     { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
@@ -74,23 +77,6 @@ export function TimetableProvider({
     { id: "P4", label: "Period 4", time: "12:00 – 1:00" },
     { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
   ])
-
-  // Check organization features
-  useEffect(() => {
-    async function checkFeatures() {
-      try {
-        const res = await fetch("/api/org-features")
-        if (res.ok) {
-          const json = await res.json()
-          const isEnabled = Boolean(json.features?.includes("multi_week_timetable"))
-          setMultiWeekEnabled(isEnabled)
-        }
-      } catch (err) {
-        console.error("Failed to check multi_week_timetable feature:", err)
-      }
-    }
-    checkFeatures()
-  }, [])
 
   // Scan clashes across institution
   const scanClashes = useCallback(async () => {
@@ -136,6 +122,7 @@ export function TimetableProvider({
   // Load initial timetable data scoped to selected Program / Department
   useEffect(() => {
     async function load() {
+      const finishTiming = startClientTiming("dashboard.timetable.initialize")
       try {
         setLoading(true)
 
@@ -150,7 +137,7 @@ export function TimetableProvider({
           return
         }
 
-        const id = await timetableService.getCurrentInstitutionId()
+        const id = session?.institution_id ?? await timetableService.getCurrentInstitutionId()
         setInstitutionId(id)
 
         // Resolve target program from query or section
@@ -195,11 +182,12 @@ export function TimetableProvider({
         console.error("Failed to load timetable data:", err?.message || err)
       } finally {
         setLoading(false)
+        finishTiming()
       }
     }
 
     load()
-  }, [semester, sectionId, programId])
+  }, [semester, sectionId, programId, session?.institution_id])
 
   // Reload slots when selectedWeek changes
   const reloadSlots = useCallback(async () => {

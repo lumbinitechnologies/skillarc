@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
@@ -36,7 +35,7 @@ import {
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
-import type { UserContext } from "@/lib/user-context"
+import type { DashboardSession } from "@/lib/dashboard-session"
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
@@ -45,11 +44,12 @@ type MenuItem = {
   icon: React.ElementType
   path: string
   badge?: number | null
+  prefetch?: boolean
 }
 
 const roleMenus: Record<Role, MenuItem[]> = {
   [ROLES.SUPER_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin", prefetch: true },
     { name: "Organizations", icon: Building2, path: "/dashboard/super-admin/organizations" },
     { name: "Org Admins", icon: UserCog, path: "/dashboard/super-admin/org-admins" },
     { name: "Institutions", icon: School, path: "/dashboard/super-admin/institutions" },
@@ -59,11 +59,11 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.ORG_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin", prefetch: true },
   ],
 
   [ROLES.INSTITUTION_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin", prefetch: true },
     { name: "Admissions", icon: FileText, path: "/dashboard/institution-admin/admissions" },
     { name: "Intake Cohorts", icon: FolderKanban, path: "/dashboard/institution-admin/intakes" },
     { name: "Billing Desk", icon: CreditCard, path: "/dashboard/institution-admin/billing" },
@@ -83,19 +83,19 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.HOD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod", prefetch: true },
     { name: "Events", icon: Calendar, path: "/dashboard/hod/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/hod/placements" },
   ],
 
   [ROLES.PROGRAM_HEAD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head", prefetch: true },
     { name: "Events", icon: Calendar, path: "/dashboard/program-head/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/program-head/placements" },
   ],
 
   [ROLES.FACULTY]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty", prefetch: true },
     { name: "Courses", icon: BookOpen, path: "/dashboard/faculty/subjects" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
     { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
@@ -104,7 +104,7 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.STUDENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student", prefetch: true },
     { name: "Attendance", icon: UserCheck, path: "/dashboard/student/attendance" },
     { name: "Courses", icon: BookOpen, path: "/dashboard/student/subjects" },
     { name: "To Do Lists", icon: ListTodo, path: "/dashboard/student/todo" },
@@ -117,7 +117,7 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.PARENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent" },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent", prefetch: true },
     { name: "Events", icon: Calendar, path: "/dashboard/parent/events" },
   ],
 }
@@ -144,39 +144,24 @@ const roleAccents: Record<Role, { bg: string; color: string }> = {
   [ROLES.PARENT]: { bg: "rgba(234,173,98,0.15)", color: "#EAAD62" },
 }
 
-export default function Sidebar({ profile: initialProfile }: { profile: UserContext | null }) {
+export default function Sidebar({ profile: initialProfile }: { profile: DashboardSession | null }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
   const profile = initialProfile
     ? {
         name: initialProfile.name,
         role: initialProfile.role as Role,
         profile_image_url: initialProfile.profile_image_url,
         is_timetable_builder: initialProfile.is_timetable_builder,
+        features: initialProfile.features,
       }
     : null
-
-  useEffect(() => {
-    async function getFeatures() {
-      try {
-        const res = await fetch("/api/org-features")
-        const json = await res.json()
-        setEnabledFeatures(json.features || [])
-      } catch (err) {
-        console.error("Failed to load org features on sidebar:", err)
-      }
-    }
-
-    getFeatures()
-  }, [])
 
   async function handleLogout() {
     await supabase.auth.signOut()
     window.location.replace("/auth/login")
   }
 
-  let baseItems = profile ? [...(roleMenus[profile.role] ?? [])] : []
+  const baseItems = profile ? [...(roleMenus[profile.role] ?? [])] : []
 
   if (profile && (profile.role === ROLES.HOD || profile.role === ROLES.PROGRAM_HEAD || profile.is_timetable_builder)) {
     const facultyItems = roleMenus[ROLES.FACULTY] || []
@@ -190,7 +175,8 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
   }
 
   let menu: MenuItem[] = baseItems.filter((item) => {
-    if (!enabledFeatures) return true // Allow items to render while loading features
+    const enabledFeatures = profile?.features
+    if (!enabledFeatures) return true
     if (item.name === "Admissions") {
       return enabledFeatures.includes("admissions_workflow")
     }
@@ -288,7 +274,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
                   },
                 }}
               >
-                {menu.map((item, idx) => {
+                {menu.map((item) => {
                   const Icon = item.icon
                   const isActive = pathname === item.path || (item.path === "/dashboard" && pathname === "/dashboard")
 
@@ -317,6 +303,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
                       >
                         <Link
                           href={item.path}
+                          prefetch={item.prefetch ?? false}
                           onClick={() => document.body.classList.remove("sidebar-open")}
                           className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
                             isActive
@@ -368,6 +355,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
           {/* Highlighted Account Item */}
           <Link
             href="/dashboard/account/profile"
+            prefetch={false}
             onClick={() => document.body.classList.remove("sidebar-open")}
             className={`group flex items-center justify-between py-2.5 px-3.5 text-sm font-semibold rounded-2xl transition-all duration-200 border ${
               pathname.startsWith("/dashboard/account")
@@ -413,6 +401,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: UserCont
           {/* User Profile Card with DP at the Very Bottom */}
           <Link
             href="/dashboard/account/profile"
+            prefetch={false}
             onClick={() => document.body.classList.remove("sidebar-open")}
             className="block group cursor-pointer pt-1"
           >

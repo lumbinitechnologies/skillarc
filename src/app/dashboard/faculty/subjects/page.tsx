@@ -3,52 +3,49 @@ import { BookOpen, GraduationCap, Layers, ArrowRight } from "lucide-react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import Link from "next/link"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function FacultySubjectsPage() {
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const profile = context
 
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id, name")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
 
   const { data: assignmentRows } = await supabase
     .from("faculty_subjects")
     .select("subject_id")
-    .eq("faculty_id", user.id)
-    .eq("institution_id", profile?.institution_id)
+    .eq("faculty_id", profile.id)
+    .eq("institution_id", profile.institution_id)
 
   const subjectIds = (assignmentRows ?? []).map((row: any) => row.subject_id).filter(Boolean)
 
-  const { data: subjectRowsData } = subjectIds.length
-    ? await supabase
-        .from("subjects")
-        .select("id, name, code")
-        .in("id", subjectIds)
-        .eq("institution_id", profile?.institution_id)
-        .order("name")
-    : { data: [] }
+  const [subjectResult, timetableResult] = await measureServer("dashboard.faculty.subjects.data", () => Promise.all([
+    subjectIds.length
+      ? supabase
+          .from("subjects")
+          .select("id, name, code")
+          .in("id", subjectIds)
+          .eq("institution_id", profile.institution_id)
+          .order("name")
+      : Promise.resolve({ data: [] }),
+    subjectIds.length
+      ? supabase
+          .from("timetable_slots")
+          .select("subject_id, section_id, semester")
+          .eq("faculty_id", profile.id)
+          .in("subject_id", subjectIds)
+          .order("semester")
+      : Promise.resolve({ data: [] }),
+  ]))
 
-  const subjectRows = Array.isArray(subjectRowsData) ? subjectRowsData : []
-
-  const { data: timetableRows } = subjectIds.length
-    ? await supabase
-        .from("timetable_slots")
-        .select("subject_id, section_id, semester")
-        .eq("faculty_id", user.id)
-        .in("subject_id", subjectIds)
-        .order("semester")
-    : { data: [] }
+  const subjectRows = Array.isArray(subjectResult.data) ? subjectResult.data : []
+  const timetableRows = timetableResult.data ?? []
 
   const sectionIds = Array.from(
     new Set(

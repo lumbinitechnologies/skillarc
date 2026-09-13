@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import { StudentSubjectDetailClient } from "./student-subject-detail-client"
 import { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
 import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export const dynamic = "force-dynamic"
 
@@ -16,30 +16,19 @@ interface PageProps {
 
 export default async function StudentSubjectDetailPage({ params }: PageProps) {
   const { subjectId } = await params
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
 
   const adminClient = createSupabaseAdminClient()
-
-  const { data: userProfile } = await adminClient
-    .from("users")
-    .select("id, name, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const { data: studentData } = await adminClient
     .from("students")
     .select("id, section_id, program_id, semester")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = { ...context, ...studentData }
 
   // 1. Fetch Subject Info
   const { data: subject } = await adminClient
@@ -102,7 +91,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     ? await adminClient
         .from("submissions")
         .select("*")
-        .eq("student_id", user.id)
+        .eq("student_id", context.id)
         .in("assignment_id", assignmentIds)
     : { data: [] }
 
@@ -158,7 +147,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       ? await adminClient
           .from("attendance_records")
           .select("session_id, status")
-          .eq("student_id", user.id)
+          .eq("student_id", context.id)
           .in("session_id", sessionIds)
       : { data: [] }
 
@@ -207,7 +196,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
   }
 
   // 8. Fetch Project Groups for this student and subject
-  const studentGroupsAll = await getStudentProjectGroupsAction(user.id)
+  const studentGroupsAll = await getStudentProjectGroupsAction(context.id)
   const projectGroups = (studentGroupsAll || []).filter((sg: any) => sg.project?.subject_id === subjectId)
 
   let gradeColumns: any[] = []
@@ -228,7 +217,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       const { data: entries, error: entriesError } = await adminClient
         .from("grade_entries")
         .select("*")
-        .eq("student_id", user.id)
+        .eq("student_id", context.id)
         .in("column_id", columnIds)
 
       if (!entriesError) {
@@ -242,7 +231,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
   return (
     <StudentSubjectDetailClient
-      studentId={user.id}
+      studentId={context.id}
       studentName={profile.name}
       studentSectionId={studentSectionId}
       subject={subject}

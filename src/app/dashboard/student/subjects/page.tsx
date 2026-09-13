@@ -1,37 +1,26 @@
 import { redirect } from "next/navigation"
 import { BookOpen, GraduationCap, UserRound, ArrowRight } from "lucide-react"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import Link from "next/link"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudentSubjectsPage() {
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
 
   const adminClient = createSupabaseAdminClient()
-
-  const { data: userProfile } = await adminClient
-    .from("users")
-    .select("id, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!userProfile || userProfile.role !== ROLES.STUDENT) redirect("/dashboard")
+  if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const { data: studentData } = await adminClient
     .from("students")
     .select("id, section_id, program_id, semester")
-    .eq("id", user.id)
+    .eq("id", context.id)
     .single()
 
-  const profile = { ...userProfile, ...studentData }
+  const profile = { ...context, ...studentData }
 
   const { data: timetableRows = [] } = profile.section_id
     ? await adminClient

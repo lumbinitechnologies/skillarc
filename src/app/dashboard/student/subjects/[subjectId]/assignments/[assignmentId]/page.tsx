@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { StudentAssignmentSolveClient } from "./student-assignment-solve-client"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
 export const dynamic = "force-dynamic"
 
@@ -20,22 +20,11 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
     redirect(subjectId ? `/dashboard/student/subjects/${subjectId}` : "/dashboard/student")
   }
 
-  const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
 
   const adminClient = createSupabaseAdminClient()
-
-  const { data: profile } = await adminClient
-    .from("users")
-    .select("id, name, role")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!profile) redirect("/dashboard")
+  const profile = context
 
   // 1. Fetch Assignment Info
   const { data: assignment } = await adminClient
@@ -53,14 +42,14 @@ export default async function StudentAssignmentPage({ params }: PageProps) {
     .from("submissions")
     .select("*")
     .eq("assignment_id", assignmentId)
-    .eq("student_id", user.id)
+    .eq("student_id", context.id)
     .maybeSingle()
 
   const finalSubjectId = assignment.subject_id || subjectId || ""
 
   return (
     <StudentAssignmentSolveClient
-      studentId={user.id}
+      studentId={context.id}
       studentName={profile.name || "Student"}
       subjectId={finalSubjectId}
       assignment={assignment}

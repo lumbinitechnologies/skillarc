@@ -73,21 +73,7 @@ export function StudentsClientPage({
   const [isLoading, setIsLoading]     = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null)
   const { toast } = useToast()
-
-  useEffect(() => {
-    async function getFeatures() {
-      try {
-        const res = await fetch("/api/org-features")
-        const json = await res.json()
-        setEnabledFeatures(json.features || [])
-      } catch (err) {
-        console.error("Failed to load org features:", err)
-      }
-    }
-    getFeatures()
-  }, [])
 
   // ── Fetch page from server ──────────────────────────────────────────────
   const loadStudents = useCallback(async (targetPage = page, targetLimit = limit) => {

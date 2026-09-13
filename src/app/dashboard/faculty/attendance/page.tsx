@@ -2,32 +2,27 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
 import AttendanceClient from "./attendance-client"
+import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 
 export default async function AttendancePage() {
+  const context = await getCurrentDashboardSession()
+  if (!context) redirect("/auth/login")
+
   const supabase = await createSupabaseServerClient()
+  const profile = context
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("id, role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role)) {
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) {
     redirect("/dashboard")
   }
 
+  if (!profile.institution_id) redirect("/dashboard")
   const institutionId = profile.institution_id
 
   const { data: facultyAssignments } = await supabase
     .from("faculty_subjects")
     .select("subject_id, section_id, semester")
-    .eq("faculty_id", user.id)
+    .eq("faculty_id", profile.id)
     .eq("institution_id", institutionId)
 
   const subjectIds = (facultyAssignments ?? []).map((row: any) => row.subject_id)
@@ -35,25 +30,29 @@ export default async function AttendancePage() {
     .map((row: any) => row.section_id)
     .filter(Boolean)
 
-  const { data: programs = [] } = await supabase
-    .from("programs")
-    .select("id,name")
-    .eq("institution_id", institutionId)
-    .order("name")
+  const [programsResult, sectionsResult, subjectsResult] = await measureServer("dashboard.faculty.attendance.data", () => Promise.all([
+    supabase
+      .from("programs")
+      .select("id,name")
+      .eq("institution_id", institutionId)
+      .order("name"),
+    supabase
+      .from("sections")
+      .select("id,name,semester,program_id")
+      .eq("institution_id", institutionId)
+      .order("semester"),
+    subjectIds.length
+      ? supabase
+          .from("subjects")
+          .select("id,name,code,semester")
+          .in("id", subjectIds)
+          .order("semester")
+      : Promise.resolve({ data: [] }),
+  ]))
 
-  const { data: sections = [] } = await supabase
-    .from("sections")
-    .select("id,name,semester,program_id")
-    .eq("institution_id", institutionId)
-    .order("semester")
-
-  const { data: subjects = [] } = subjectIds.length
-    ? await supabase
-        .from("subjects")
-        .select("id,name,code,semester")
-        .in("id", subjectIds)
-        .order("semester")
-    : { data: [] }
+  const programs = programsResult.data ?? []
+  const sections = sectionsResult.data ?? []
+  const subjects = subjectsResult.data ?? []
 
   let studentQuery = supabase
     .from("students")
@@ -116,7 +115,7 @@ export default async function AttendancePage() {
 
   return (
     <AttendanceClient
-      facultyId={user.id}
+      facultyId={profile.id}
       institutionId={institutionId}
       programs={programs ?? []}
       sections={sections ?? []}

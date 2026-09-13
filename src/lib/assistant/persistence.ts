@@ -3,6 +3,31 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { createAssistantDataClient } from "@/lib/assistant/server-client"
 import type { AssistantPrincipal, AssistantUIMessage, SourceCitation } from "@/lib/assistant/types"
 
+type AssistantThreadSummary = {
+  id: string
+  title: string
+  createdAt: string
+  updatedAt: string
+}
+
+function scopedThreadsQuery(client: SupabaseClient, principal: AssistantPrincipal) {
+  let query = client
+    .from("assistant_threads")
+    .select("id, title, created_at, updated_at")
+    .eq("user_id", principal.userId)
+    .eq("actor_user_id", principal.actorUserId)
+    .eq("role", principal.role)
+
+  query = principal.organizationId ? query.eq("organization_id", principal.organizationId) : query.is("organization_id", null)
+  query = principal.institutionId ? query.eq("institution_id", principal.institutionId) : query.is("institution_id", null)
+  query = principal.departmentId ? query.eq("department_id", principal.departmentId) : query.is("department_id", null)
+  return query
+}
+
+function scopedThreadQuery(client: SupabaseClient, principal: AssistantPrincipal, threadId: string) {
+  return scopedThreadsQuery(client, principal).eq("id", threadId).maybeSingle()
+}
+
 export async function createOrVerifyThread(
   principal: AssistantPrincipal,
   requestedThreadId?: string,
@@ -11,23 +36,7 @@ export async function createOrVerifyThread(
   const threadId = requestedThreadId ?? crypto.randomUUID()
 
   if (requestedThreadId) {
-    const scopedQuery = client
-      .from("assistant_threads")
-      .select("id")
-      .eq("id", threadId)
-      .eq("user_id", principal.userId)
-      .eq("actor_user_id", principal.actorUserId)
-      .eq("role", principal.role)
-    const scopedWithOrganization = principal.organizationId
-      ? scopedQuery.eq("organization_id", principal.organizationId)
-      : scopedQuery.is("organization_id", null)
-    const scopedWithInstitution = principal.institutionId
-      ? scopedWithOrganization.eq("institution_id", principal.institutionId)
-      : scopedWithOrganization.is("institution_id", null)
-    const scopedWithDepartment = principal.departmentId
-      ? scopedWithInstitution.eq("department_id", principal.departmentId)
-      : scopedWithInstitution.is("department_id", null)
-    const { data, error } = await scopedWithDepartment.maybeSingle()
+    const { data, error } = await scopedThreadQuery(client, principal, threadId)
     if (error) throw new Error("Assistant thread storage is unavailable")
     if (!data) {
       // The client may generate a fresh UUID before the first turn. It is safe
@@ -72,6 +81,61 @@ export async function createOrVerifyThread(
       .map((row) => row.message as AssistantUIMessage)
       .filter((message) => message && ["user", "assistant"].includes(message.role)),
   }
+}
+
+export async function listAssistantThreads(
+  principal: AssistantPrincipal,
+  limit = 30,
+): Promise<AssistantThreadSummary[]> {
+  const client = await createAssistantDataClient(principal)
+  const { data: threads, error } = await scopedThreadsQuery(client, principal)
+    .order("updated_at", { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 50))
+  if (error) throw new Error("Assistant thread storage is unavailable")
+  if (!threads?.length) return []
+
+  const threadIds = threads.map((thread) => thread.id)
+  const { data: userMessages, error: messagesError } = await client
+    .from("assistant_messages")
+    .select("thread_id, content, created_at")
+    .in("thread_id", threadIds)
+    .eq("role", "user")
+    .order("created_at", { ascending: true })
+  if (messagesError) throw new Error("Assistant message storage is unavailable")
+
+  const firstMessageByThread = new Map<string, string>()
+  for (const message of userMessages ?? []) {
+    if (!firstMessageByThread.has(message.thread_id)) firstMessageByThread.set(message.thread_id, message.content)
+  }
+
+  return threads.map((thread) => ({
+    id: thread.id,
+    title: (thread.title || firstMessageByThread.get(thread.id) || "New conversation").trim().slice(0, 72),
+    createdAt: thread.created_at,
+    updatedAt: thread.updated_at,
+  }))
+}
+
+export async function getAssistantThread(
+  principal: AssistantPrincipal,
+  threadId: string,
+): Promise<AssistantUIMessage[] | null> {
+  const client = await createAssistantDataClient(principal)
+  const { data: thread, error: threadError } = await scopedThreadQuery(client, principal, threadId)
+  if (threadError) throw new Error("Assistant thread storage is unavailable")
+  if (!thread) return null
+
+  const { data: messages, error } = await client
+    .from("assistant_messages")
+    .select("message")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+    .limit(40)
+  if (error) throw new Error("Assistant message storage is unavailable")
+
+  return (messages ?? [])
+    .map((row) => row.message as AssistantUIMessage)
+    .filter((message) => message && ["user", "assistant"].includes(message.role))
 }
 
 export async function findStoredTurn(
@@ -143,6 +207,15 @@ export async function persistMessage(
     client_turn_id: clientTurnId,
   })
   if (error) throw new Error("Assistant message persistence failed")
+
+  const { error: threadError } = await client
+    .from("assistant_threads")
+    .update({
+      title: message.role === "user" && text ? text.slice(0, 72) : undefined,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", threadId)
+  if (threadError) throw new Error("Assistant thread persistence failed")
 }
 
 export async function persistSources(

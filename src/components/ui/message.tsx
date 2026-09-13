@@ -7,7 +7,7 @@ export function Message({ className, ...props }: HTMLAttributes<HTMLDivElement>)
 }
 
 export function MessageContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("max-w-[82%] rounded-2xl px-3.5 py-3 text-xs leading-relaxed", className)} {...props} />
+  return <div className={cn("w-fit max-w-full rounded-2xl px-3.5 py-3 text-xs leading-relaxed", className)} {...props} />
 }
 
 export function MessageAvatar({ children, className, ...props }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) {

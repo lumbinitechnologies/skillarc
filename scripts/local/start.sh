@@ -14,6 +14,5 @@ docker compose -f docker-compose.local.yml up -d redis
 echo
 echo "Local services are running. Start the app in separate terminals with:"
 echo "  npm run local:dev"
-echo "  npm run local:backend"
 echo "Local Supabase Studio: http://127.0.0.1:55423"
 echo "Local email inbox:     http://127.0.0.1:55424"
