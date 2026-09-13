@@ -7,9 +7,12 @@ import { ArrowDown, ArrowRight } from "lucide-react"
 
 gsap.registerPlugin(ScrollTrigger)
 
+type DrawableFrame = ImageBitmap | HTMLImageElement
+
 export default function BookScrollAnimation() {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const framesRef = useRef<DrawableFrame[]>([])
   const drawDimsRef = useRef<{
     x: number
     y: number
@@ -17,7 +20,6 @@ export default function BookScrollAnimation() {
     drawHeight: number
   }>({ x: 0, y: 0, drawWidth: 0, drawHeight: 0 })
 
-  const [images, setImages] = useState<HTMLImageElement[]>([])
   const [loading, setLoading] = useState(true)
   const [loadProgress, setLoadProgress] = useState(0)
 
@@ -25,69 +27,126 @@ export default function BookScrollAnimation() {
   const endFrame = 137
   const totalFrames = endFrame - startFrame + 1
 
-  // Preload frames with mobile detection, batched requests and memory optimization
+  // Preload frames with touch/tablet detection, GPU ImageBitmap acceleration and memory cleanup
   useEffect(() => {
     let isCancelled = false
     let loadedCount = 0
-    const loadedImages: HTMLImageElement[] = new Array(totalFrames)
+    const loadedFrames: DrawableFrame[] = new Array(totalFrames)
 
-    const preloadFrames = async () => {
-      const isMobile =
-        typeof window !== "undefined" &&
-        (window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
-      const basePath = isMobile ? "/sequence/mobile" : "/sequence"
+    const isMobile =
+      typeof window !== "undefined" &&
+      (window.matchMedia("(max-width: 1024px)").matches ||
+        "ontouchstart" in window ||
+        (navigator.maxTouchPoints && navigator.maxTouchPoints > 0))
 
-      const loadSingleImage = (frameNumber: number, index: number): Promise<void> => {
-        return new Promise<void>((resolve) => {
-          const frameNum = String(frameNumber).padStart(3, "0")
-          const img = new Image()
-          img.src = `${basePath}/ezgif-frame-${frameNum}.jpg`
+    const basePath = isMobile ? "/sequence/mobile" : "/sequence"
 
-          const onComplete = () => {
+    const loadSingleFrame = async (frameNumber: number, index: number): Promise<void> => {
+      const frameNum = String(frameNumber).padStart(3, "0")
+      const src = `${basePath}/ezgif-frame-${frameNum}.jpg`
+
+      try {
+        const img = new Image()
+        img.src = src
+
+        if (!img.complete) {
+          await new Promise<void>((resolve) => {
+            img.onload = () => resolve()
+            img.onerror = () => resolve()
+          })
+        }
+
+        // Create zero-copy GPU bitmap preserving true source aspect ratio
+        if (typeof createImageBitmap !== "undefined") {
+          try {
+            const targetWidth = 720
+            const targetHeight =
+              img.width > 0 && img.height > 0
+                ? Math.round(targetWidth * (img.height / img.width))
+                : 405
+
+            const bitmap = isMobile
+              ? await createImageBitmap(img, {
+                  resizeWidth: targetWidth,
+                  resizeHeight: targetHeight,
+                  resizeQuality: "high",
+                })
+              : await createImageBitmap(img)
+
             if (!isCancelled) {
-              loadedImages[index] = img
-              loadedCount++
-              setLoadProgress(Math.round((loadedCount / totalFrames) * 100))
+              loadedFrames[index] = bitmap
+            } else {
+              bitmap.close()
             }
-            resolve()
+          } catch {
+            if (!isCancelled) loadedFrames[index] = img
           }
-
-          if (img.complete) {
-            onComplete()
-          } else {
-            img.onload = onComplete
-            img.onerror = onComplete
+        } else {
+          try {
+            await img.decode()
+          } catch {
+            // Fallback for older browsers
           }
-        })
+          if (!isCancelled) loadedFrames[index] = img
+        }
+      } catch {
+        // Fallback placeholder
+      } finally {
+        if (!isCancelled) {
+          loadedCount++
+          setLoadProgress(Math.round((loadedCount / totalFrames) * 100))
+        }
       }
+    }
 
-      // Batch requests to prevent mobile network choking and memory surges
+    const preloadAll = async () => {
       const batchSize = isMobile ? 8 : 16
       for (let i = startFrame; i <= endFrame; i += batchSize) {
         if (isCancelled) break
         const batchPromises = []
         for (let j = i; j < Math.min(i + batchSize, endFrame + 1); j++) {
-          batchPromises.push(loadSingleImage(j, j - startFrame))
+          batchPromises.push(loadSingleFrame(j, j - startFrame))
         }
         await Promise.all(batchPromises)
       }
 
       if (!isCancelled) {
-        setImages(loadedImages)
+        framesRef.current = loadedFrames
         setLoading(false)
       }
     }
 
-    preloadFrames()
+    void preloadAll()
 
     return () => {
       isCancelled = true
+      loadedFrames.forEach((frame) => {
+        if (frame && "close" in frame && typeof frame.close === "function") {
+          try {
+            frame.close()
+          } catch {}
+        }
+      })
     }
   }, [totalFrames])
 
-  // Setup GSAP Timeline and Continuous RAF Lerp Canvas Rendering
+  // Explicitly close GPU ImageBitmap buffers ONLY on component unmount
   useEffect(() => {
-    if (loading || images.length === 0) return
+    return () => {
+      framesRef.current.forEach((frame) => {
+        if (frame && "close" in frame && typeof frame.close === "function") {
+          try {
+            frame.close()
+          } catch {}
+        }
+      })
+      framesRef.current = []
+    }
+  }, [])
+
+  // Setup GSAP Timeline and Zero-Jank Hardware Canvas Rendering
+  useEffect(() => {
+    if (loading || framesRef.current.length === 0) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -96,13 +155,14 @@ export default function BookScrollAnimation() {
 
     const isMobile =
       typeof window !== "undefined" &&
-      (window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent))
+      (window.matchMedia("(max-width: 1024px)").matches ||
+        "ontouchstart" in window ||
+        (navigator.maxTouchPoints && navigator.maxTouchPoints > 0))
+
     const dpr = Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, isMobile ? 1.5 : 2)
     
-    // Lerp state for physics-based frame momentum
+    let currentFrameIndex = -1
     const targetFrameRef = { current: 0 }
-    const renderedFrameRef = { current: 0 }
-    let rafId: number | null = null
 
     // Calculate containment dimensions once on resize instead of every frame
     const resizeCanvas = () => {
@@ -114,8 +174,8 @@ export default function BookScrollAnimation() {
       canvas.style.width = `${w}px`
       canvas.style.height = `${h}px`
 
-      const sampleImg = images[0]
-      const imgRatio = sampleImg ? sampleImg.width / sampleImg.height : 16 / 9
+      const sampleFrame = framesRef.current[0]
+      const imgRatio = sampleFrame ? sampleFrame.width / sampleFrame.height : 16 / 9
       const screenRatio = w / h
 
       let drawWidth = w * dpr
@@ -127,66 +187,48 @@ export default function BookScrollAnimation() {
         drawHeight = (w / imgRatio) * dpr
       }
 
-      const x = (canvas.width - drawWidth) / 2
-      const y = (canvas.height - drawHeight) / 2
+      const x = Math.round((canvas.width - drawWidth) / 2)
+      const y = Math.round((canvas.height - drawHeight) / 2)
 
       drawDimsRef.current = { x, y, drawWidth, drawHeight }
 
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = "high"
 
-      render(renderedFrameRef.current)
+      currentFrameIndex = -1
+      render(targetFrameRef.current)
     }
 
-    // High-fidelity sub-frame interpolation renderer with smoothstep crossfade
+    // High-performance single-pass GPU hardware blit (skips redundant draws)
     const render = (frameFloat: number) => {
-      const total = images.length
+      const currentFrames = framesRef.current
+      const total = currentFrames.length
       if (total === 0) return
 
-      const clamped = Math.max(0, Math.min(total - 1, frameFloat))
-      const baseIndex = Math.floor(clamped)
-      const nextIndex = Math.min(total - 1, baseIndex + 1)
-      const fraction = clamped - baseIndex
+      const index = Math.max(0, Math.min(total - 1, Math.round(frameFloat)))
+      if (index === currentFrameIndex) return
+      currentFrameIndex = index
 
-      // Hermite smoothstep curve for zero-tangent boundary blending
-      const smoothFraction = fraction * fraction * (3 - 2 * fraction)
+      const frame = currentFrames[index]
+      if (!frame) return
 
-      const img1 = images[baseIndex]
-      const img2 = images[nextIndex]
       const dims = drawDimsRef.current
-
-      // Clear full canvas area
-      ctx.fillStyle = "#050505"
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-      // Draw primary base frame
-      if (img1) {
-        ctx.globalAlpha = 1
-        ctx.drawImage(img1, dims.x, dims.y, dims.drawWidth, dims.drawHeight)
-      }
-
-      // Smooth temporal crossfade between adjacent frames
-      if (img2 && smoothFraction > 0.002 && baseIndex !== nextIndex) {
-        ctx.globalAlpha = smoothFraction
-        ctx.drawImage(img2, dims.x, dims.y, dims.drawWidth, dims.drawHeight)
-      }
-
-      ctx.globalAlpha = 1
+      ctx.drawImage(frame, dims.x, dims.y, dims.drawWidth, dims.drawHeight)
     }
 
-    // Instantaneous direct canvas rendering on scroll update
+    // Single ScrollTrigger timeline with smooth Apple-style scrub
     const tl = gsap.timeline({
       scrollTrigger: {
         trigger: containerRef.current,
         start: "top top",
-        end: "+=380%",
-        scrub: 0.2,
+        end: "+=220%",
+        scrub: 0.4,
         pin: true,
         pinSpacing: true,
       },
     })
 
-    // 1. Frame progression with direct frame update (0 input lag)
+    // 1. Frame progression with direct frame update
     tl.to(
       targetFrameRef,
       {
@@ -228,7 +270,7 @@ export default function BookScrollAnimation() {
       tl.kill()
       window.removeEventListener("resize", resizeCanvas)
     }
-  }, [loading, images, totalFrames])
+  }, [loading, totalFrames])
 
   return (
     <div
