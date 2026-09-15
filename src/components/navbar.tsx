@@ -24,43 +24,65 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
       }
     : null
 
-  const [notifications, setNotifications] = useState<any[]>(
-    initialProfile?.initialNotifications ?? []
-  )
-  const subscribedUserIdRef = useRef<string | null>(null)
+  const [notifications, setNotifications] = useState<any[]>([])
 
   useEffect(() => {
-    if (initialProfile?.initialNotifications) {
-      setNotifications(initialProfile.initialNotifications)
-    }
-  }, [initialProfile?.initialNotifications])
+    async function loadNotifications(userId: string) {
+      try {
+        let items: any[] | null = null
+        const res = await supabase
+          .from("notifications")
+          .select("id, title, message, link, is_read, created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(10)
 
-  useEffect(() => {
-    const userId = initialProfile?.id
-    if (!userId || subscribedUserIdRef.current === userId) return
-
-    subscribedUserIdRef.current = userId
-    const channel = supabase
-      .channel(`public:notifications:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setNotifications((prev) => [payload.new, ...prev.slice(0, 9)])
-          }
+        // Fallback if link column is not added to notifications table yet
+        if (res.error && (res.error.code === "42703" || res.error.message?.includes("link"))) {
+          const fallback = await supabase
+            .from("notifications")
+            .select("id, title, message, is_read, created_at")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .limit(10)
+          items = (fallback.data as any[]) || []
+        } else if (res.data) {
+          items = res.data as any[]
         }
-      )
-      .subscribe()
 
-    return () => {
-      subscribedUserIdRef.current = null
-      supabase.removeChannel(channel)
+        if (items) {
+          setNotifications(items)
+        }
+      } catch (err) {
+        console.error("Failed to load notifications:", err)
+      }
+    }
+
+    if (initialProfile?.id) {
+      loadNotifications(initialProfile.id)
+
+      // Realtime subscription for incoming notifications
+      const channel = supabase
+        .channel(`public:notifications:${initialProfile.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${initialProfile.id}`,
+          },
+          (payload) => {
+            if (payload.new) {
+              setNotifications((prev) => [payload.new, ...prev.slice(0, 9)])
+            }
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
   }, [initialProfile?.id])
 
