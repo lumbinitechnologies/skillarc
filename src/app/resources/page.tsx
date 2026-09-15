@@ -1,202 +1,28 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import gsap from "gsap"
 import { motion } from "framer-motion"
-import LandingNavbar from "@/components/landing/navbar"
-import { CtaSection, Footer } from "@/components/landing/footer"
-import { ArrowRight, BookOpen, Terminal, Activity, FileText } from "lucide-react"
+import { ArrowRight, BookOpen, FileText, ShieldCheck, Users } from "lucide-react"
+import Link from "next/link"
+import { DEMO_URL } from "@/components/landing/marketing-data"
+import { MarketingShell, SectionEyebrow, SoftCard } from "@/components/landing/marketing-ui"
+
+const resources = [
+  { title: "Platform overview", description: "See how SkillArc connects university structure, role-based workspaces, and everyday follow-through.", label: "Start here", href: "/platform", icon: BookOpen, accent: "text-[#31547A] bg-[#EAF1F7]" },
+  { title: "Solutions by role", description: "Explore what university leadership, administrators, department heads, faculty, students, and families see.", label: "For every team", href: "/solutions", icon: Users, accent: "text-[#C85D2E] bg-[#FBECE5]" },
+  { title: "Feature library", description: "Review the capabilities behind admissions, timetables, attendance, grades, events, billing, and placements.", label: "Explore capabilities", href: "/features", icon: FileText, accent: "text-[#087F62] bg-[#E7F6F0]" },
+  { title: "Security, privacy, and access", description: "Talk with our team about role-based workspaces and how information is kept relevant to each role.", label: "Talk to the team", href: DEMO_URL, external: true, icon: ShieldCheck, accent: "text-[#A66314] bg-[#FFF5DE]" },
+]
 
 export default function ResourcesPage() {
-  const heroRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        ".resources-word",
-        { y: 130, opacity: 0, filter: "blur(14px)", rotateY: -45 },
-        {
-          y: 0,
-          opacity: 1,
-          filter: "blur(0px)",
-          rotateY: 0,
-          duration: 1.25,
-          stagger: 0.12,
-          ease: "power4.out",
-          delay: 0.12,
-        }
-      )
-
-      gsap.fromTo(
-        ".resources-subtext",
-        { y: 18, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.9,
-          ease: "power2.out",
-          delay: 0.75,
-        }
-      )
-
-      gsap.fromTo(
-        ".page-section-stagger",
-        { y: 24, opacity: 0 },
-        {
-          y: 0,
-          opacity: 1,
-          duration: 0.95,
-          stagger: 0.08,
-          ease: "power3.out",
-          delay: 0.25,
-        }
-      )
-    }, heroRef)
-
-    return () => ctx.revert()
-  }, [])
-
-  const resourceCards = [
-    {
-      title: "Blueprints Documentation",
-      desc: "Learn about the logical organizational hierarchy schema, curriculum blueprints, user mapping matrices, and tenant synchronization controls.",
-      icon: <BookOpen size={20} className="text-[#38BDF8]" />,
-      tag: "API blue-prints",
-    },
-    {
-      title: "Developer API Guide",
-      desc: "Comprehensive integration guide detailing REST endpoints, supabase relational tables, database partitions, and active webhooks setup.",
-      icon: <Terminal size={20} className="text-[#FF5500]" />,
-      tag: "DEVELOPER OS",
-    },
-    {
-      title: "System Status Live",
-      desc: "Monitor telemetry live connections, active client database updates, server latency benchmarks, and active postgres triggers.",
-      icon: <Activity size={20} className="text-[#38BDF8]" />,
-      tag: "System telemetry",
-    },
-    {
-      title: "Legal Terms & Policies",
-      desc: "Read our security blueprints, tenant isolation guidelines, data encryption rules, terms of service, and privacy policies.",
-      icon: <FileText size={20} className="text-[#FF5500]" />,
-      tag: "Security blueprints",
-    },
-  ]
-
   return (
-    <div className="editorial-page min-h-screen bg-[#0A0A0A] text-[#F4F4F0] antialiased selection:bg-[#FF5500]/20 selection:text-[#FF5500]">
-      <LandingNavbar />
+    <MarketingShell>
+      <main>
+        <section className="relative overflow-hidden bg-[#14234B] px-5 py-20 text-white sm:px-8 lg:py-28"><div className="absolute left-[-8rem] top-[-9rem] h-[30rem] w-[30rem] rounded-full bg-[#31547A]/50 blur-3xl" aria-hidden="true" /><div className="relative mx-auto max-w-7xl"><SectionEyebrow accent="amber">A useful starting point</SectionEyebrow><h1 className="mt-6 max-w-4xl text-5xl font-bold leading-[1.04] tracking-[-0.055em] sm:text-6xl lg:text-7xl">Clear answers for university teams.</h1><p className="mt-7 max-w-2xl text-lg leading-8 text-[#D6E3EC]">Start with the overview that matches your role, then explore the workflows behind a more connected student journey.</p></div></section>
 
-      <section ref={heroRef} className="editorial-hero relative pt-40 pb-20 px-6 sm:px-12 md:px-16 flex flex-col justify-between overflow-hidden z-10 border-b border-white/10">
-        <div className="hero-glow absolute left-1/2 top-8 -translate-x-1/2 w-[720px] h-[720px] rounded-full bg-[#38BDF8]/12 pointer-events-none" />
-        <div className="absolute right-8 top-20 h-24 w-24 rounded-full border border-[#38BDF8]/20 bg-[#38BDF8]/10 drift" />
-        
-        {/* Ambient floating elements */}
-        <div className="absolute left-16 top-48 w-32 h-32 rounded-full border border-[#38BDF8]/12 floating-element" style={{ animationDelay: '0s', animationDuration: '12s' }} />
-        <div className="absolute right-1/4 bottom-32 w-20 h-20 rounded-full bg-[#7DD3FC]/8 floating-accent" style={{ animationDelay: '1.5s' }} />
-        <div className="absolute left-1/3 top-32 w-16 h-16 rounded-full border border-[#FF5500]/10 floating-element" style={{ animationDelay: '2.5s', animationDuration: '15s' }} />
+        <section className="bg-[#F7FAFC] px-5 py-20 sm:px-8 lg:py-24"><div className="mx-auto max-w-7xl"><div className="max-w-3xl"><SectionEyebrow accent="navy">Resource hub</SectionEyebrow><h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Find the next useful answer.</h2><p className="mt-5 text-lg leading-8 text-[#58718B]">A practical orientation to the platform, the people it supports, and the work it connects.</p></div><div className="mt-12 grid gap-5 md:grid-cols-2">{resources.map((resource, index) => { const Icon = resource.icon; return <motion.div key={resource.title} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.4, delay: index * 0.06 }}><SoftCard className="flex h-full flex-col justify-between"><div><div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${resource.accent}`}><Icon size={20} aria-hidden="true" /></div><p className="mt-6 text-sm font-bold uppercase tracking-[0.12em] text-[#6D8498]">{resource.label}</p><h3 className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#14234B]">{resource.title}</h3><p className="mt-4 text-base leading-7 text-[#58718B]">{resource.description}</p></div>{resource.external ? <a href={resource.href} target="_blank" rel="noopener noreferrer" className="mt-7 inline-flex items-center gap-2 text-sm font-bold text-[#C85D2E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E]">Open conversation <ArrowRight size={16} aria-hidden="true" /></a> : <Link href={resource.href} className="mt-7 inline-flex items-center gap-2 text-sm font-bold text-[#C85D2E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E]">Explore {resource.title.toLowerCase()} <ArrowRight size={16} aria-hidden="true" /></Link>}</SoftCard></motion.div>})}</div></div></section>
 
-        <div className="max-w-7xl mx-auto w-full space-y-8 pt-12 relative z-10">
-          <div className="editorial-label page-section-stagger flex items-center gap-3 text-[#38BDF8] text-[10px]">
-            <span className="w-2 h-2 rounded-full bg-[#38BDF8] pulse-soft" />
-            <span>[ Comprehensive archive ]</span>
-          </div>
-
-          <h1 className="text-5xl sm:text-7xl md:text-8xl lg:text-[100px] font-black uppercase tracking-[-0.06em] leading-[0.88] max-w-5xl">
-            <span className="resources-word editorial-word block text-white"><span>System telemetry</span></span>
-            <span className="resources-word editorial-word block text-[#38BDF8]"><span>resources.</span></span>
-          </h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.85 }}
-            className="resources-subtext page-section-stagger max-w-xl text-white/60 text-sm sm:text-base leading-relaxed font-mono uppercase tracking-[0.18em]"
-          >
-            A living library of architecture notes, security guides, API references, and live operating data.
-          </motion.p>
-        </div>
-      </section>
-
-      <motion.section
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.2 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className="relative py-10 z-10"
-      >
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="editorial-card p-6 md:p-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#38BDF8]">Signal archive</p>
-                <h3 className="mt-3 text-3xl md:text-5xl font-black uppercase tracking-[-0.06em] text-[#F4F4F0]">Built for fast reference and long thinking.</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "docs",
-                  "api",
-                  "status",
-                  "policies",
-                ].map((item, index) => (
-                  <motion.span
-                    key={item}
-                    initial={{ opacity: 0, x: 18 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true, amount: 0.5 }}
-                    transition={{ duration: 0.45, delay: index * 0.06 }}
-                    className="rounded-full border border-[#38BDF8]/30 bg-[#38BDF8]/5 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#D8F3FF]"
-                  >
-                    {item}
-                  </motion.span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.section>
-
-      <section className="py-24 relative overflow-hidden z-10">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-            {resourceCards.map((card, index) => (
-              <div
-                key={card.title}
-                className="editorial-card group p-8 min-h-[260px] flex flex-col justify-between resource-card"
-                style={{ animationDelay: `${index * 0.12}s` }}
-              >
-                <div className="space-y-4">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-[#38BDF8]/20 to-transparent blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center icon-animate group-hover:scale-110 transition-transform">
-                        {card.icon}
-                      </div>
-                    </div>
-                    <span className="text-[9px] font-mono font-bold tracking-widest uppercase text-white/40 bg-white/5 border border-white/5 px-2.5 py-1 rounded">
-                      [ {card.tag} ]
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold uppercase text-[#F4F4F0] font-sans tracking-tight pt-2">
-                    {card.title}
-                  </h3>
-                  <p className="text-xs text-white/50 leading-relaxed font-mono">
-                    {card.desc}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 text-xs font-bold text-[#FF5500] uppercase tracking-widest font-mono pt-6 cursor-pointer group-hover:underline">
-                  <span>Access Documents</span>
-                  <ArrowRight size={13} className="transform group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <CtaSection variant="cyan" />
-      <Footer variant="cyan" />
-    </div>
+        <section className="bg-white px-5 py-16 sm:px-8 lg:py-20"><div className="mx-auto flex max-w-7xl flex-col gap-6 rounded-3xl border border-[#DCE6EE] bg-[#F0F5F8] p-7 sm:flex-row sm:items-center sm:justify-between sm:p-10"><div><p className="text-sm font-bold uppercase tracking-[0.12em] text-[#6D8498]">Need a university-specific conversation?</p><h2 className="mt-3 text-3xl font-bold tracking-[-0.04em] text-[#14234B]">Talk with the SkillArc team.</h2><p className="mt-3 max-w-xl text-base leading-7 text-[#58718B]">Bring your current workflow, campus structure, and student-support priorities. We’ll show you where the platform fits.</p></div><a href={DEMO_URL} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#C85D2E] px-6 py-3.5 text-sm font-bold text-white transition hover:bg-[#A94B22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E] focus-visible:ring-offset-2">Book a demo <ArrowRight size={16} aria-hidden="true" /></a></div></section>
+      </main>
+    </MarketingShell>
   )
 }
