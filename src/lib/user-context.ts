@@ -17,6 +17,7 @@ export type UserContext = {
   is_active: boolean
   is_timetable_builder: boolean
   isImpersonating: boolean
+  initialNotifications?: any[]
   originalProfile: {
     id: string
     role: string
@@ -49,7 +50,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     userId = user.id
   }
 
-  const [profileRes, userPermRes] = await Promise.all([
+  const [profileRes, userPermRes, notifRes] = await Promise.all([
     supabase
       .from("users")
       .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
@@ -61,6 +62,12 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       .eq("user_id", userId)
       .eq("permissions.name", "timetable_builder")
       .maybeSingle(),
+    supabase
+      .from("notifications")
+      .select("id, title, message, link, is_read, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(10),
   ])
 
   const t1 = performance.now()
@@ -104,6 +111,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       is_active: targetProfile?.is_active ?? true,
       is_timetable_builder: isTimetableBuilder,
       isImpersonating: true,
+      initialNotifications: notifRes.data ?? [],
       originalProfile: {
         id: actualProfile.id,
         role: actualProfile.role,
@@ -132,6 +140,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     is_active: actualProfile.is_active ?? true,
     is_timetable_builder: isTimetableBuilder,
     isImpersonating: false,
+    initialNotifications: notifRes.data ?? [],
     originalProfile: {
       id: actualProfile.id,
       role: actualProfile.role,
