@@ -1,5 +1,6 @@
 import { cache } from "react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { cookies, headers } from "next/headers"
 import { ROLES } from "@/constants/roles"
 
@@ -34,10 +35,10 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
   const t0 = performance.now()
   const headerList = await headers()
   let userId = headerList.get("x-user-id")
-  const supabase = await createSupabaseServerClient()
   const source = userId ? "header-fastpath" : "gotrue-fallback"
 
   if (!userId) {
+    const supabase = await createSupabaseServerClient()
     const {
       data: { user },
       error: userError,
@@ -49,13 +50,14 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     userId = user.id
   }
 
+  const admin = createSupabaseAdminClient()
   const [profileRes, userPermRes] = await Promise.all([
-    supabase
+    admin
       .from("users")
       .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
       .eq("id", userId)
       .maybeSingle(),
-    supabase
+    admin
       .from("user_permissions")
       .select("id, permissions!inner(name)")
       .eq("user_id", userId)
@@ -81,7 +83,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
 
   if (actualProfile.role === ROLES.SUPER_ADMIN && impRole) {
     const targetProfileData = impUserId
-      ? await supabase
+      ? await admin
           .from("users")
           .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
           .eq("id", impUserId)
