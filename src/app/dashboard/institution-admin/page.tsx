@@ -5,22 +5,23 @@ import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
 
 export default async function InstitutionAdminPage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
   const context = await getCurrentUserContext()
+  const contextMs = performance.now() - tContextStart
+
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/auth/login")
 
   const profile = context
   const supabase = await createSupabaseServerClient()
 
-  // 1. Fetch institution details
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("id, name, domain")
-    .eq("id", profile.institution_id)
-    .single()
+  // 2. Fetch counts, timetable, periods, logs, and attendance concurrently in ONE single parallel batch
+  const todayStr = new Date().toISOString().split("T")[0]
 
-  // 2. Fetch counts and datasets in parallel
+  const tBatchStart = performance.now()
   const [
+    institutionRes,
     facultyCountRes,
     studentCountRes,
     parentCountRes,
@@ -30,14 +31,18 @@ export default async function InstitutionAdminPage() {
     subjectCountRes,
     timetableSlotsRes,
     periodsRes,
-    institutionUsersRes,
     allFacultyRes,
     assignedFacultyRes,
     programsListRes,
     sectionsListRes,
     pendingInvitesRes,
     eventsRes,
+    auditLogsRes,
+    attendanceRecordsRes,
   ] = await Promise.all([
+    // Institution Details
+    supabase.from("institutions").select("id, name, domain").eq("id", profile.institution_id).maybeSingle(),
+
     // Basic counts
     supabase.from("users").select("*", { count: "exact", head: true }).eq("institution_id", profile.institution_id).in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
     supabase.from("users").select("*", { count: "exact", head: true }).eq("institution_id", profile.institution_id).eq("role", ROLES.STUDENT),
@@ -67,9 +72,6 @@ export default async function InstitutionAdminPage() {
     `).eq("institution_id", profile.institution_id),
     supabase.from("periods").select("period_number, start_time, end_time").eq("institution_id", profile.institution_id).order("period_number"),
 
-    // Users (to filter audit logs)
-    supabase.from("users").select("id, name, email").eq("institution_id", profile.institution_id),
-
     // Unassigned faculty metrics
     supabase.from("users").select("id, name, email").eq("institution_id", profile.institution_id).in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
     supabase.from("faculty_subjects").select("faculty_id"),
@@ -83,55 +85,23 @@ export default async function InstitutionAdminPage() {
 
     // Events
     supabase.from("events").select("id, title, description, start_time, location").eq("institution_id", profile.institution_id).order("start_time", { ascending: true }).limit(5),
+
+    // Direct Audit Logs by institution
+    supabase.from("audit_logs").select("id, action, entity_type, created_at, user_id, user_name, user_email").eq("institution_id", profile.institution_id).order("created_at", { ascending: false }).limit(6),
+
+    // Today's Attendance Records
+    supabase.from("attendance_records").select("status, attendance_sessions!inner(institution_id, attendance_date)").eq("attendance_sessions.institution_id", profile.institution_id).eq("attendance_sessions.attendance_date", todayStr),
   ])
+  const batchMs = performance.now() - tBatchStart
+  const totalMs = performance.now() - tPageStart
 
-  // Get active user IDs to fetch their recent activity/audit logs
-  const users = institutionUsersRes.data ?? []
-  const userIds = users.map(u => u.id)
-  let auditLogs: any[] = []
+  console.info(
+    `[DashboardInstitutionAdmin] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} institutionId=${profile.institution_id}`
+  )
 
-  if (userIds.length > 0) {
-    const { data: logs } = await supabase
-      .from("audit_logs")
-      .select("id, action, entity_type, created_at, user_id")
-      .in("user_id", userIds)
-      .order("created_at", { ascending: false })
-      .limit(6)
-    
-    // Map log user details locally
-    auditLogs = (logs ?? []).map(l => {
-      const u = users.find(user => user.id === l.user_id)
-      return {
-        ...l,
-        user_name: u?.name ?? "System",
-        user_email: u?.email ?? ""
-      }
-    })
-  }
-
-  // Calculate today's attendance rate
-  const todayStr = new Date().toISOString().split("T")[0]
-  const sectionIds = (sectionsListRes.data ?? []).map(s => s.program_id) // Wait, section has id, program_id
-  const activeSectionIds = (sectionsListRes.data ?? []).map(s => s.program_id) // wait, sections_list has id
-  const secIds = (sectionsListRes.data ?? []).map(s => (s as any).id)
-
-  let attendanceRecords: any[] = []
-  if (secIds.length > 0) {
-    const { data: sessions } = await supabase
-      .from("attendance_sessions")
-      .select("id")
-      .in("section_id", secIds)
-      .eq("attendance_date", todayStr)
-
-    const sessionIds = (sessions ?? []).map(s => s.id)
-    if (sessionIds.length > 0) {
-      const { data: records } = await supabase
-        .from("attendance_records")
-        .select("status")
-        .in("session_id", sessionIds)
-      attendanceRecords = records ?? []
-    }
-  }
+  const institution = institutionRes.data
+  const auditLogs = auditLogsRes.data ?? []
+  const attendanceRecords = attendanceRecordsRes.data ?? []
 
   const presentCount = attendanceRecords.filter(r => r.status === "PRESENT" || r.status === "LATE").length
   const totalAttendanceCount = attendanceRecords.length

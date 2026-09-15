@@ -1,50 +1,54 @@
-import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
 import { StudentsClientPage } from "./students-client"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 import type { StudentWithSection } from "@/modules/students"
 
 export const dynamic = "force-dynamic"
 
 export default async function StudentsPage() {
-  const supabase = await createSupabaseServerClient()
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
+  const context = await getCurrentUserContext()
+  const contextMs = performance.now() - tContextStart
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
+  if (!context.institution_id) redirect("/dashboard")
 
+  const institutionId = context.institution_id
   const adminClient = createSupabaseAdminClient()
 
-  const { data: userProfile } = await adminClient
-    .from("users")
-    .select("role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (userProfile?.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
-
-  const institutionId = userProfile.institution_id
-
-  // Fetch students from students table
-  const { data: studentRecords = [], count } = await adminClient
-    .from("students")
-    .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender", { count: "exact" })
-    .eq("institution_id", institutionId)
-    .order("id")
-    .range(0, 24) // first 25 rows
-
-  // Fetch user data for these students
-  const studentIds = (studentRecords || []).map(s => s.id)
-  const { data: userRecords = [] } = studentIds.length > 0
-    ? await adminClient
-        .from("users")
-        .select("id, name, email, role, organization_id, created_at, is_active, profile_image_url")
-        .in("id", studentIds)
-    : { data: [] }
-
-  const [sectionsRes, programsRes] = await Promise.all([
+  // Consolidated parallel batch: Fetch joined students, sections, and programs in ONE single Promise.all
+  const tBatchStart = performance.now()
+  const [studentsRes, sectionsRes, programsRes] = await Promise.all([
+    adminClient
+      .from("students")
+      .select(`
+        id,
+        institution_id,
+        program_id,
+        section_id,
+        semester,
+        registration_number,
+        admission_year,
+        dob,
+        gender,
+        users:users!id(
+          id,
+          name,
+          email,
+          role,
+          organization_id,
+          created_at,
+          is_active,
+          profile_image_url
+        )
+      `, { count: "exact" })
+      .eq("institution_id", institutionId)
+      .order("id")
+      .range(0, 24),
     adminClient
       .from("sections")
       .select(`
@@ -61,18 +65,21 @@ export default async function StudentsPage() {
       .order("name"),
     adminClient
       .from("programs")
-      .select("id,name")
+      .select("id, name")
       .eq("institution_id", institutionId)
       .order("name"),
   ])
+  const batchMs = performance.now() - tBatchStart
 
-  const sections = sectionsRes.data ?? []
-  const programs = programsRes.data ?? []
+  const studentRecords = (studentsRes.data ?? []) as any[]
+  const count = studentsRes.count ?? 0
+  const sections = (sectionsRes.data ?? []) as any[]
+  const programs = (programsRes.data ?? []) as any[]
 
-  // Merge student + user + section data
-  const students = (studentRecords || []).map(student => {
-    const user = (userRecords || []).find(u => u.id === student.id)
-    const sec = (sections || []).find(s => s.id === student.section_id)
+  // Merge student + user + section data in-memory
+  const students = studentRecords.map((student) => {
+    const user = Array.isArray(student.users) ? student.users[0] : student.users
+    const sec = sections.find((s) => s.id === student.section_id)
     return {
       ...student,
       ...user,
@@ -82,12 +89,17 @@ export default async function StudentsPage() {
     } as any as StudentWithSection
   })
 
+  const totalMs = performance.now() - tPageStart
+  console.info(
+    `[DashboardInstitutionAdminStudents] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} count=${count}`
+  )
+
   return (
     <StudentsClientPage
-      initialStudents={students || []}
-      initialTotalCount={count ?? 0}
-      sections={sections || []}
-      programs={programs || []}
+      initialStudents={students}
+      initialTotalCount={count}
+      sections={sections}
+      programs={programs}
       institutionId={institutionId}
     />
   )

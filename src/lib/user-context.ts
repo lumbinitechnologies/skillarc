@@ -1,6 +1,6 @@
 import { cache } from "react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { ROLES } from "@/constants/roles"
 
 export type UserContext = {
@@ -31,47 +31,47 @@ export type UserContext = {
 }
 
 export const getCurrentUserContext = cache(async (): Promise<UserContext | null> => {
+  const t0 = performance.now()
+  const headerList = await headers()
+  let userId = headerList.get("x-user-id")
   const supabase = await createSupabaseServerClient()
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const source = userId ? "header-fastpath" : "gotrue-fallback"
 
-  if (userError || !user?.id) {
-    return null
-  }
+  if (!userId) {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-  const userId = user.id
-
-  const { data: actualProfile, error: profileError } = await supabase
-    .from("users")
-    .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
-    .eq("id", userId)
-    .single()
-
-  if (profileError || !actualProfile) {
-    return null
-  }
-
-  let isTimetableBuilder = false
-  const { data: perm } = await supabase
-    .from("permissions")
-    .select("id")
-    .eq("name", "timetable_builder")
-    .maybeSingle()
-
-  if (perm?.id) {
-    const { data: userPerm } = await supabase
-      .from("user_permissions")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("permission_id", perm.id)
-      .maybeSingle()
-
-    if (userPerm?.id) {
-      isTimetableBuilder = true
+    if (userError || !user?.id) {
+      return null
     }
+    userId = user.id
   }
+
+  const [profileRes, userPermRes] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase
+      .from("user_permissions")
+      .select("id, permissions!inner(name)")
+      .eq("user_id", userId)
+      .eq("permissions.name", "timetable_builder")
+      .maybeSingle(),
+  ])
+
+  const t1 = performance.now()
+  console.info(`[UserContext] source=${source} userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
+
+  const actualProfile = profileRes.data
+  if (profileRes.error || !actualProfile) {
+    return null
+  }
+
+  const isTimetableBuilder = Boolean(userPermRes.data?.id)
 
   const cookieStore = await cookies()
   const impRole = cookieStore.get("sa_impersonate_role")?.value
