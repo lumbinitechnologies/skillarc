@@ -17,6 +17,7 @@
     "local:dev": "bash scripts/local/dev.sh",
     "local:test": "bash scripts/local/test.sh",
     "seed:demo": "node --env-file=.env scripts/seed-demo-data.mjs",
+    "seed:client-meeting": "node --env-file=.env --import tsx scripts/seed-client-meeting-data.ts",
     "knowledge:backfill": "node --env-file=.env.local --import tsx scripts/backfill-knowledge.ts"
   },
   "dependencies": {
