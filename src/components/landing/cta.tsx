@@ -1,61 +1,29 @@
 "use client"
 
-import { ShieldCheck, ArrowRight, Layers, Database, Lock, Cpu, Server } from "lucide-react"
+import { CheckCircle2, Layers3, LockKeyhole, Users, Workflow } from "lucide-react"
+import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
 
 export function SecuritySection() {
   return (
-    <section className="border-b border-white/5 py-32 relative overflow-hidden bg-[#0E0F12] text-[#F4F4F0] font-sans">
+    <section className="bg-white px-5 py-20 sm:px-8 lg:py-24">
+      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-20">
+        <div>
+          <SectionEyebrow accent="mint">Clear access for every team</SectionEyebrow>
+          <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">The right people see the right information.</h2>
+          <p className="mt-5 text-lg leading-8 text-[#58718B]">University administrators, department heads, faculty, students, and parents each get a focused view of the information relevant to their work and relationship.</p>
+        </div>
 
-      {/* Background Soft Glow */}
-      <div className="absolute top-1/2 left-0 -translate-y-1/2 w-[500px] h-[500px] bg-[#38BDF8]/5 rounded-full blur-[180px] pointer-events-none z-0" />
-
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
-
-        {/* Left Copy */}
-        <div className="space-y-6 lg:col-span-5">
-          <span className="text-xs font-mono tracking-[0.25em] text-[#38BDF8] uppercase flex items-center gap-2">
-            <Lock size={14} />
-            <span>[ SYSTEM SECURITY ]</span>
-          </span>
-
-          <h3 className="text-3xl sm:text-5xl font-extrabold uppercase text-white font-sans tracking-tight leading-tight">
-            The right people see the right information.
-          </h3>
-
-          <p className="text-sm text-white/60 leading-relaxed font-sans font-light">
-            Role-based access controls keep academic information strictly partitioned according to staff responsibilities, department boundaries, and institutional hierarchy.
-          </p>
-
-          {/* Breadcrumb Hierarchy Trail */}
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono pt-2">
-            {["Organization", "Institution", "Department", "Program", "Role"].map((tag, idx) => (
-              <div key={tag} className="flex items-center gap-2">
-                <span className="bg-white/5 border border-white/10 px-3.5 py-1.5 rounded-full text-white/80 hover:border-white/20 transition-colors">
-                  {tag}
-                </span>
-                {idx < 4 && <ArrowRight size={12} className="text-[#FF5500]" />}
-              </div>
+        <ProductWindow title="Role-based workspace access" label="Illustrative workspace" accent="mint">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#E7F6F0] text-[#087F62]"><LockKeyhole size={20} aria-hidden="true" /></div><div><p className="text-sm font-semibold text-[#6D8498]">Access matched to</p><h3 className="text-xl font-bold text-[#14234B]">Institution administrator</h3></div></div>
+            <StatusPill accent="mint">Focused workspace</StatusPill>
+          </div>
+          <div className="mt-7 grid gap-3 sm:grid-cols-2">
+            {["Admissions", "Academic administration", "Student progress", "Placements"].map((item) => (
+              <div key={item} className="flex items-center gap-3 rounded-2xl border border-[#E2EAF0] bg-[#F8FBFD] px-4 py-4 text-sm font-semibold text-[#31547A]"><CheckCircle2 size={17} className="text-[#087F62]" aria-hidden="true" />{item}</div>
             ))}
           </div>
-        </div>
-
-        {/* Right Glass Card */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-2xl space-y-6 lg:col-span-7 hover:border-white/20 transition-all">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-[#FF5500]/10 border border-[#FF5500]/30 flex items-center justify-center text-[#FF5500] shrink-0">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <h4 className="text-lg font-bold text-white font-sans">Strict Tenant Isolation</h4>
-              <p className="text-xs font-mono text-[#38BDF8]">// DATABASE-LEVEL ROW SECURITY</p>
-            </div>
-          </div>
-
-          <p className="text-sm text-white/60 leading-relaxed font-sans font-light border-t border-white/5 pt-6">
-            Institutional records are partitioned at the database schema layer. Department Heads are constrained strictly to their subject scopes, and students can only view their own registered courses and grades.
-          </p>
-        </div>
-
+        </ProductWindow>
       </div>
     </section>
   )
@@ -63,63 +31,24 @@ export function SecuritySection() {
 
 export function MultiInstitutionSection() {
   return (
-    <section className="border-b border-white/5 py-32 relative overflow-hidden bg-[#0A0B0E] text-[#F4F4F0] font-sans">
-
-      {/* Background Central Atmospheric Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#FF5500]/10 rounded-full blur-[200px] pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 space-y-20 relative z-10">
-
-        {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto space-y-4">
-          <span className="text-xs font-mono tracking-[0.25em] text-[#38BDF8] uppercase block">
-            [ SYSTEM SCALABILITY ]
-          </span>
-          <h2 className="text-4xl sm:text-6xl font-extrabold font-sans uppercase tracking-tight text-white leading-tight">
-            One organization. <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF5500] to-[#FF8800]">Multiple institutions.</span>
-          </h2>
-          <p className="text-sm text-white/60 font-sans font-light max-w-xl mx-auto">
-            Scale your academic ecosystem smoothly without losing unified administrative overviews or cross-campus analytics.
-          </p>
-        </div>
-
-        {/* Scalability Architecture Flow Tree */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-3xl p-8 sm:p-12 w-full max-w-4xl mx-auto shadow-2xl backdrop-blur-2xl space-y-10 hover:border-white/20 transition-all">
-
-          {/* Top Parent Node */}
-          <div className="text-center relative">
-            <span className="inline-flex items-center gap-2 text-xs font-mono font-bold text-black bg-[#FF5500] px-6 py-3 rounded-full uppercase tracking-wider shadow-[0_0_25px_rgba(255,85,0,0.35)]">
-              <Layers size={14} />
-              <span>Central Organization Hub</span>
-            </span>
+    <section className="bg-[#F0F5F8] px-5 py-20 sm:px-8 lg:py-24">
+      <div className="mx-auto max-w-7xl">
+        <div className="grid gap-12 lg:grid-cols-[0.7fr_1.3fr] lg:items-center lg:gap-20">
+          <div>
+            <SectionEyebrow accent="terracotta">For more than one campus</SectionEyebrow>
+            <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">One organization. Local control where it matters.</h2>
+            <p className="mt-5 text-lg leading-8 text-[#58718B]">Keep a shared overview across institutions while each campus and department manages the daily work in its own context.</p>
           </div>
 
-          {/* Connected Children Branches */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center relative pt-4">
-            {["Institution A", "Institution B", "Institution C"].map((inst) => (
-              <div key={inst} className="space-y-4 group">
-                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-sm font-bold text-white group-hover:border-[#38BDF8]/50 group-hover:bg-[#38BDF8]/5 transition-all">
-                  {inst}
-                </div>
-                <div className="w-0.5 h-6 bg-gradient-to-b from-white/20 to-white/5 mx-auto" />
-                <div className="p-3 bg-white/[0.01] border border-white/5 rounded-xl text-xs font-medium text-white/60 font-mono">
-                  Departments
-                </div>
-                <div className="w-0.5 h-6 bg-gradient-to-b from-white/20 to-white/5 mx-auto" />
-                <div className="p-2.5 bg-white/[0.01] border border-white/5 rounded-lg text-[11px] font-mono text-white/40">
-                  Programs & Courses
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer Callout */}
-          <div className="text-center pt-6 border-t border-white/5">
-            <span className="text-xs font-bold text-[#38BDF8] font-mono uppercase tracking-widest">
-              // ZERO PERFORMANCE DEGRADATION AT SCALE
-            </span>
-          </div>
-
+          <ProductWindow title="University group overview" label="Illustrative workspace" accent="terracotta">
+            <div className="flex items-center justify-between gap-4 rounded-2xl bg-[#FBECE5] px-5 py-4"><div className="flex items-center gap-3"><Layers3 size={19} className="text-[#C85D2E]" aria-hidden="true" /><span className="text-sm font-bold text-[#14234B]">University group overview</span></div><StatusPill accent="terracotta">Shared view</StatusPill></div>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              {["Institution A", "Institution B", "Institution C"].map((institution) => (
+                <div key={institution} className="rounded-2xl border border-[#DCE6EE] bg-white p-5"><p className="text-sm font-bold text-[#14234B]">{institution}</p><div className="mt-5 space-y-2 text-sm text-[#58718B]"><p className="flex items-center gap-2"><Workflow size={14} className="text-[#31547A]" aria-hidden="true" /> Departments</p><p className="flex items-center gap-2"><Users size={14} className="text-[#C85D2E]" aria-hidden="true" /> Programs & courses</p></div></div>
+              ))}
+            </div>
+            <p className="mt-6 flex items-center gap-2 border-t border-[#E4EBF1] pt-5 text-sm font-semibold text-[#31547A]"><CheckCircle2 size={16} className="text-[#087F62]" aria-hidden="true" /> One shared view, local control</p>
+          </ProductWindow>
         </div>
       </div>
     </section>
@@ -127,43 +56,26 @@ export function MultiInstitutionSection() {
 }
 
 export function InfrastructureSection() {
+  const items = [
+    { label: "One shared view", sub: "Keep important updates together", icon: Workflow },
+    { label: "Clear responsibilities", sub: "Give each team the right view", icon: Users },
+    { label: "Consistent records", sub: "Work from the same information", icon: CheckCircle2 },
+    { label: "Room to grow", sub: "Support more programs and campuses", icon: Layers3 },
+  ]
+
   return (
-    <section className="border-b border-white/5 py-32 relative overflow-hidden bg-[#0E0F12] text-[#F4F4F0] font-sans">
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-
-        {/* Left Copy */}
-        <div className="space-y-4 lg:col-span-5">
-          <span className="text-xs font-mono tracking-[0.25em] text-white/40 uppercase block">
-            // TELEMETRY INFRASTRUCTURE
-          </span>
-          <h3 className="text-3xl sm:text-4xl font-extrabold uppercase text-white font-sans tracking-tight">
-            Built on modern cloud architecture.
-          </h3>
-          <p className="text-sm text-white/60 leading-relaxed font-sans font-light">
-            SkillArc pairs serverless relational databases with low-latency client state synchronization to deliver fast timetable calculations and reliable updates.
-          </p>
+    <section className="bg-[#F7FAFC] px-5 py-20 sm:px-8 lg:py-24">
+      <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-20">
+        <div>
+          <SectionEyebrow accent="navy">Designed for university teams</SectionEyebrow>
+          <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">A dependable workspace for the way universities work.</h2>
+          <p className="mt-5 text-lg leading-8 text-[#58718B]">Organize the structure behind the university, then give each team a practical way to act on what they see.</p>
         </div>
-
-        {/* Right Tech Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-7">
-          {[
-            { label: "Next.js & React 19", sub: "Speed & SEO optimized", icon: <Cpu size={18} className="text-[#FF5500]" /> },
-            { label: "Supabase DB", sub: "Real-time query engine", icon: <Database size={18} className="text-[#38BDF8]" /> },
-            { label: "PostgreSQL Engine", sub: "Strict relational integrity", icon: <Server size={18} className="text-[#FF5500]" /> },
-            { label: "Role Security Auth", sub: "Identity & tenant bounds", icon: <Lock size={18} className="text-[#38BDF8]" /> },
-          ].map((tech) => (
-            <div key={tech.label} className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl backdrop-blur-2xl hover:border-white/20 transition-all flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                {tech.icon}
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white font-sans">{tech.label}</h4>
-                <p className="text-xs text-white/40 mt-1 font-mono">{tech.sub}</p>
-              </div>
-            </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {items.map(({ label, sub, icon: Icon }) => (
+            <div key={label} className="rounded-3xl border border-[#DCE6EE] bg-white p-6 shadow-[0_12px_36px_rgba(20,35,75,0.05)]"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EAF1F7] text-[#31547A]"><Icon size={18} aria-hidden="true" /></div><h3 className="mt-5 text-lg font-bold text-[#14234B]">{label}</h3><p className="mt-2 text-base leading-7 text-[#6D8498]">{sub}</p></div>
           ))}
         </div>
-
       </div>
     </section>
   )

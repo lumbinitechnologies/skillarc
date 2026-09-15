@@ -2,8 +2,8 @@ import "./globals.css"
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget"
 
 export const metadata = {
-  title: "SkillArc LMS",
-  description: "Learning Management System",
+  title: "SkillArc | Connected university operations",
+  description: "SkillArc connects admissions, academic operations, student progress, and placements in one clear university workspace.",
   icons: {
     icon: "/skillarc_logo.svg",
   },
