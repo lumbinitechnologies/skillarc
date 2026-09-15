@@ -24,6 +24,7 @@ export default function InactivePage() {
     <AuthShell
       title="Your portal access is inactive"
       description="Your student portal access is currently inactive. Contact your HOD or institution administrator to review your access."
+      utilityLabel="Account access"
     >
       <AuthCard className="text-center">
         <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F2D8A7] bg-[#FFF9EA] text-[#A66314]" aria-hidden="true">

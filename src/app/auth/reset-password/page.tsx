@@ -8,6 +8,7 @@ import {
   AuthButton,
   AuthCard,
   AuthField,
+  AuthLink,
   AuthMessage,
   AuthShell,
 } from '@/components/auth/auth-ui'
@@ -192,6 +193,12 @@ export default function ResetPasswordPage() {
           </AuthButton>
         </form>
       </AuthCard>
+
+      {status === 'error' && !hasSession ? (
+        <p className="mt-5 text-center text-sm text-[#70849A]">
+          <AuthLink href="/auth/forgot-password">Request a new reset link</AuthLink>
+        </p>
+      ) : null}
     </AuthShell>
   )
 }

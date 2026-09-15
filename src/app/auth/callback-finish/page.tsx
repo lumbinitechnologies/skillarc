@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { AuthShell } from '@/components/auth/auth-ui'
+import { AuthCard, AuthLink, AuthShell } from '@/components/auth/auth-ui'
 
 export default function AuthCallbackFinishPage() {
   const router = useRouter()
@@ -158,18 +158,37 @@ export default function AuthCallbackFinishPage() {
     }
   }, [router, searchParams])
 
+  const hasFailed = /failed|mismatch|not found/i.test(status)
+
   return (
     <AuthShell
       title="Verifying your access"
       description="We’re checking your invitation and preparing your SkillArc university workspace."
+      utilityLabel="Verifying access"
     >
-      <div className="rounded-[24px] border border-[#DCE6EE] bg-white p-7 text-center shadow-[0_18px_50px_rgba(20,35,75,0.08)]" aria-live="polite">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#C8DBEB] bg-[#EAF1F7] text-[#31547A]" aria-hidden="true">
-          <span className="motion-safe:animate-spin h-5 w-5 rounded-full border-2 border-current border-t-transparent" />
+      <AuthCard className="text-center" aria-live="polite">
+        <div
+          className={hasFailed
+            ? 'mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F0CACA] bg-[#FFF5F5] text-[#9B3B3B]'
+            : 'mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#C8DBEB] bg-[#EAF1F7] text-[#31547A]'}
+          aria-hidden="true"
+        >
+          {hasFailed ? (
+            <span className="text-xl font-bold">!</span>
+          ) : (
+            <span className="motion-safe:animate-spin h-5 w-5 rounded-full border-2 border-current border-t-transparent" />
+          )}
         </div>
         <p className="mt-5 text-sm font-semibold text-[#31547A]">{status}</p>
-        <p className="mt-2 text-sm leading-6 text-[#70849A]">Keep this window open while we finish setting up your access.</p>
-      </div>
+        <p className="mt-2 text-sm leading-6 text-[#70849A]">
+          {hasFailed ? 'Return to sign in and open the invitation link again when you are ready.' : 'Keep this window open while we finish setting up your access.'}
+        </p>
+        {hasFailed ? (
+          <AuthLink href="/auth/login" className="mt-5 inline-flex">
+            Return to sign in
+          </AuthLink>
+        ) : null}
+      </AuthCard>
     </AuthShell>
   )
 }

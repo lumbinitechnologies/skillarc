@@ -11,7 +11,7 @@ import {
   AuthMessage,
   AuthShell,
 } from '@/components/auth/auth-ui'
-import { Lock } from 'lucide-react'
+import { Eye, EyeOff, Lock } from 'lucide-react'
 
 export default function SetPasswordPage() {
   const router = useRouter()
@@ -19,6 +19,8 @@ export default function SetPasswordPage() {
   const inviteEmail = searchParams.get('inviteEmail')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle')
   const [error, setError] = useState('')
   const [userEmail, setUserEmail] = useState('')
@@ -165,7 +167,7 @@ export default function SetPasswordPage() {
         >
           <AuthField
             label="New password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             placeholder="Create a password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
@@ -173,17 +175,39 @@ export default function SetPasswordPage() {
             disabled={status === 'loading' || status === 'success'}
             hint="Use at least 6 characters."
             icon={<Lock size={17} aria-hidden="true" />}
+            rightSlot={
+              <button
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                disabled={status === 'loading' || status === 'success'}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7890A7] hover:bg-[#F0F5F8] hover:text-[#14234B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              </button>
+            }
           />
 
           <AuthField
             label="Confirm password"
-            type="password"
+            type={showConfirm ? 'text' : 'password'}
             placeholder="Re-enter your password"
             value={confirm}
             onChange={(event) => setConfirm(event.target.value)}
             autoComplete="new-password"
             disabled={status === 'loading' || status === 'success'}
             icon={<Lock size={17} aria-hidden="true" />}
+            rightSlot={
+              <button
+                type="button"
+                onClick={() => setShowConfirm((visible) => !visible)}
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                disabled={status === 'loading' || status === 'success'}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#7890A7] hover:bg-[#F0F5F8] hover:text-[#14234B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showConfirm ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              </button>
+            }
           />
 
           <AuthButton

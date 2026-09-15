@@ -48,7 +48,6 @@ export default function LoginPage() {
     <AuthShell
       title="Sign in to SkillArc"
       description="Use your institutional account to access your university workspace."
-      presentation="gradient"
     >
       <AuthCard>
         {error ? <AuthMessage>{error}</AuthMessage> : null}
