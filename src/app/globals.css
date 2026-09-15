@@ -199,10 +199,9 @@
     margin: 0;
     min-height: 100vh;
     background:
-      radial-gradient(circle at 15% 15%, rgba(229, 125, 55, 0.04), transparent 40%),
-      radial-gradient(circle at 85% 20%, rgba(22, 144, 199, 0.04), transparent 35%),
-      radial-gradient(circle at 50% 80%, rgba(234, 173, 98, 0.04), transparent 45%),
-      linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      radial-gradient(circle at 8% 12%, rgba(200, 93, 46, 0.045), transparent 28%),
+      radial-gradient(circle at 90% 16%, rgba(49, 84, 122, 0.06), transparent 30%),
+      linear-gradient(180deg, #fbfdff 0%, #f3f7fa 100%);
     color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -505,6 +504,71 @@
   [aria-disabled="true"],
   [disabled] {
     cursor: not-allowed;
+  }
+}
+
+@layer components {
+  .marketing-site {
+    --marketing-navy: #14234B;
+    --marketing-blue: #31547A;
+    --marketing-terra: #C85D2E;
+    --marketing-mint: #087F62;
+    --marketing-amber: #A66314;
+    font-family: 'Inter', system-ui, sans-serif;
+    background:
+      radial-gradient(circle at 12% 10%, rgba(200, 93, 46, 0.045), transparent 26%),
+      radial-gradient(circle at 88% 18%, rgba(49, 84, 122, 0.05), transparent 30%),
+      #f7fafc;
+  }
+
+  .marketing-site h1,
+  .marketing-site h2,
+  .marketing-site h3,
+  .marketing-site h4 {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
+
+  .marketing-site button,
+  .marketing-site a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .product-window {
+    animation: marketing-rise 700ms cubic-bezier(.2,.8,.2,1) both;
+  }
+
+  .marketing-float {
+    animation: marketing-float 6s ease-in-out infinite;
+  }
+
+  .marketing-pulse {
+    animation: marketing-pulse 2.8s ease-in-out infinite;
+  }
+
+  @keyframes marketing-rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes marketing-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  @keyframes marketing-pulse {
+    0%, 100% { opacity: .55; transform: scale(.95); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marketing-site *,
+    .marketing-site *::before,
+    .marketing-site *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

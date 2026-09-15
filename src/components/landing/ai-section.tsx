@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { Terminal, Send, Sparkles } from "lucide-react"
@@ -13,54 +13,19 @@ interface Message {
   isTyping?: boolean
 }
 
+const CONVERSATION = [
+  { sender: "user" as const, text: "What's my timetable today?" },
+  { sender: "arca" as const, text: "Good morning Sathvik! You have 3 classes scheduled today:\n\n1. Data Communication Networks at 09:00 AM (Room 302)\n2. Web Technology at 11:00 AM (Lab 2)\n3. Design & Analysis of Algorithms at 02:00 PM (Room 104)" },
+  { sender: "user" as const, text: "Who teaches DAA?" },
+  { sender: "arca" as const, text: "Dr. Roy teaches Design & Analysis of Algorithms (CS-302)." },
+]
+
 export default function AiSection() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [hasStarted, setHasStarted] = useState(false)
 
-  const conversation = [
-    { sender: "user" as const, text: "What's my timetable today?" },
-    { sender: "arca" as const, text: "Good morning Sathvik! You have 3 classes scheduled today:\n\n1. Data Communication Networks at 09:00 AM (Room 302)\n2. Web Technology at 11:00 AM (Lab 2)\n3. Design & Analysis of Algorithms at 02:00 PM (Room 104)" },
-    { sender: "user" as const, text: "Who teaches DAA?" },
-    { sender: "arca" as const, text: "Dr. Roy teaches Design & Analysis of Algorithms (CS-302)." },
-  ]
-
-  useEffect(() => {
-    const trigger = ScrollTrigger.create({
-      trigger: containerRef.current,
-      start: "top 70%",
-      onEnter: () => {
-        if (!hasStarted) {
-          setHasStarted(true)
-          runSimulation()
-        }
-      },
-    })
-
-    return () => trigger.kill()
-  }, [hasStarted])
-
-  const runSimulation = async () => {
-    for (let i = 0; i < conversation.length; i++) {
-      const step = conversation[i]
-
-      if (step.sender === "user") {
-        setMessages((prev) => [...prev, { sender: "user", text: "", isTyping: true }])
-        await typeMessage(step.text, i)
-      } else {
-        setMessages((prev) => [...prev, { sender: "arca", text: "...", isTyping: true }])
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        setMessages((prev) => {
-          const next = [...prev]
-          next[i] = { sender: "arca", text: step.text }
-          return next
-        })
-        await new Promise((resolve) => setTimeout(resolve, 800))
-      }
-    }
-  }
-
-  const typeMessage = (fullText: string, index: number): Promise<void> => {
+  const typeMessage = useCallback((fullText: string, index: number): Promise<void> => {
     return new Promise((resolve) => {
       let currentText = ""
       let charIdx = 0
@@ -84,7 +49,42 @@ export default function AiSection() {
         }
       }, 55)
     })
-  }
+  }, [])
+
+  const runSimulation = useCallback(async () => {
+    for (let i = 0; i < CONVERSATION.length; i++) {
+      const step = CONVERSATION[i]
+
+      if (step.sender === "user") {
+        setMessages((prev) => [...prev, { sender: "user", text: "", isTyping: true }])
+        await typeMessage(step.text, i)
+      } else {
+        setMessages((prev) => [...prev, { sender: "arca", text: "...", isTyping: true }])
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        setMessages((prev) => {
+          const next = [...prev]
+          next[i] = { sender: "arca", text: step.text }
+          return next
+        })
+        await new Promise((resolve) => setTimeout(resolve, 800))
+      }
+    }
+  }, [typeMessage])
+
+  useEffect(() => {
+    const trigger = ScrollTrigger.create({
+      trigger: containerRef.current,
+      start: "top 70%",
+      onEnter: () => {
+        if (!hasStarted) {
+          setHasStarted(true)
+          void runSimulation()
+        }
+      },
+    })
+
+    return () => trigger.kill()
+  }, [hasStarted, runSimulation])
 
   return (
     <section
@@ -98,13 +98,13 @@ export default function AiSection() {
         {/* Header */}
         <div className="text-center max-w-2xl mx-auto space-y-4">
           <span className="text-[10px] font-['Space_Mono',monospace] tracking-[0.25em] text-[#3A6DAF] uppercase font-bold">
-            [ INTELLIGENT TELEMETRY ]
+            [ HELP WHEN YOU NEED IT ]
           </span>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black uppercase tracking-tight text-[#0B132B]">
-            An intelligent assistant for your academic ecosystem.
+            Practical help for everyday academic questions.
           </h2>
           <p className="font-['Space_Mono',monospace] text-xs text-[#0B132B]/80 leading-relaxed uppercase tracking-wider font-bold">
-            {"{ SkillArc brings intelligent assistance directly into the academic experience. }"}
+            {"{ Ask about schedules, courses, and the information you are allowed to see. }"}
           </p>
         </div>
 
@@ -128,7 +128,7 @@ export default function AiSection() {
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-2 text-[#94BAC4]">
                 <Sparkles size={20} className="text-[#E57D37] animate-pulse" />
-                <p className="text-[9px] font-bold">Initializing system telemetry...</p>
+                <p className="text-[9px] font-bold">Preparing your academic help...</p>
               </div>
             )}
             {messages.map((msg, idx) => (
@@ -146,7 +146,7 @@ export default function AiSection() {
                   {msg.sender === "user" ? `> ${msg.text}` : msg.text}
                 </div>
                 <span className="text-[8px] text-[#94BAC4] mt-1 block px-1 uppercase tracking-widest font-bold">
-                  {msg.sender === "user" ? "user-query" : "arca-response"}
+                  {msg.sender === "user" ? "your question" : "Arca's answer"}
                 </span>
               </div>
             ))}
@@ -157,7 +157,7 @@ export default function AiSection() {
             <span className="text-[#E57D37] text-xs pl-1 font-bold">&gt;</span>
             <input
               disabled
-              placeholder="Ask Arca anything about your schedule..."
+              placeholder="Ask Arca about your schedule..."
               className="flex-1 bg-transparent text-[#EFEAD8] text-xs px-2 py-2 outline-none placeholder:text-[#94BAC4] cursor-not-allowed font-bold"
             />
             <button

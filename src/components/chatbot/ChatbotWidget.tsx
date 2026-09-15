@@ -314,7 +314,7 @@ export function ChatbotWidget() {
   }
 
   return (
-    <div className="fixed bottom-[max(1.5rem,calc(env(safe-area-inset-bottom,0px)+1rem))] left-4 right-4 z-50 font-sans sm:bottom-6 sm:left-auto sm:right-6 pointer-events-none">
+    <div className="skillarc-chatbot-root fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] left-4 right-4 z-50 font-sans sm:bottom-6 sm:left-auto sm:right-6 pointer-events-none">
       <div className="flex flex-col items-end gap-3.5">
         <AnimatePresence>
           {open && (
@@ -412,7 +412,7 @@ export function ChatbotWidget() {
           )}
         </AnimatePresence>
 
-        <motion.button onClick={() => setOpen((value) => !value)} aria-label="Open AI assistant" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="pointer-events-auto group flex h-14 w-14 items-center justify-center rounded-full border-2 border-slate-800 bg-slate-900 text-[#ECDFCB] shadow-xl shadow-slate-950/20 transition-all">
+        <motion.button onClick={() => setOpen((value) => !value)} aria-label="Open AI assistant" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="pointer-events-auto group flex h-12 w-12 items-center justify-center rounded-full border border-[#31547A] bg-[#14234B] text-[#ECDFCB] shadow-lg shadow-slate-950/15 transition-all">
           <AnimatePresence mode="wait">
             {open ? <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}><X size={20} /></motion.div> : <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}><Sparkles size={20} className="animate-pulse text-[#EAAD62]" /></motion.div>}
           </AnimatePresence>
