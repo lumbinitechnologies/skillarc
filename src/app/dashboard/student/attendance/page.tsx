@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { measureServer } from "@/lib/perf"
 import AttendanceClient from "./attendance-client"
 
 export const dynamic = "force-dynamic"
@@ -28,208 +29,174 @@ interface SubjectSummary {
 }
 
 export default async function StudentAttendancePage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
   const context = await getCurrentDashboardSession()
+  const contextMs = performance.now() - tContextStart
+
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const supabase = await createSupabaseServerClient()
-  const { data: studentProfile } = await supabase
-    .from("students")
-    .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender")
-    .eq("id", context.id)
-    .single()
 
-  const profile = { ...context, ...studentProfile }
-
-  const { data: institution } = await supabase
-    .from("institutions")
-    .select("id, name")
-    .eq("id", profile.institution_id)
-    .single()
-
-  let sectionName = "Not assigned"
-  let programName = "Not assigned"
-  let sectionSemester: number | null = null
-  let advisorName = "Faculty advisor pending"
-  let advisorId: string | null = null
-  let sectionId: string | null = null
-
-  if (profile.section_id) {
-    const { data: section } = await supabase
-      .from("sections")
-      .select("id, name, semester, program_id, faculty_advisor_id")
-      .eq("id", profile.section_id)
-      .single()
-
-    if (section) {
-      sectionId = section.id
-      sectionName = section.name ?? "Not assigned"
-      sectionSemester = section.semester ?? profile.semester ?? null
-      const [programResult, advisorResult] = await Promise.all([
-        section.program_id
-          ? supabase.from("programs").select("id, name").eq("id", section.program_id).single()
+  const tBatchStart = performance.now()
+  const [studentRes, institutionRes, recordsRes, leaveRes] = await measureServer(
+    "dashboard.student.attendance.data",
+    () =>
+      Promise.all([
+        supabase
+          .from("students")
+          .select(`
+            id,
+            institution_id,
+            program_id,
+            section_id,
+            semester,
+            registration_number,
+            admission_year,
+            dob,
+            gender,
+            sections:sections!section_id(
+              id,
+              name,
+              semester,
+              program_id,
+              advisor:users!faculty_advisor_id(id, name)
+            ),
+            programs:programs!program_id(id, name)
+          `)
+          .eq("id", context.id)
+          .maybeSingle(),
+        context.institution_id
+          ? supabase.from("institutions").select("id, name").eq("id", context.institution_id).maybeSingle()
           : Promise.resolve({ data: null }),
-        section.faculty_advisor_id
-          ? supabase.from("users").select("id, name").eq("id", section.faculty_advisor_id).single()
-          : Promise.resolve({ data: null }),
-      ])
-      if (programResult.data) programName = programResult.data.name ?? "Not assigned"
-      if (section.faculty_advisor_id) advisorId = section.faculty_advisor_id
-      advisorName = advisorResult.data?.name ?? advisorName
-    }
-  } else if (profile.program_id) {
-    const { data: program } = await supabase
-      .from("programs")
-      .select("id, name")
-        .eq("id", profile.program_id)
-        .single()
-
-    if (program) {
-      programName = program.name ?? "Not assigned"
-    }
-  }
-
-  let attendanceEntries: AttendanceEntry[] = []
-  let subjectSummaries: SubjectSummary[] = []
-  let overallSummary = {
-    total: 0,
-    present: 0,
-    absent: 0,
-    late: 0,
-    rate: 0,
-  }
-
-  if (profile.section_id) {
-    const { data: sessions = [] } = await supabase
-      .from("attendance_sessions")
-      .select("id, attendance_date, period, subject_id, faculty_id")
-      .eq("section_id", profile.section_id)
-      .order("attendance_date", { ascending: false })
-      .order("period")
-
-    const sessionIds = (sessions as Array<{ id: string }>).map((session) => session.id)
-
-    const { data: records = [] } = sessionIds.length
-      ? await supabase
+        supabase
           .from("attendance_records")
-          .select("session_id, status")
+          .select(`
+            status,
+            session_id,
+            attendance_sessions!inner(
+              id,
+              attendance_date,
+              period,
+              subject_id,
+              faculty_id,
+              subjects(id, name, code),
+              users!faculty_id(id, name)
+            )
+          `)
+          .eq("student_id", context.id),
+        supabase
+          .from("leave_applications")
+          .select("id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
           .eq("student_id", context.id)
-          .in("session_id", sessionIds)
-      : { data: [] }
+          .order("created_at", { ascending: false }),
+      ])
+  )
+  const batchMs = performance.now() - tBatchStart
 
-    const recordMap = new Map((records as Array<{ session_id: string; status: string }>).map((record) => [record.session_id, record]))
+  const studentProfile = studentRes.data
+  const institution = institutionRes.data
+  const rawRecords = (recordsRes.data ?? []) as any[]
+  const leaveApplications = (leaveRes.data ?? []) as any[]
 
-    const subjectIds = Array.from(new Set((sessions as Array<{ subject_id: string | null }>).map((session) => session.subject_id).filter(Boolean))) as string[]
-    const facultyIds = Array.from(new Set((sessions as Array<{ faculty_id: string | null }>).map((session) => session.faculty_id).filter(Boolean))) as string[]
+  const section = Array.isArray(studentProfile?.sections) ? studentProfile.sections[0] : studentProfile?.sections
+  const program = Array.isArray(studentProfile?.programs) ? studentProfile.programs[0] : studentProfile?.programs
+  const advisor = Array.isArray(section?.advisor) ? section.advisor[0] : section?.advisor
 
-    const [subjectsResult, facultiesResult] = await Promise.all([
-      subjectIds.length
-        ? supabase.from("subjects").select("id, name, code").in("id", subjectIds)
-        : Promise.resolve({ data: [] }),
-      facultyIds.length
-        ? supabase.from("users").select("id, name").in("id", facultyIds)
-        : Promise.resolve({ data: [] }),
-    ])
+  const sectionName = section?.name ?? "Not assigned"
+  const programName = program?.name ?? "Not assigned"
+  const sectionSemester = section?.semester ?? studentProfile?.semester ?? null
+  const advisorName = advisor?.name ?? "Faculty advisor pending"
+  const advisorId = advisor?.id ?? null
+  const sectionId = section?.id ?? null
 
-    const subjectMap = new Map<string, { id: string; name: string; code: string }>()
-    ;(subjectsResult.data as Array<{ id: string; name: string; code: string }>).forEach((subject) => {
-      subjectMap.set(subject.id, subject)
-    })
+  const attendanceEntries: AttendanceEntry[] = rawRecords.map((r) => {
+    const ses = Array.isArray(r.attendance_sessions) ? r.attendance_sessions[0] : r.attendance_sessions
+    const sub = Array.isArray(ses?.subjects) ? ses.subjects[0] : ses?.subjects
+    const fac = Array.isArray(ses?.users) ? ses.users[0] : ses?.users
 
-    const facultyMap = new Map<string, { id: string; name: string }>()
-    ;(facultiesResult.data as Array<{ id: string; name: string }>).forEach((faculty) => {
-      facultyMap.set(faculty.id, faculty)
-    })
-
-    attendanceEntries = (sessions as Array<{ id: string; attendance_date: string; period: number; subject_id: string | null; faculty_id: string | null }>).map((session) => {
-      const record = recordMap.get(session.id)
-      const subject = session.subject_id ? subjectMap.get(session.subject_id) : undefined
-      const faculty = session.faculty_id ? facultyMap.get(session.faculty_id) : undefined
-
-      return {
-        id: session.id,
-        date: session.attendance_date,
-        period: session.period,
-        subjectName: subject?.name ?? "Subject pending",
-        subjectCode: subject?.code ?? "—",
-        facultyName: faculty?.name ?? "Faculty pending",
-        status: record?.status ?? "NOT_MARKED",
-      }
-    })
-
-    const summaryBySubject = new Map<string, SubjectSummary>()
-    attendanceEntries.forEach((entry) => {
-      const existing = summaryBySubject.get(entry.subjectName) ?? {
-        id: entry.id,
-        name: entry.subjectName,
-        code: entry.subjectCode,
-        present: 0,
-        absent: 0,
-        late: 0,
-        total: 0,
-        rate: 0,
-      }
-
-      if (entry.status !== "NOT_MARKED") {
-        existing.total += 1
-        if (entry.status === "PRESENT") existing.present += 1
-        if (entry.status === "ABSENT") existing.absent += 1
-        if (entry.status === "LATE") existing.late += 1
-        if (entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED") existing.present += 1
-      }
-
-      const effectivePresent = existing.present + existing.late
-      existing.rate = existing.total > 0 ? Math.round((effectivePresent / existing.total) * 100) : 0
-      summaryBySubject.set(entry.subjectName, existing)
-    })
-
-    subjectSummaries = Array.from(summaryBySubject.values()).sort((a, b) => a.name.localeCompare(b.name))
-
-    const totalRecords = attendanceEntries.filter((entry) => entry.status !== "NOT_MARKED").length
-    const presentCount = attendanceEntries.filter((entry) => entry.status === "PRESENT").length
-    const absentCount = attendanceEntries.filter((entry) => entry.status === "ABSENT").length
-    const lateCount = attendanceEntries.filter((entry) => entry.status === "LATE").length
-    const approvedCount = attendanceEntries.filter((entry) => entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED").length
-    const effectivePresent = presentCount + lateCount + approvedCount
-
-    overallSummary = {
-      total: totalRecords,
-      present: presentCount + approvedCount,
-      absent: absentCount,
-      late: lateCount,
-      rate: totalRecords > 0 ? Math.round((effectivePresent / totalRecords) * 100) : 0,
+    return {
+      id: ses?.id ?? r.session_id,
+      date: ses?.attendance_date ?? "",
+      period: ses?.period ?? 1,
+      subjectName: sub?.name ?? "Subject pending",
+      subjectCode: sub?.code ?? "—",
+      facultyName: fac?.name ?? "Faculty pending",
+      status: r.status ?? "NOT_MARKED",
     }
+  })
+
+  const summaryBySubject = new Map<string, SubjectSummary>()
+  attendanceEntries.forEach((entry) => {
+    const existing = summaryBySubject.get(entry.subjectName) ?? {
+      id: entry.id,
+      name: entry.subjectName,
+      code: entry.subjectCode,
+      present: 0,
+      absent: 0,
+      late: 0,
+      total: 0,
+      rate: 0,
+    }
+
+    if (entry.status !== "NOT_MARKED") {
+      existing.total += 1
+      if (entry.status === "PRESENT") existing.present += 1
+      if (entry.status === "ABSENT") existing.absent += 1
+      if (entry.status === "LATE") existing.late += 1
+      if (entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED") existing.present += 1
+    }
+
+    const effectivePresent = existing.present + existing.late
+    existing.rate = existing.total > 0 ? Math.round((effectivePresent / existing.total) * 100) : 0
+    summaryBySubject.set(entry.subjectName, existing)
+  })
+
+  const subjectSummaries = Array.from(summaryBySubject.values()).sort((a, b) => a.name.localeCompare(b.name))
+
+  const totalRecords = attendanceEntries.filter((entry) => entry.status !== "NOT_MARKED").length
+  const presentCount = attendanceEntries.filter((entry) => entry.status === "PRESENT").length
+  const absentCount = attendanceEntries.filter((entry) => entry.status === "ABSENT").length
+  const lateCount = attendanceEntries.filter((entry) => entry.status === "LATE").length
+  const approvedCount = attendanceEntries.filter((entry) => entry.status === "APPROVED_ABSENCE" || entry.status === "EXCUSED").length
+  const effectivePresent = presentCount + lateCount + approvedCount
+
+  const overallSummary = {
+    total: totalRecords,
+    present: presentCount + approvedCount,
+    absent: absentCount,
+    late: lateCount,
+    rate: totalRecords > 0 ? Math.round((effectivePresent / totalRecords) * 100) : 0,
   }
 
-  // Fetch the student's submitted leave applications
-  const { data: leaveApplications = [] } = await supabase
-    .from("leave_applications")
-    .select("id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
-    .eq("student_id", context.id)
-    .order("created_at", { ascending: false })
+  const totalMs = performance.now() - tPageStart
+  console.info(
+    `[DashboardStudentAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
+  )
 
   return (
     <AttendanceClient
       student={{
-        name: profile.name ?? context.email ?? "Student",
-        email: profile.email ?? context.email ?? "",
+        name: context.name ?? context.email ?? "Student",
+        email: context.email ?? "",
         institution: institution?.name ?? "Institution",
         sectionName,
         programName,
-        semester: sectionSemester ?? profile.semester ?? null,
-        registrationNumber: profile.registration_number ?? "",
-        phone: (profile as any).phone ?? "",
-        admissionYear: profile.admission_year ?? null,
+        semester: sectionSemester,
+        registrationNumber: studentProfile?.registration_number ?? "",
+        phone: context.phone ?? "",
+        admissionYear: studentProfile?.admission_year ?? null,
       }}
-      studentId={profile.id}
+      studentId={context.id}
       sectionId={sectionId}
       advisorId={advisorId}
-      institutionId={profile.institution_id}
+      institutionId={context.institution_id}
       advisorName={advisorName}
       attendanceEntries={attendanceEntries}
       subjectSummaries={subjectSummaries}
       overallSummary={overallSummary}
-      initialLeaveApplications={leaveApplications ?? []}
+      initialLeaveApplications={leaveApplications}
     />
   )
 }

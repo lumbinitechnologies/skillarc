@@ -1,22 +1,12 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import type { AssistantPrincipal } from "@/lib/assistant/types"
 
 /**
- * Resolve the database client once at the assistant boundary. Normal requests
- * retain the user's cookie session and RLS. Impersonated requests require the
- * server-only service key, while the read service still applies explicit
- * effective-principal predicates to every query.
+ * Resolve the database client for assistant orchestration and persistence.
+ * The assistant read service and persistence layer apply strict, explicit
+ * tenant and user principal predicates to all queries and mutations.
  */
-export async function createAssistantDataClient(principal: AssistantPrincipal): Promise<SupabaseClient> {
-  if (!principal.isImpersonating) return createSupabaseServerClient()
-
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!serviceRoleKey || !supabaseUrl) throw new Error("Impersonated assistant access requires server configuration")
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
+export async function createAssistantDataClient(_principal: AssistantPrincipal): Promise<SupabaseClient> {
+  return createSupabaseAdminClient()
 }

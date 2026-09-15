@@ -9,12 +9,23 @@ import {
   Users, Building2, TrendingUp, DollarSign, Award, Search, Plus, X, Video, VideoOff,
   RotateCcw, AlertTriangle, Mic, MicOff, MessageSquare, Sparkles, GraduationCap, Percent, Briefcase
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import {
   Card, StatCard, Badge, Button, Input, Select, Skeleton, SectionHeader, EmptyState
 } from "@/components/placements-ui";
-import {
-  ApexAreaChart, ApexBarChart, ApexPieChart
-} from "@/components/placements-charts";
+
+const ApexAreaChart = dynamic(
+  () => import("@/components/placements-charts").then((mod) => mod.ApexAreaChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-2xl" /> }
+);
+const ApexBarChart = dynamic(
+  () => import("@/components/placements-charts").then((mod) => mod.ApexBarChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-2xl" /> }
+);
+const ApexPieChart = dynamic(
+  () => import("@/components/placements-charts").then((mod) => mod.ApexPieChart),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-2xl" /> }
+);
 import {
   MOCK_COMPANIES, MOCK_DRIVES, MOCK_STUDENTS, buildAnalytics, Student, Company, Drive
 } from "@/lib/placements-mock";

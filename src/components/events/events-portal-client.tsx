@@ -602,15 +602,24 @@ export default function EventsPortalClient() {
 
     setIsSubmittingReservation(true);
     try {
-      const { error } = await supabase
-        .from("event_registrations")
-        .insert([{ 
-          event_id: reservingEvent.id, 
-          user_id: userId 
-        }]);
+      const res = await fetch("/api/events/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: reservingEvent.id }),
+      });
 
-      if (error) {
-        console.warn("Direct insert error:", error);
+      if (!res.ok) {
+        // Fallback to direct supabase insert if API returns error
+        const { error } = await supabase
+          .from("event_registrations")
+          .insert([{ 
+            event_id: reservingEvent.id, 
+            user_id: userId 
+          }]);
+
+        if (error) {
+          console.warn("Direct insert error:", error);
+        }
       }
 
       const ticketId = `SKL-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${Date.now().toString().slice(-4)}`;
@@ -652,14 +661,20 @@ export default function EventsPortalClient() {
     if (!confirm("Are you sure you want to cancel your seat reservation for this event?")) return;
 
     try {
-      const { error } = await supabase
-        .from("event_registrations")
-        .delete()
-        .eq("event_id", eventId)
-        .eq("user_id", userId);
+      const res = await fetch(`/api/events/register?event_id=${eventId}`, {
+        method: "DELETE",
+      });
 
-      if (error) {
-        console.warn("Delete registration error:", error);
+      if (!res.ok) {
+        const { error } = await supabase
+          .from("event_registrations")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("user_id", userId);
+
+        if (error) {
+          console.warn("Delete registration error:", error);
+        }
       }
 
       setEvents(prev => prev.map(e => e.id === eventId ? {
@@ -831,31 +846,51 @@ export default function EventsPortalClient() {
 
     try {
       if (isEditing && editingEventId) {
-        const { error } = await supabase
-          .from("events")
-          .update(payload)
-          .eq("id", editingEventId);
+        const res = await fetch(`/api/events/${editingEventId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-        if (error) {
-          delete payload.image_url;
-          const { error: err2 } = await supabase
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          // Fallback to direct supabase update
+          const { error } = await supabase
             .from("events")
             .update(payload)
             .eq("id", editingEventId);
-          if (err2) throw err2;
+
+          if (error) {
+            delete payload.image_url;
+            const { error: err2 } = await supabase
+              .from("events")
+              .update(payload)
+              .eq("id", editingEventId);
+            if (err2) throw new Error(errJson.error || err2.message);
+          }
         }
         triggerToast("Event successfully updated");
       } else {
-        const { error } = await supabase
-          .from("events")
-          .insert([payload]);
+        const res = await fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
 
-        if (error) {
-          delete payload.image_url;
-          const { error: err2 } = await supabase
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          // Fallback to direct supabase insert
+          const { error } = await supabase
             .from("events")
             .insert([payload]);
-          if (err2) throw err2;
+
+          if (error) {
+            delete payload.image_url;
+            const { error: err2 } = await supabase
+              .from("events")
+              .insert([payload]);
+            if (err2) throw new Error(errJson.error || err2.message);
+          }
         }
         triggerToast("Event successfully scheduled");
       }
@@ -881,35 +916,41 @@ export default function EventsPortalClient() {
         tags: "",
         image_url: "",
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving event:", err);
-      alert("Failed to save event in database.");
+      alert(err?.message || "Failed to save event in database.");
     }
   };
 
   const handleDeleteEvent = async (id: string) => {
     setIsDeleting(true);
     try {
-      await supabase
-        .from("event_registrations")
-        .delete()
-        .eq("event_id", id);
+      const res = await fetch(`/api/events/${id}`, {
+        method: "DELETE",
+      });
 
-      const { error } = await supabase
-        .from("events")
-        .delete()
-        .eq("id", id);
+      if (!res.ok) {
+        await supabase
+          .from("event_registrations")
+          .delete()
+          .eq("event_id", id);
 
-      if (error) throw error;
+        const { error } = await supabase
+          .from("events")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+      }
 
       triggerToast("Event deleted successfully");
       setSelectedEventId(null);
       fetchEvents();
       setDeleteConfirmOpen(false);
       setDeletingEventId(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting event:", err);
-      alert("Failed to delete event.");
+      alert(err?.message || "Failed to delete event.");
     } finally {
       setIsDeleting(false);
     }

@@ -6,7 +6,11 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 import { measureServer } from "@/lib/perf"
 
 export default async function AttendancePage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
   const context = await getCurrentDashboardSession()
+  const contextMs = performance.now() - tContextStart
+
   if (!context) redirect("/auth/login")
 
   const supabase = await createSupabaseServerClient()
@@ -19,63 +23,78 @@ export default async function AttendancePage() {
   if (!profile.institution_id) redirect("/dashboard")
   const institutionId = profile.institution_id
 
-  const { data: facultyAssignments } = await supabase
-    .from("faculty_subjects")
-    .select("subject_id, section_id, semester")
-    .eq("faculty_id", profile.id)
-    .eq("institution_id", institutionId)
+  // Consolidated parallel batch: Fetch faculty assignments, programs, sections, subjects, joined students, and leave applications in ONE single Promise.all
+  const tBatchStart = performance.now()
+  const [
+    assignmentsRes,
+    programsRes,
+    sectionsRes,
+    subjectsRes,
+    studentsRes,
+    leavesRes,
+  ] = await measureServer("dashboard.faculty.attendance.data", () =>
+    Promise.all([
+      supabase
+        .from("faculty_subjects")
+        .select("subject_id, section_id, semester")
+        .eq("faculty_id", profile.id)
+        .eq("institution_id", institutionId),
+      supabase
+        .from("programs")
+        .select("id, name")
+        .eq("institution_id", institutionId)
+        .order("name"),
+      supabase
+        .from("sections")
+        .select("id, name, semester, program_id")
+        .eq("institution_id", institutionId)
+        .order("semester"),
+      supabase
+        .from("subjects")
+        .select("id, name, code, semester")
+        .eq("institution_id", institutionId)
+        .order("semester"),
+      supabase
+        .from("students")
+        .select(`
+          id,
+          institution_id,
+          program_id,
+          section_id,
+          semester,
+          registration_number,
+          admission_year,
+          dob,
+          gender,
+          users:users!id(id, name, email, role, profile_image_url)
+        `)
+        .eq("institution_id", institutionId)
+        .order("id"),
+      supabase
+        .from("leave_applications")
+        .select("id, student_id, section_id, advisor_id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
+        .eq("institution_id", institutionId)
+        .order("created_at", { ascending: false }),
+    ])
+  )
+  const batchMs = performance.now() - tBatchStart
 
-  const subjectIds = (facultyAssignments ?? []).map((row: any) => row.subject_id)
-  const sectionIds = (facultyAssignments ?? [])
-    .map((row: any) => row.section_id)
-    .filter(Boolean)
+  const facultyAssignments = assignmentsRes.data ?? []
+  const programs = programsRes.data ?? []
+  const sections = sectionsRes.data ?? []
+  const allSubjects = subjectsRes.data ?? []
+  const rawStudents = (studentsRes.data ?? []) as any[]
+  const rawLeaves = leavesRes.data ?? []
 
-  const [programsResult, sectionsResult, subjectsResult] = await measureServer("dashboard.faculty.attendance.data", () => Promise.all([
-    supabase
-      .from("programs")
-      .select("id,name")
-      .eq("institution_id", institutionId)
-      .order("name"),
-    supabase
-      .from("sections")
-      .select("id,name,semester,program_id")
-      .eq("institution_id", institutionId)
-      .order("semester"),
-    subjectIds.length
-      ? supabase
-          .from("subjects")
-          .select("id,name,code,semester")
-          .in("id", subjectIds)
-          .order("semester")
-      : Promise.resolve({ data: [] }),
-  ]))
+  const assignedSubjectIds = new Set(facultyAssignments.map((row: any) => row.subject_id))
+  const assignedSectionIds = new Set(facultyAssignments.map((row: any) => row.section_id).filter(Boolean))
 
-  const programs = programsResult.data ?? []
-  const sections = sectionsResult.data ?? []
-  const subjects = subjectsResult.data ?? []
+  const subjects = assignedSubjectIds.size > 0
+    ? allSubjects.filter((s: any) => assignedSubjectIds.has(s.id))
+    : allSubjects
 
-  let studentQuery = supabase
-    .from("students")
-    .select("id, institution_id, program_id, section_id, semester, registration_number, admission_year, dob, gender")
-    .eq("institution_id", institutionId)
-    .order("id")
-
-  // Also need user names/emails - we'll join on id which references users.id
-  // Fetch students data first
-  const { data: studentRecords = [] } = await studentQuery
-
-  // Now fetch corresponding user info
-  const studentIds = (studentRecords ?? []).map((s: any) => s.id)
-  const { data: userRecords = [] } = studentIds.length
-    ? await supabase
-        .from("users")
-        .select("id, name, email, role, profile_image_url")
-        .in("id", studentIds)
-    : { data: [] }
-
-  // Merge student + user data
-  const students = (studentRecords ?? []).map((s: any) => {
-    const user = (userRecords ?? []).find((u: any) => u.id === s.id)
+  const students = rawStudents.map((s: any) => {
+    const user = Array.isArray(s.users) ? s.users[0] : s.users
     return {
       ...s,
       name: user?.name || "Unknown",
@@ -86,17 +105,9 @@ export default async function AttendancePage() {
   })
 
   // Filter by section if faculty teaches specific sections
-  let filteredStudents = students
-  if (sectionIds.length) {
-    filteredStudents = students.filter((s: any) => sectionIds.includes(s.section_id))
-  }
-
-  // Fetch leave applications for this institution
-  const { data: rawLeaves = [] } = await supabase
-    .from("leave_applications")
-    .select("id, student_id, section_id, advisor_id, from_date, to_date, reason, notes, status, created_at, approved_at, approved_by")
-    .eq("institution_id", institutionId)
-    .order("created_at", { ascending: false })
+  const filteredStudents = assignedSectionIds.size > 0
+    ? students.filter((s: any) => assignedSectionIds.has(s.section_id))
+    : students
 
   const studentMap = new Map(students.map((s: any) => [s.id, s]))
   const sectionMap = new Map((sections ?? []).map((sec: any) => [sec.id, sec.name]))
@@ -112,6 +123,11 @@ export default async function AttendancePage() {
       sectionName: sectionMap.get(leave.section_id) || "—",
     }
   })
+
+  const totalMs = performance.now() - tPageStart
+  console.info(
+    `[DashboardFacultyAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} facultyId=${profile.id}`
+  )
 
   return (
     <AttendanceClient

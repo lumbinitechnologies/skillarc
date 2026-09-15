@@ -49,7 +49,7 @@ type MenuItem = {
 
 const roleMenus: Record<Role, MenuItem[]> = {
   [ROLES.SUPER_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin" },
     { name: "Organizations", icon: Building2, path: "/dashboard/super-admin/organizations" },
     { name: "Org Admins", icon: UserCog, path: "/dashboard/super-admin/org-admins" },
     { name: "Institutions", icon: School, path: "/dashboard/super-admin/institutions" },
@@ -59,11 +59,11 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.ORG_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin" },
   ],
 
   [ROLES.INSTITUTION_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin" },
     { name: "Admissions", icon: FileText, path: "/dashboard/institution-admin/admissions" },
     { name: "Intake Cohorts", icon: FolderKanban, path: "/dashboard/institution-admin/intakes" },
     { name: "Billing Desk", icon: CreditCard, path: "/dashboard/institution-admin/billing" },
@@ -83,19 +83,19 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.HOD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod" },
     { name: "Events", icon: Calendar, path: "/dashboard/hod/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/hod/placements" },
   ],
 
   [ROLES.PROGRAM_HEAD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head" },
     { name: "Events", icon: Calendar, path: "/dashboard/program-head/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/program-head/placements" },
   ],
 
   [ROLES.FACULTY]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
     { name: "Courses", icon: BookOpen, path: "/dashboard/faculty/subjects" },
     { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
     { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
@@ -104,7 +104,7 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.STUDENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
     { name: "Attendance", icon: UserCheck, path: "/dashboard/student/attendance" },
     { name: "Courses", icon: BookOpen, path: "/dashboard/student/subjects" },
     { name: "To Do Lists", icon: ListTodo, path: "/dashboard/student/todo" },
@@ -117,7 +117,7 @@ const roleMenus: Record<Role, MenuItem[]> = {
   ],
 
   [ROLES.PARENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent", prefetch: true },
+    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent" },
     { name: "Events", icon: Calendar, path: "/dashboard/parent/events" },
   ],
 }
@@ -303,7 +303,7 @@ export default function Sidebar({ profile: initialProfile }: { profile: Dashboar
                       >
                         <Link
                           href={item.path}
-                          prefetch={item.prefetch ?? false}
+                          prefetch={false}
                           onClick={() => document.body.classList.remove("sidebar-open")}
                           className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
                             isActive

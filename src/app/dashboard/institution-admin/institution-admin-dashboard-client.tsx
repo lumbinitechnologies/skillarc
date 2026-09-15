@@ -594,15 +594,15 @@ export default function InstitutionAdminDashboardClient({
 
           <div className="border-t border-slate-100 mt-8 pt-6">
             <div className="grid grid-cols-3 gap-4 text-center">
-              <Link href="/dashboard/institution-admin/programs" className="group block">
+              <Link href="/dashboard/institution-admin/programs" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.programs}</p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Programs</p>
               </Link>
-              <Link href="/dashboard/institution-admin/sections" className="group block">
+              <Link href="/dashboard/institution-admin/sections" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.sections}</p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Sections</p>
               </Link>
-              <Link href="/dashboard/institution-admin/subjects" className="group block">
+              <Link href="/dashboard/institution-admin/subjects" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.courses}</p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Courses</p>
               </Link>
@@ -630,11 +630,11 @@ export default function InstitutionAdminDashboardClient({
 
           <div className="relative z-10 border-t border-slate-100 mt-8 pt-6">
             <div className="grid grid-cols-2 gap-4 text-center">
-              <Link href="/dashboard/institution-admin/faculty" className="group block border-r border-slate-100">
+              <Link href="/dashboard/institution-admin/faculty" prefetch={false} className="group block border-r border-slate-100">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.faculty}</p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Faculty</p>
               </Link>
-              <Link href="/dashboard/institution-admin/parents" className="group block">
+              <Link href="/dashboard/institution-admin/parents" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.parents}</p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Parents</p>
               </Link>

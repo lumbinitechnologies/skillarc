@@ -1,10 +1,23 @@
 "use server"
 
 import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { ROLES } from "@/constants/roles"
+import { DASHBOARD_ROUTES } from "@/constants/routes"
+import { checkAuthRateLimit } from "@/lib/rate-limit"
 
 export async function loginAction(email: string, password: string) {
+  const tTotalStart = performance.now()
+  const headerList = await headers()
+  const clientIp = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() || headerList.get("x-real-ip") || null
+
+  const tRateStart = performance.now()
+  const rateLimitStatus = await checkAuthRateLimit(clientIp, email)
+  const tRateEnd = performance.now()
+  if (!rateLimitStatus.allowed) {
+    return { error: rateLimitStatus.message || "Too many attempts. Please try again later." }
+  }
+
   const cookieStore = await cookies()
 
   const supabase = createServerClient(
@@ -24,13 +37,45 @@ export async function loginAction(email: string, password: string) {
     }
   )
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const tGoTrueStart = performance.now()
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  const tGoTrueEnd = performance.now()
 
-  if (error) {
-    return { error: error.message }
+  if (error || !data.user) {
+    console.info(`[loginAction:Failed] email: ${email} | GoTrue: ${(tGoTrueEnd - tGoTrueStart).toFixed(2)}ms | Total: ${(performance.now() - tTotalStart).toFixed(2)}ms | Error: ${error?.message}`)
+    return { error: error?.message || "Invalid login credentials." }
   }
 
-  return { success: true }
+  // Resolve user role to eliminate intermediate redirect hop
+  let destination = "/dashboard"
+  const tRoleStart = performance.now()
+  try {
+    const metaRole = (data.user.user_metadata?.role || data.user.app_metadata?.role) as keyof typeof DASHBOARD_ROUTES | undefined
+    if (metaRole && DASHBOARD_ROUTES[metaRole]) {
+      destination = DASHBOARD_ROUTES[metaRole]
+    } else {
+      const { data: userProfile } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", data.user.id)
+        .maybeSingle()
+
+      const role = userProfile?.role as keyof typeof DASHBOARD_ROUTES | undefined
+      if (role && DASHBOARD_ROUTES[role]) {
+        destination = DASHBOARD_ROUTES[role]
+      }
+    }
+  } catch {
+    destination = "/dashboard"
+  }
+  const tRoleEnd = performance.now()
+  const tTotalEnd = performance.now()
+
+  console.info(
+    `[loginAction:Success] email: ${email} | RateLimit: ${(tRateEnd - tRateStart).toFixed(2)}ms | GoTrue (bcrypt+JWT): ${(tGoTrueEnd - tGoTrueStart).toFixed(2)}ms | RoleLookup: ${(tRoleEnd - tRoleStart).toFixed(2)}ms | Total: ${(tTotalEnd - tTotalStart).toFixed(2)}ms -> ${destination}`
+  )
+
+  return { success: true, destination }
 }
 
 export async function signupAction(
@@ -62,6 +107,12 @@ export async function signupAction(
   const { data, error: signupError } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: {
+        name,
+        role,
+      },
+    },
   })
 
   if (signupError) {

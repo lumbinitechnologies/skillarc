@@ -1,5 +1,31 @@
 import "./globals.css"
-import ChatbotWidget from "@/components/chatbot/ChatbotWidget"
+import { Inter, Plus_Jakarta_Sans, Space_Grotesk, Space_Mono } from "next/font/google"
+import ChatbotWrapper from "@/components/chatbot/ChatbotWrapper"
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+})
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-plus-jakarta",
+  display: "swap",
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+})
+
+const spaceMono = Space_Mono({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-space-mono",
+  display: "swap",
+})
 
 export const metadata = {
   title: "SkillArc LMS",
@@ -15,10 +41,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html
+      lang="en"
+      className={`${inter.variable} ${plusJakarta.variable} ${spaceGrotesk.variable} ${spaceMono.variable}`}
+    >
+      <body className="font-sans antialiased">
         {children}
-        <ChatbotWidget />
+        <ChatbotWrapper />
       </body>
     </html>
   )

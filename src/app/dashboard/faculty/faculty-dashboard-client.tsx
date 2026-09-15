@@ -107,6 +107,7 @@ export default function FacultyDashboardClient({
           <div className="flex flex-wrap gap-3">
             <Link 
               href="/dashboard/faculty/timetable" 
+              prefetch={false}
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-xs font-bold text-[#ECDFCB] transition hover:bg-[#1C3F73] hover:border-[#E57D37]/50 active:scale-95"
             >
               <Calendar className="w-4 h-4" />
@@ -114,6 +115,7 @@ export default function FacultyDashboardClient({
             </Link>
             <Link 
               href="/dashboard/faculty/attendance" 
+              prefetch={false}
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#E57D37] to-[#EAAD62] px-4 py-2.5 text-xs font-bold text-[#14234B] shadow-sm hover:shadow-md hover:shadow-[#E57D37]/20 transition-all duration-200 active:scale-95"
             >
               <Plus className="w-4 h-4" />
@@ -268,6 +270,7 @@ export default function FacultyDashboardClient({
           <div className="space-y-3.5">
             <Link 
               href="/dashboard/faculty/attendance" 
+              prefetch={false}
               className="group w-full rounded-2xl border border-[#3A6DAF]/20 hover:border-[#E57D37]/40 bg-[#F8FAFD] hover:bg-[#F0F5FB] px-5 py-4 text-left flex justify-between items-center transition-all duration-300 hover:shadow-sm"
             >
               <div className="flex items-center gap-3">
@@ -284,6 +287,7 @@ export default function FacultyDashboardClient({
 
             <Link 
               href="/dashboard/faculty/timetable" 
+              prefetch={false}
               className="group w-full rounded-2xl border border-[#3A6DAF]/20 hover:border-[#E57D37]/40 bg-[#F8FAFD] hover:bg-[#F0F5FB] px-5 py-4 text-left flex justify-between items-center transition-all duration-300 hover:shadow-sm"
             >
               <div className="flex items-center gap-3">
@@ -300,6 +304,7 @@ export default function FacultyDashboardClient({
 
             <Link 
               href="/dashboard/faculty/subjects" 
+              prefetch={false}
               className="group w-full rounded-2xl border border-slate-100 hover:border-gray-200 bg-slate-50/50 hover:bg-white px-5 py-4 text-left flex justify-between items-center transition-all duration-300 hover:shadow-sm"
             >
               <div className="flex items-center gap-3">

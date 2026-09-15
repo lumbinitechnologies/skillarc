@@ -2,71 +2,81 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
 import AttendanceClient from "./attendance-client"
+import { getCurrentUserContext } from "@/lib/user-context"
+import { getInstitutionAllAttendanceAnalyticsAction } from "../../faculty/attendance/actions"
 
 export default async function AttendancePage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
+  const context = await getCurrentUserContext()
+  const contextMs = performance.now() - tContextStart
+
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
+  if (!context.institution_id) redirect("/dashboard")
+
+  const institutionId = context.institution_id
   const supabase = await createSupabaseServerClient()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/auth/login")
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role, institution_id")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== ROLES.INSTITUTION_ADMIN) {
-    redirect("/dashboard")
-  }
-
-  const institutionId = profile.institution_id
-
-  const [programsRes, sectionsRes, subjectsRes, studentRecordsRes, departmentsRes] = await Promise.all([
+  // Consolidated parallel batch: Fetch programs, sections, subjects, joined students, departments, and analytics in ONE single Promise.all
+  const tBatchStart = performance.now()
+  const [
+    programsRes,
+    sectionsRes,
+    subjectsRes,
+    studentsRes,
+    departmentsRes,
+    statsRes,
+  ] = await Promise.all([
     supabase
       .from("programs")
-      .select("id,name,department_id")
+      .select("id, name, department_id")
       .eq("institution_id", institutionId)
       .order("name"),
     supabase
       .from("sections")
-      .select("id,name,semester,program_id")
+      .select("id, name, semester, program_id")
       .eq("institution_id", institutionId)
       .order("semester"),
     supabase
       .from("subjects")
-      .select("id,name,code,semester")
+      .select("id, name, code, semester")
       .eq("institution_id", institutionId)
       .order("semester"),
     supabase
       .from("students")
-      .select("*")
+      .select(`
+        id,
+        institution_id,
+        program_id,
+        section_id,
+        semester,
+        registration_number,
+        admission_year,
+        dob,
+        gender,
+        users:users!id(id, name, email, role, profile_image_url)
+      `)
       .eq("institution_id", institutionId),
     supabase
       .from("departments")
-      .select("id,name")
+      .select("id, name")
       .eq("institution_id", institutionId)
       .order("name"),
+    getInstitutionAllAttendanceAnalyticsAction(institutionId),
   ])
+  const batchMs = performance.now() - tBatchStart
+  const totalMs = performance.now() - tPageStart
 
   const programs = programsRes.data ?? []
   const sections = sectionsRes.data ?? []
   const subjects = subjectsRes.data ?? []
-  const studentRecords = studentRecordsRes.data ?? []
+  const rawStudents = (studentsRes.data ?? []) as any[]
   const departments = departmentsRes.data ?? []
+  const allStats = statsRes.success ? statsRes.stats || [] : []
 
-  const studentIds = studentRecords.map((s: any) => s.id)
-  const { data: userRecords = [] } = studentIds.length
-    ? await supabase
-        .from("users")
-        .select("id, name, email, role, profile_image_url")
-        .in("id", studentIds)
-    : { data: [] }
-
-  const students = studentRecords.map((s: any) => {
-    const user = (userRecords ?? []).find((u: any) => u.id === s.id)
+  const students = rawStudents.map((s) => {
+    const user = Array.isArray(s.users) ? s.users[0] : s.users
     return {
       ...s,
       name: user?.name || "Unknown Student",
@@ -76,18 +86,17 @@ export default async function AttendancePage() {
     }
   })
 
-  // Load institution-wide analytics stats
-  const { getInstitutionAllAttendanceAnalyticsAction } = await import("../../faculty/attendance/actions")
-  const statsRes = await getInstitutionAllAttendanceAnalyticsAction(institutionId)
-  const allStats = statsRes.success ? statsRes.stats || [] : []
+  console.info(
+    `[DashboardInstitutionAdminAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)}`
+  )
 
   return (
     <AttendanceClient
       institutionId={institutionId}
-      programs={programs ?? []}
-      sections={sections ?? []}
-      subjects={subjects ?? []}
-      students={students ?? []}
+      programs={programs}
+      sections={sections}
+      subjects={subjects}
+      students={students}
       departments={departments}
       allStats={allStats}
     />

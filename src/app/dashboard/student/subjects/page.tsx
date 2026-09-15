@@ -8,67 +8,87 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 export const dynamic = "force-dynamic"
 
 export default async function StudentSubjectsPage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
   const context = await getCurrentDashboardSession()
-  if (!context) redirect("/auth/login")
+  const contextMs = performance.now() - tContextStart
 
-  const adminClient = createSupabaseAdminClient()
+  if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  const { data: studentData } = await adminClient
-    .from("students")
-    .select("id, section_id, program_id, semester")
-    .eq("id", context.id)
-    .single()
+  const adminClient = createSupabaseAdminClient()
 
-  const profile = { ...context, ...studentData }
+  const tBatchStart = performance.now()
+  const [studentRes, timetableRes, subjectsRes] = await Promise.all([
+    adminClient
+      .from("students")
+      .select("id, section_id, program_id, semester")
+      .eq("id", context.id)
+      .maybeSingle(),
+    context.institution_id
+      ? adminClient
+          .from("timetable_slots")
+          .select("subject_id, faculty_id, section_id, subjects(id, name, code, subject_type), users!faculty_id(id, name)")
+          .eq("institution_id", context.institution_id)
+      : Promise.resolve({ data: [] }),
+    context.institution_id
+      ? adminClient
+          .from("subjects")
+          .select("id, name, code, subject_type, program_id, semester")
+          .eq("institution_id", context.institution_id)
+      : Promise.resolve({ data: [] }),
+  ])
+  const batchMs = performance.now() - tBatchStart
 
-  const { data: timetableRows = [] } = profile.section_id
-    ? await adminClient
-        .from("timetable_slots")
-        .select("subject_id, faculty_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-        .order("subject_id")
-    : { data: [] }
+  const studentData = studentRes.data
+  const allSlots = (timetableRes.data ?? []) as any[]
+  const allSubjects = (subjectsRes.data ?? []) as any[]
 
-  let subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+  // Filter slots for student's section
+  const sectionSlots = studentData?.section_id
+    ? allSlots.filter((slot: any) => slot.section_id === studentData.section_id)
+    : []
 
-  if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
-    let subQuery = adminClient
-      .from("subjects")
-      .select("id")
-    if (profile.program_id) {
-      subQuery = subQuery.eq("program_id", profile.program_id)
-    } else if (profile.institution_id) {
-      subQuery = subQuery.eq("institution_id", profile.institution_id)
+  const subjectMap = new Map<string, { id: string; name: string; code: string; subjectType: string; facultyName: string }>()
+
+  sectionSlots.forEach((slot: any) => {
+    const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
+    const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
+    if (sub?.id && !subjectMap.has(sub.id)) {
+      subjectMap.set(sub.id, {
+        id: sub.id,
+        name: sub.name,
+        code: sub.code,
+        subjectType: sub.subject_type || "THEORY",
+        facultyName: fac?.name ?? "Faculty pending",
+      })
     }
-    if (profile.semester) {
-      subQuery = subQuery.eq("semester", profile.semester)
-    }
-    const { data: programSubjects } = await subQuery
-    if (programSubjects?.length) {
-      subjectIds = programSubjects.map((s: any) => s.id)
-    }
+  })
+
+  // Fallback: If section has no timetable slots yet, find subjects for student's program/semester
+  if (subjectMap.size === 0 && studentData?.program_id) {
+    const progSubs = allSubjects.filter((s: any) => {
+      const matchProg = s.program_id === studentData.program_id
+      const matchSem = !studentData.semester || !s.semester || s.semester === studentData.semester
+      return matchProg && matchSem
+    })
+    progSubs.forEach((sub: any) => {
+      subjectMap.set(sub.id, {
+        id: sub.id,
+        name: sub.name,
+        code: sub.code,
+        subjectType: sub.subject_type || "THEORY",
+        facultyName: "Faculty pending",
+      })
+    })
   }
 
-  const { data: subjectRows = [] } = subjectIds.length
-    ? await adminClient.from("subjects").select("id, name, code, subject_type").in("id", subjectIds).order("name")
-    : { data: [] }
+  const subjects = Array.from(subjectMap.values())
+  const totalMs = performance.now() - tPageStart
 
-  const facultyIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.faculty_id).filter(Boolean))) as string[]
-  const facultyMap = new Map<string, string>()
-  if (facultyIds.length) {
-    const { data: facultyRows = [] } = await adminClient.from("users").select("id, name").in("id", facultyIds)
-    ;(facultyRows as Array<any>).forEach((faculty) => facultyMap.set(faculty.id, faculty.name))
-  }
-
-  const subjects = (subjectRows as Array<any>).map((subject) => ({
-    id: subject.id,
-    name: subject.name,
-    code: subject.code,
-    subjectType: subject.subject_type || "THEORY",
-    facultyName: facultyMap.get((timetableRows as Array<any>).find((slot: any) => slot.subject_id === subject.id)?.faculty_id) ?? "Faculty pending",
-  }))
+  console.info(
+    `[DashboardStudentSubjects] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
+  )
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">

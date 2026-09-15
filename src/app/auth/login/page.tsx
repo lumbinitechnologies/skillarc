@@ -30,7 +30,8 @@ export default function LoginPage() {
       }
 
       window.dispatchEvent(new Event('skillarc-auth-changed'))
-      router.push('/dashboard')
+      const targetDestination = (result as any)?.destination || '/dashboard'
+      router.push(targetDestination)
     } catch (err) {
       console.error('Login error:', err)
       setLoading(false)
@@ -38,13 +39,7 @@ export default function LoginPage() {
   }
 
   return (
-    <>
-      <link
-        href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600;1,700&family=Space+Grotesk:wght@500;700;800;900&family=Space+Mono:wght@400;700&display=swap"
-        rel="stylesheet"
-      />
-
-      <div className="min-h-screen w-full grid grid-cols-12 bg-[#0B132B] font-['Space_Grotesk',sans-serif] text-[#ECDFCB] overflow-hidden selection:bg-[#E57D37] selection:text-[#EFEAD8]">
+    <div className="min-h-screen w-full grid grid-cols-12 bg-[#0B132B] font-['Space_Grotesk',sans-serif] text-[#ECDFCB] overflow-hidden selection:bg-[#E57D37] selection:text-[#EFEAD8]">
         
         {/* Left Column: Visual Panel (Visible on Desktop) */}
         <div className="hidden lg:flex lg:col-span-6 bg-[#14234B] p-16 flex-col justify-between relative overflow-hidden border-r border-[#3A6DAF]/20">
@@ -255,6 +250,5 @@ export default function LoginPage() {
         </div>
 
       </div>
-    </>
   )
 }
