@@ -5,33 +5,31 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { ROLES } from '@/constants/roles'
 import {
-  EditorialButton,
-  EditorialInput,
-  EditorialCard,
-  EditorialCardContent,
-  EditorialMetaTag,
-} from '@/components/editorial'
-import { motion } from 'framer-motion'
+  AuthButton,
+  AuthCard,
+  AuthField,
+  AuthMessage,
+  AuthShell,
+} from '@/components/auth/auth-ui'
 import { Lock } from 'lucide-react'
 
 export default function SetPasswordPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const inviteEmail = searchParams.get('inviteEmail')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle')
   const [error, setError] = useState('')
   const [userEmail, setUserEmail] = useState('')
-  const [inviteEmail, setInviteEmail] = useState<string | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
   const [hasSession, setHasSession] = useState(false)
 
   useEffect(() => {
-    const emailFromQuery = searchParams.get('inviteEmail')
-    setInviteEmail(emailFromQuery)
+    const emailFromQuery = inviteEmail
 
     let ready = false
-    const handleSession = async (session: any | null) => {
+    const handleSession = async (session: { user?: { email?: string | null } } | null) => {
       const sessionEmail = session?.user?.email
       setSessionReady(true)
       setHasSession(Boolean(session))
@@ -47,8 +45,8 @@ export default function SetPasswordPage() {
       }
 
       if (emailFromQuery && sessionEmail && sessionEmail.toLowerCase() !== emailFromQuery.toLowerCase()) {
-        console.warn('⚠️ Set-password page session mismatch', { inviteEmail: emailFromQuery, sessionEmail })
-        setError('You are signed in as a different user than the invited email. Signing out and retrying...')
+        console.warn('Set-password page session mismatch', { inviteEmail: emailFromQuery, sessionEmail })
+        setError('You are signed in as a different user than the invited email. Signing out and retrying…')
         setStatus('error')
         await supabase.auth.signOut()
         window.location.replace(`/auth/callback?inviteEmail=${encodeURIComponent(emailFromQuery)}&retry=1`)
@@ -61,28 +59,24 @@ export default function SetPasswordPage() {
 
     async function getSession() {
       const { data: { session } } = await supabase.auth.getSession()
-      console.debug('set-password initial getSession', { session })
       ready = true
       await handleSession(session)
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.debug('set-password onAuthStateChange', { event, session })
       if (!ready) return
       await handleSession(session)
     })
 
-    getSession()
+    void getSession()
 
     return () => subscription?.unsubscribe()
-  }, [router, searchParams])
+  }, [inviteEmail])
 
   useEffect(() => {
     const fallbackTimer = window.setTimeout(() => {
       if (!hasSession) {
-        setError(
-          'No active invite session was detected. Please open the invite link again in a browser where you are not signed in.'
-        )
+        setError('No active invite session was detected. Please open the invite link again in a browser where you are not signed in.')
         setStatus('error')
       }
     }, 5000)
@@ -90,18 +84,14 @@ export default function SetPasswordPage() {
     return () => window.clearTimeout(fallbackTimer)
   }, [hasSession])
 
-  useEffect(() => {
-    console.debug('set-password mounted', { inviteEmail })
-  }, [inviteEmail])
-
   async function handleSubmit() {
     if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+      setError('Password must be at least 6 characters.')
       setStatus('error')
       return
     }
     if (password !== confirm) {
-      setError('Passwords do not match')
+      setError('Passwords do not match.')
       setStatus('error')
       return
     }
@@ -110,9 +100,9 @@ export default function SetPasswordPage() {
     setError('')
 
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) {
-        setError(error.message)
+      const { error: updateError } = await supabase.auth.updateUser({ password })
+      if (updateError) {
+        setError(updateError.message)
         setStatus('error')
         return
       }
@@ -138,146 +128,83 @@ export default function SetPasswordPage() {
       }
 
       setStatus('success')
-      setTimeout(() => router.push(redirectPath), 1200)
+      window.setTimeout(() => router.push(redirectPath), 1200)
     } catch (err) {
-      setError('An unexpected error occurred')
+      console.error('Password setup error:', err)
+      setError('An unexpected error occurred. Please try again.')
       setStatus('error')
     }
   }
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
-      {/* Background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-editorial-navy via-[#1a2f5a] to-editorial-navy -z-10" />
-      <div className="fixed inset-0 opacity-40 -z-10 pointer-events-none" style={{
-        backgroundImage: "linear-gradient(rgba(58, 109, 175, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(58, 109, 175, 0.08) 1px, transparent 1px)",
-        backgroundSize: '44px 44px',
-      }} />
-
-      {/* Accent glows */}
-      <div className="fixed top-20 right-1/3 w-96 h-96 bg-editorial-orange opacity-5 rounded-full blur-3xl -z-10 pointer-events-none" />
-      <div className="fixed bottom-32 left-1/4 w-96 h-96 bg-editorial-amber opacity-5 rounded-full blur-3xl -z-10 pointer-events-none" />
-
-      {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-        <div className="w-full max-w-md">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-8 space-y-2"
-          >
-            <EditorialMetaTag>{ 'ACCOUNT_SETUP' }</EditorialMetaTag>
-            <h1 className="ed-headline text-3xl">Set Password</h1>
-            <p className="text-editorial-sky text-sm leading-relaxed">
-              Create a secure password to activate your account.
-            </p>
-          </motion.div>
-
-          {/* Account Info */}
-          {(inviteEmail || userEmail) && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-4 rounded-lg border border-editorial-blue border-opacity-30 bg-editorial-navy bg-opacity-40 text-editorial-cream text-sm space-y-2"
-            >
-              <p>Invite for: <span className="font-semibold text-editorial-orange">{inviteEmail ?? 'Unknown'}</span></p>
-              {userEmail && (
-                <p>Signed in as: <span className="font-semibold text-editorial-amber">{userEmail}</span></p>
-              )}
-            </motion.div>
-          )}
-
-          {/* Success Message */}
-          {status === 'success' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-6 rounded-lg border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-center space-y-3"
-            >
-              <p className="font-semibold text-lg">✓ Password Set</p>
-              <p className="text-sm">Redirecting to dashboard...</p>
-            </motion.div>
-          )}
-
-          {/* Error Message */}
-          {status === 'error' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-4 rounded-lg border border-rose-500/40 bg-rose-500/10 text-rose-300 text-sm"
-            >
-              {error}
-            </motion.div>
-          )}
-
-          {/* Form Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <EditorialCard variant="bordered">
-              <EditorialCardContent className="space-y-6">
-                {/* New Password */}
-                <EditorialInput
-                  label="New Password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={status === 'loading' || status === 'success'}
-                  icon={<Lock className="w-4 h-4" />}
-                  meta="Min. 6 characters"
-                />
-
-                {/* Confirm Password */}
-                <EditorialInput
-                  label="Confirm Password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                  disabled={status === 'loading' || status === 'success'}
-                  icon={<Lock className="w-4 h-4" />}
-                />
-
-                {/* Submit Button */}
-                <EditorialButton
-                  variant={status === 'success' ? 'secondary' : 'primary'}
-                  size="md"
-                  onClick={handleSubmit}
-                  isLoading={status === 'loading'}
-                  disabled={status === 'success' || !sessionReady || !hasSession}
-                  className="w-full mt-6"
-                >
-                  {status === 'loading'
-                    ? 'Setting up...'
-                    : status === 'success'
-                    ? 'Account Ready'
-                    : !sessionReady
-                    ? 'Checking session...'
-                    : !hasSession
-                    ? 'No active session'
-                    : 'Set Password & Login'}
-                </EditorialButton>
-              </EditorialCardContent>
-            </EditorialCard>
-          </motion.div>
-
-          {/* Footer Meta */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mt-8 text-center text-xs text-editorial-sky/60"
-          >
-            { 'SECURE_ACCOUNT_ACTIVATION' }
-          </motion.div>
+    <AuthShell
+      title="Set your SkillArc password"
+      description="Create a password to activate your invitation and continue to your university workspace."
+    >
+      {(inviteEmail || userEmail) ? (
+        <div className="mb-5 space-y-1 rounded-xl border border-[#DCE6EE] bg-[#F8FBFD] px-4 py-3 text-sm text-[#5B708A]">
+          {inviteEmail ? <p>Invitation for <span className="font-bold text-[#31547A]">{inviteEmail}</span></p> : null}
+          {userEmail ? <p>Signed in as <span className="font-bold text-[#31547A]">{userEmail}</span></p> : null}
         </div>
-      </div>
-    </div>
+      ) : null}
+
+      {status === 'success' ? (
+        <AuthMessage tone="success" title="Account ready">
+          Your password has been set. Redirecting to your workspace…
+        </AuthMessage>
+      ) : null}
+      {status === 'error' ? <AuthMessage>{error}</AuthMessage> : null}
+
+      <AuthCard>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void handleSubmit()
+          }}
+          className="space-y-5"
+        >
+          <AuthField
+            label="New password"
+            type="password"
+            placeholder="Create a password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="new-password"
+            disabled={status === 'loading' || status === 'success'}
+            hint="Use at least 6 characters."
+            icon={<Lock size={17} aria-hidden="true" />}
+          />
+
+          <AuthField
+            label="Confirm password"
+            type="password"
+            placeholder="Re-enter your password"
+            value={confirm}
+            onChange={(event) => setConfirm(event.target.value)}
+            autoComplete="new-password"
+            disabled={status === 'loading' || status === 'success'}
+            icon={<Lock size={17} aria-hidden="true" />}
+          />
+
+          <AuthButton
+            type="submit"
+            isLoading={status === 'loading'}
+            disabled={status === 'success' || !sessionReady || !hasSession}
+            className="w-full"
+            variant={status === 'success' ? 'secondary' : 'primary'}
+          >
+            {status === 'loading'
+              ? 'Setting password'
+              : status === 'success'
+                ? 'Account ready'
+                : !sessionReady
+                  ? 'Checking invitation'
+                  : !hasSession
+                    ? 'No active invitation'
+                    : 'Set password and continue'}
+          </AuthButton>
+        </form>
+      </AuthCard>
+    </AuthShell>
   )
 }
