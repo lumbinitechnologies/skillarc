@@ -5,7 +5,7 @@ import { ArrowRight, CheckCircle2 } from "lucide-react"
 import Link from "next/link"
 import Roles from "@/components/landing/roles"
 import { SecuritySection } from "@/components/landing/cta"
-import { MarketingShell, SectionEyebrow } from "@/components/landing/marketing-ui"
+import { MarketingShell } from "@/components/landing/marketing-ui"
 
 export default function SolutionsPage() {
   return (
@@ -15,8 +15,7 @@ export default function SolutionsPage() {
           <div className="absolute bottom-[-11rem] right-[-6rem] h-[32rem] w-[32rem] rounded-full bg-[#C85D2E]/20 blur-3xl" aria-hidden="true" />
           <div className="relative mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:gap-20">
             <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
-              <SectionEyebrow accent="amber">University teams, working together</SectionEyebrow>
-              <h1 className="mt-6 max-w-2xl text-5xl font-bold leading-[1.04] tracking-[-0.055em] sm:text-6xl lg:text-7xl">One clear view for every team supporting students.</h1>
+              <h1 className="mt-0 max-w-2xl text-5xl font-bold leading-[1.04] tracking-[-0.055em] sm:text-6xl lg:text-7xl">One clear view for every team supporting students.</h1>
               <p className="mt-7 max-w-xl text-lg leading-8 text-[#D6E3EC]">Give each role the information and tools relevant to them while keeping the whole university connected around the student journey.</p>
               <div className="mt-8 flex flex-wrap gap-3"><Link href="#role-solutions" className="inline-flex items-center gap-2 rounded-full bg-[#C85D2E] px-6 py-3.5 text-sm font-bold text-white transition hover:bg-[#E07A48] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#14234B]">Explore role solutions <ArrowRight size={16} aria-hidden="true" /></Link><Link href="/features" className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3.5 text-sm font-bold text-white transition hover:border-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">View features</Link></div>
             </motion.div>

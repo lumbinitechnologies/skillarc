@@ -4,7 +4,7 @@ import { useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Award, BookOpen, Building2, HeartHandshake, Shield, Users } from "lucide-react"
 import { ROLE_VIEWS } from "@/components/landing/marketing-data"
-import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
+import { ProductWindow } from "@/components/landing/marketing-ui"
 
 const iconMap = { Shield, Building2, Award, BookOpen, Users, HeartHandshake }
 
@@ -24,7 +24,7 @@ export default function Roles() {
   return (
     <section className="bg-[#F7FAFC] px-5 py-20 sm:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
-        <div className="max-w-3xl"><SectionEyebrow accent="terracotta">A view for every university role</SectionEyebrow><h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Everyone sees the work that matters to them.</h2><p className="mt-5 text-lg leading-8 text-[#58718B]">Keep the university connected while leadership, administrators, department heads, faculty, students, and families each get a focused workspace.</p></div>
+        <div className="max-w-3xl"><h2 className="mt-0 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Everyone sees the work that matters to them.</h2><p className="mt-5 text-lg leading-8 text-[#58718B]">Keep the university connected while leadership, administrators, department heads, faculty, students, and families each get a focused workspace.</p></div>
 
         <div className="mt-12 grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-start lg:gap-12">
           <div className="space-y-2" role="tablist" aria-label="Role-based solutions">
@@ -39,7 +39,7 @@ export default function Roles() {
           <ProductWindow title={`${active.audience} workspace`} label="Focused workspace" accent={active.accent}>
             <AnimatePresence mode="wait">
               <motion.div key={active.id} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.24 }}>
-                <div className="flex flex-wrap items-start justify-between gap-4"><div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF1F7] text-[#31547A]"><Icon size={22} aria-hidden="true" /></div><div><p className="text-sm font-semibold text-[#6D8498]">{active.audience}</p><h3 className="text-2xl font-bold text-[#14234B]">{active.title}</h3></div></div><StatusPill accent="mint">Access matched</StatusPill></div>
+                <div className="flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF1F7] text-[#31547A]"><Icon size={22} aria-hidden="true" /></div><div><p className="text-sm font-semibold text-[#6D8498]">{active.audience}</p><h3 className="text-2xl font-bold text-[#14234B]">{active.title}</h3></div></div>
                 <p className="mt-6 text-base leading-7 text-[#58718B]">{active.description}</p>
                 <div className="mt-7 grid gap-3 sm:grid-cols-3">{active.focus.map((focus, index) => <div key={focus} className="rounded-2xl border border-[#E2EAF0] bg-[#F8FBFD] p-4"><span className="text-sm font-bold text-[#C85D2E]">0{index + 1}</span><p className="mt-5 text-sm font-semibold leading-6 text-[#31547A]">{focus}</p></div>)}</div>
                 <div className="mt-6 overflow-hidden rounded-2xl border border-[#E2EAF0]"><div className="grid grid-cols-[1fr_1fr_0.65fr] gap-3 bg-[#F4F8FB] px-4 py-3 text-xs font-bold text-[#6D8498]"><span>Workstream</span><span>Context</span><span>Status</span></div>{previewRows[active.id].map((row) => <div key={row[0]} className="grid grid-cols-[1fr_1fr_0.65fr] gap-3 border-t border-[#E8EEF3] px-4 py-3 text-sm text-[#58718B]"><span className="font-semibold text-[#14234B]">{row[0]}</span><span>{row[1]}</span><span className="font-semibold text-[#087F62]">{row[2]}</span></div>)}</div>

@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion"
 import { BookOpen, CalendarDays, ClipboardCheck, GraduationCap, Users } from "lucide-react"
-import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
+import { ProductWindow } from "@/components/landing/marketing-ui"
 
 const workspaces = [
   { label: "Institution administration", title: "Run the institution with the day in view.", description: "Bring admissions, programs, faculty, students, fees, schedules, attendance, events, and placements into one practical workspace.", icon: GraduationCap, accent: "navy" as const, items: ["Admissions review", "Today’s priorities", "Attendance follow-up"] },
@@ -15,8 +15,7 @@ export default function StudentExperience() {
     <section className="bg-[#F7FAFC] px-5 py-20 sm:px-8 lg:py-28">
       <div className="mx-auto max-w-7xl">
         <div className="max-w-3xl">
-          <SectionEyebrow accent="terracotta">A view for every role</SectionEyebrow>
-          <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Everyone sees the work that matters to them.</h2>
+          <h2 className="mt-0 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Everyone sees the work that matters to them.</h2>
           <p className="mt-5 text-lg leading-8 text-[#58718B]">The university stays connected while leadership, administrators, faculty, students, and families each get a focused workspace.</p>
         </div>
 
@@ -28,7 +27,6 @@ export default function StudentExperience() {
                 <ProductWindow title={workspace.label} label="Focused workspace" accent={workspace.accent}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EAF1F7] text-[#31547A]"><Icon size={21} aria-hidden="true" /></div>
-                    <StatusPill accent="mint">Access matched</StatusPill>
                   </div>
                   <h3 className="mt-6 text-2xl font-bold tracking-[-0.04em] text-[#14234B]">{workspace.title}</h3>
                   <p className="mt-3 text-base leading-7 text-[#58718B]">{workspace.description}</p>

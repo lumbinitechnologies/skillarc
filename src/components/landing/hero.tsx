@@ -5,12 +5,11 @@ import { AnimatePresence, motion } from "framer-motion"
 import { ArrowRight, ArrowUpRight, CalendarDays, CheckCircle2, GraduationCap, Users } from "lucide-react"
 import Link from "next/link"
 import { DEMO_URL, WORKFLOW_STEPS } from "@/components/landing/marketing-data"
-import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
+import { ProductWindow } from "@/components/landing/marketing-ui"
 
 const heroViews = [
   {
     title: "Admissions review",
-    status: "Ready for review",
     accent: "terracotta" as const,
     rows: [
       ["A. Sharma", "Computer Science", "Fall 2026", "Review"],
@@ -20,7 +19,6 @@ const heroViews = [
   },
   {
     title: "Academic operations",
-    status: "Ready to publish",
     accent: "navy" as const,
     rows: [
       ["Monday 09:00", "CS-302", "Room 304", "No clash"],
@@ -30,7 +28,6 @@ const heroViews = [
   },
   {
     title: "Student support",
-    status: "3 priorities today",
     accent: "mint" as const,
     rows: [
       ["Attendance follow-up", "Below threshold", "12 students", "Review"],
@@ -56,8 +53,7 @@ export default function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55 }}
           >
-            <SectionEyebrow>Purpose-built for university teams</SectionEyebrow>
-            <h1 className="mt-7 max-w-2xl text-5xl font-bold leading-[1.03] tracking-[-0.055em] text-[#14234B] sm:text-6xl lg:text-7xl">
+            <h1 className="mt-0 max-w-2xl text-5xl font-bold leading-[1.03] tracking-[-0.055em] text-[#14234B] sm:text-6xl lg:text-7xl">
               One clear workspace for the work behind every student journey.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#58718B] sm:text-xl">
@@ -88,18 +84,12 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.12 }}
             className="relative"
           >
-            <div className="absolute -right-4 -top-7 z-10 hidden rounded-2xl border border-[#D9E3EC] bg-white px-4 py-3 shadow-[0_14px_34px_rgba(20,35,75,0.13)] sm:block marketing-float">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#31547A]"><span className="h-2 w-2 rounded-full bg-[#087F62]" /> One shared view</div>
-              <p className="mt-1 text-xs text-[#6D8498]">Up to date for every role</p>
-            </div>
-
             <ProductWindow title={view.title} label="Illustrative workspace" accent={view.accent} className="relative z-0">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#6D8498]">Today at your university</p>
                   <h2 className="mt-1 text-2xl font-bold tracking-[-0.04em] text-[#14234B]">The work that needs attention.</h2>
                 </div>
-                <StatusPill accent="mint">{view.status}</StatusPill>
               </div>
 
               <div className="mt-7 overflow-hidden rounded-2xl border border-[#E4EBF1]">
@@ -153,8 +143,7 @@ export default function Hero() {
       <section className="bg-white px-5 py-20 sm:px-8 lg:py-24">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
-            <SectionEyebrow accent="navy">A clearer way to run the university</SectionEyebrow>
-            <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Bring the work together without making every team work the same way.</h2>
+            <h2 className="mt-0 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">Bring the work together without making every team work the same way.</h2>
             <p className="mt-5 text-lg leading-8 text-[#58718B]">SkillArc keeps the university connected while giving each team a focused view of the work in front of them.</p>
           </div>
 

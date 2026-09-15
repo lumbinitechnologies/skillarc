@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { Building2, ChevronRight, CircleUserRound, GraduationCap, Layers3 } from "lucide-react"
-import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
+import { ProductWindow } from "@/components/landing/marketing-ui"
 
 const nodes = [
   { id: "university", label: "University group", icon: Building2, description: "A shared view across institutions and campuses.", children: ["Institution A", "Institution B", "Institution C"] },
@@ -22,8 +22,7 @@ export default function Organization() {
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:gap-20">
           <div>
-            <SectionEyebrow accent="navy">The university structure, connected</SectionEyebrow>
-            <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">The right information, in the right hands.</h2>
+            <h2 className="mt-0 text-4xl font-bold tracking-[-0.05em] text-[#14234B] sm:text-5xl">The right information, in the right hands.</h2>
             <p className="mt-5 text-lg leading-8 text-[#58718B]">Bring your existing structure into one dependable workspace, with clear responsibilities for each team.</p>
             <div className="mt-8 space-y-2" role="tablist" aria-label="University structure levels">
               {nodes.map((node) => {
@@ -54,7 +53,6 @@ export default function Organization() {
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EAF1F7] text-[#31547A]"><Icon size={22} aria-hidden="true" /></div>
                     <div><p className="text-sm font-semibold text-[#6D8498]">Current level</p><h3 className="text-2xl font-bold text-[#14234B]">{active.label}</h3></div>
                   </div>
-                  <StatusPill accent="mint">Connected</StatusPill>
                 </div>
                 <p className="mt-6 text-base leading-7 text-[#58718B]">{active.description}</p>
                 <div className="relative mt-8 grid gap-3 sm:grid-cols-3">

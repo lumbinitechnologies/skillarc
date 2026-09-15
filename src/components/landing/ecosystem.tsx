@@ -4,7 +4,7 @@ import { useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowRight, BarChart3, ClipboardCheck, LayoutGrid, ShieldCheck } from "lucide-react"
 import { FEATURE_GROUPS } from "@/components/landing/marketing-data"
-import { ProductWindow, SectionEyebrow, StatusPill } from "@/components/landing/marketing-ui"
+import { ProductWindow } from "@/components/landing/marketing-ui"
 
 export default function Ecosystem() {
   const [activeId, setActiveId] = useState(FEATURE_GROUPS[1].id)
@@ -15,8 +15,7 @@ export default function Ecosystem() {
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:gap-20">
           <div>
-            <SectionEyebrow accent="amber">Connected priorities</SectionEyebrow>
-            <h2 className="mt-5 text-4xl font-bold tracking-[-0.05em] sm:text-5xl">One platform, the priorities your teams actually manage.</h2>
+            <h2 className="mt-0 text-4xl font-bold tracking-[-0.05em] sm:text-5xl">One platform, the priorities your teams actually manage.</h2>
             <p className="mt-5 max-w-xl text-lg leading-8 text-[#D6E3EC]">Keep the whole university in view without asking every role to work from the same dashboard.</p>
 
             <div className="mt-9 space-y-2" role="tablist" aria-label="Connected university priorities">
@@ -39,12 +38,11 @@ export default function Ecosystem() {
           <ProductWindow title="SkillArc university workspace" label="Illustrative workspace" accent={active.accent}>
             <AnimatePresence mode="wait">
               <motion.div key={active.id} initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={{ duration: 0.24 }}>
-                <div className="flex flex-wrap items-start justify-between gap-5">
+                <div>
                   <div>
                     <p className="text-sm font-semibold text-[#6D8498]">{active.label}</p>
                     <h3 className="mt-2 text-3xl font-bold tracking-[-0.05em] text-[#14234B]">{active.title}</h3>
                   </div>
-                  <StatusPill accent={active.accent}>Up to date</StatusPill>
                 </div>
                 <p className="mt-5 max-w-2xl text-base leading-7 text-[#58718B]">{active.description}</p>
 

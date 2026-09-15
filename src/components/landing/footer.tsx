@@ -11,14 +11,13 @@ export function CtaSection() {
       <div className="absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[#C85D2E]/20 blur-3xl" aria-hidden="true" />
       <div className="relative mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
         <div>
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#A9C2D7]">See SkillArc in context</p>
           <h2 className="max-w-3xl text-4xl font-bold tracking-[-0.04em] sm:text-5xl lg:text-6xl">
-            Make university work easier to see, manage, and move forward.
+            Need a university-specific conversation?
           </h2>
         </div>
         <div className="lg:justify-self-end">
           <p className="max-w-md text-lg leading-8 text-[#D6E3EC]">
-            Talk with our team about admissions, academic operations, student support, and placements in one connected workspace.
+            Talk with the SkillArc team. Bring your current workflow, campus structure, and student-support priorities. We’ll show you where the platform fits.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <a
@@ -69,7 +68,7 @@ export function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.6fr_repeat(3,1fr)]">
           <div>
             <Link href="/" className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E]">
-              <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={48} className="h-12 w-auto object-contain" />
+              <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={64} className="h-16 w-auto object-contain" />
             </Link>
             <p className="mt-5 max-w-sm text-base leading-7 text-[#58718B]">
               A connected university management platform for clearer operations and better student support.

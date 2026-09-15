@@ -21,17 +21,6 @@ export function MarketingShell({ children, cta = true }: { children: ReactNode; 
   )
 }
 
-export function SectionEyebrow({ children, accent = "terracotta" }: { children: ReactNode; accent?: MarketingAccent }) {
-  const styles = accentStyles[accent]
-
-  return (
-    <div className={`flex items-center gap-2 text-sm font-semibold tracking-[0.12em] uppercase ${styles.eyebrow}`}>
-      <span className={`h-2 w-2 rounded-full ${styles.line}`} aria-hidden="true" />
-      <span>{children}</span>
-    </div>
-  )
-}
-
 export function ProductWindow({
   title,
   label = "Illustrative workspace",
@@ -65,15 +54,6 @@ export function ProductWindow({
       <div className="p-5 sm:p-7">{children}</div>
     </div>
   )
-}
-
-export function StatusPill({ children, accent = "mint" }: { children: ReactNode; accent?: MarketingAccent }) {
-  const styles = accentStyles[accent]
-
-  return <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${styles.soft} ${styles.eyebrow}`}>
-    <span className={`h-1.5 w-1.5 rounded-full ${styles.line}`} aria-hidden="true" />
-    {children}
-  </span>
 }
 
 export function SoftCard({ children, className = "" }: { children: ReactNode; className?: string }) {
