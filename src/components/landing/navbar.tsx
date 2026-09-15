@@ -14,7 +14,7 @@ export default function LandingNavbar() {
     <header className="sticky top-0 z-50 border-b border-[#DDE7EF]/80 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-10">
         <Link href="/" className="shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E] focus-visible:ring-offset-2">
-          <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={44} className="max-h-11 w-auto object-contain" preload />
+          <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={44} className="h-11 w-auto object-contain" preload />
         </Link>
 
         <nav aria-label="Main navigation" className="hidden items-center gap-7 lg:flex">

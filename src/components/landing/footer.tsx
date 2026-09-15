@@ -69,7 +69,7 @@ export function Footer() {
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.6fr_repeat(3,1fr)]">
           <div>
             <Link href="/" className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#C85D2E]">
-              <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={48} className="max-h-12 w-auto object-contain" />
+              <Image src="/skillarc_logo.svg" alt="SkillArc" width={172} height={48} className="h-12 w-auto object-contain" />
             </Link>
             <p className="mt-5 max-w-sm text-base leading-7 text-[#58718B]">
               A connected university management platform for clearer operations and better student support.
