@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { ACADEMIC_CONTEXT_LIMITS, fetchAcademicContext } from "@/lib/academic-context"
 import type { AssistantPrincipal, AssistantReadResult, AssistantReadScope, SourceCitation } from "@/lib/assistant/types"
-import { embedKnowledgeQuery } from "@/lib/knowledge/embeddings"
 import { knowledgeEmbeddingDimensions, knowledgeEmbeddingProfile, knowledgeSearchEnabled } from "@/lib/knowledge/config"
 
 /**
@@ -288,6 +287,10 @@ export async function searchPermittedDocuments(
 }
 
 async function defaultQueryEmbedding(value: string): Promise<number[]> {
+  // Keep the native ONNX runtime out of routes when document search is
+  // disabled. The embedding package is optional at request time and loads
+  // libonnxruntime.so through @huggingface/transformers only when needed.
+  const { embedKnowledgeQuery } = await import("@/lib/knowledge/embeddings")
   return embedKnowledgeQuery(value)
 }
 
