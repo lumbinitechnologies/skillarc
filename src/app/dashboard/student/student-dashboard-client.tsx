@@ -188,13 +188,13 @@ export default function StudentPage({
           </div>
 
           <div className="flex flex-wrap gap-2.5">
-            <Link href="/dashboard/student/attendance" className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-4 py-2.5 text-[11px] font-bold text-emerald-200 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-400/60 hover:bg-emerald-900/60">
+            <Link href="/dashboard/student/attendance" prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/40 px-4 py-2.5 text-[11px] font-bold text-emerald-200 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-400/60 hover:bg-emerald-900/60">
               <Activity size={14} className="text-emerald-400" /> Attendance Analytics
             </Link>
-            <Link href="/dashboard/student/todo" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-[11px] font-bold text-[#ECDFCB] shadow-sm transition hover:-translate-y-0.5 hover:border-[#E57D37]/50 hover:bg-[#1C3F73]">
+            <Link href="/dashboard/student/todo" prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-[11px] font-bold text-[#ECDFCB] shadow-sm transition hover:-translate-y-0.5 hover:border-[#E57D37]/50 hover:bg-[#1C3F73]">
               📋 To-Do List
             </Link>
-            <Link href="/dashboard/student/report-card" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-[11px] font-bold text-[#ECDFCB] shadow-sm transition hover:-translate-y-0.5 hover:border-[#E57D37]/50 hover:bg-[#1C3F73]">
+            <Link href="/dashboard/student/report-card" prefetch={false} className="inline-flex items-center justify-center gap-2 rounded-full border border-[#3A6DAF]/30 bg-[#1A2E4D]/70 px-4 py-2.5 text-[11px] font-bold text-[#ECDFCB] shadow-sm transition hover:-translate-y-0.5 hover:border-[#E57D37]/50 hover:bg-[#1C3F73]">
               🏆 Grades
             </Link>
           </div>
@@ -204,7 +204,7 @@ export default function StudentPage({
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((item, idx) => (
-          <Link key={item.label} href={item.link}>
+          <Link key={item.label} href={item.link} prefetch={false}>
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
@@ -277,7 +277,7 @@ export default function StudentPage({
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">Enrolled Courses</p>
                 <h3 className="text-base font-bold text-slate-900 font-heading">Course Attendance Overview</h3>
               </div>
-              <Link href="/dashboard/student/subjects" className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors">
+              <Link href="/dashboard/student/subjects" prefetch={false} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors">
                 View All <ChevronRight size={14} />
               </Link>
             </div>
@@ -287,7 +287,7 @@ export default function StudentPage({
                 const rate = sub.attendanceRate ?? 0
                 const isSafe = rate >= 75
                 return (
-                  <Link key={sub.id} href={`/dashboard/student/subjects/${sub.id}`}>
+                  <Link key={sub.id} href={`/dashboard/student/subjects/${sub.id}`} prefetch={false}>
                     <div className="p-3.5 rounded-[18px] border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-indigo-200 hover:shadow-md transition-all group">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1">
@@ -328,7 +328,7 @@ export default function StudentPage({
                 <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-600">Live Analytics</p>
                 <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900 font-heading">Overall Attendance</h2>
               </div>
-              <Link href="/dashboard/student/attendance" className="p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 transition-colors">
+              <Link href="/dashboard/student/attendance" prefetch={false} className="p-2 rounded-xl bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 transition-colors">
                 <ArrowUpRight size={18} />
               </Link>
             </div>
@@ -445,6 +445,7 @@ export default function StudentPage({
 
             <Link
               href="/dashboard/student/attendance"
+              prefetch={false}
               className="mt-4 flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100 text-xs font-bold text-indigo-700 transition-all shadow-sm"
             >
               View Full Attendance Center & Leaves <ChevronRight size={14} />
