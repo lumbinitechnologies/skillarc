@@ -4,6 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import type {
   ButtonHTMLAttributes,
+  HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes,
@@ -18,46 +19,24 @@ const focusRing =
 export function AuthShell({
   title,
   description,
-  presentation = "workspace",
+  utilityLabel = "SkillArc access",
   children,
 }: {
   title: string
   description: string
-  presentation?: "workspace" | "gradient"
+  utilityLabel?: string
   children: ReactNode
 }) {
-  const isGradient = presentation === "gradient"
-
   return (
-    <main
-      className={cn(
-        "auth-page min-h-screen overflow-x-hidden text-[#14234B]",
-        isGradient &&
-          "bg-[radial-gradient(circle_at_10%_8%,rgba(22,145,200,0.34),transparent_30%),radial-gradient(circle_at_90%_88%,rgba(200,93,46,0.24),transparent_28%),linear-gradient(135deg,#14234B_0%,#203B68_55%,#172853_100%)]",
-        !isGradient && "bg-[#F3F7FA]"
-      )}
-    >
-      <div
-        className={cn(
-          "mx-auto grid min-h-screen",
-          isGradient
-            ? "max-w-[760px] lg:px-8"
-            : "max-w-[1600px] lg:grid-cols-[minmax(440px,0.9fr)_minmax(560px,1.1fr)]"
-        )}
-      >
-        <section
-          className={cn(
-            "relative flex min-h-screen flex-col px-5 py-6 sm:px-10 sm:py-8 lg:px-14 xl:px-20",
-            isGradient && "lg:px-0"
-          )}
-        >
+    <main className="auth-page min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_12%_0%,rgba(22,145,200,0.12),transparent_30%),radial-gradient(circle_at_92%_100%,rgba(200,93,46,0.12),transparent_28%),linear-gradient(145deg,#F8FBFD_0%,#F1F6F9_55%,#FFF8F3_100%)] text-[#14234B]">
+      <div className="grid min-h-screen w-full lg:grid-cols-[minmax(440px,0.88fr)_minmax(520px,1.12fr)]">
+        <section className="relative flex min-h-screen flex-col px-5 py-6 sm:px-10 sm:py-8 lg:px-14 lg:py-10 xl:px-20">
           <Link
             href="/"
             className={cn(
               "inline-flex w-fit shrink-0 rounded-xl",
-              isGradient && "bg-white p-2.5 shadow-[0_12px_30px_rgba(5,15,35,0.18)]",
               focusRing,
-              isGradient ? "focus-visible:ring-offset-[#14234B]" : "focus-visible:ring-offset-[#F3F7FA]"
+              "focus-visible:ring-offset-[#F3F7FA]"
             )}
           >
             <Image
@@ -66,151 +45,72 @@ export function AuthShell({
               width={172}
               height={64}
               className="h-14 w-auto object-contain sm:h-16"
-              priority
-            />
+            priority
+          />
           </Link>
 
           <div className="flex flex-1 items-center justify-center py-10 sm:py-14 lg:py-16">
             <div className="mx-auto w-full max-w-[480px]">
-              <div className="mb-8 space-y-3">
+              <div className="mb-7 space-y-3 sm:mb-8">
                 <h1
-                  className={cn(
-                    "font-sans text-3xl font-extrabold tracking-[-0.04em] sm:text-4xl",
-                    isGradient ? "text-white" : "text-[#14234B]"
-                  )}
+                  className="font-sans text-3xl font-extrabold tracking-[-0.04em] text-[#14234B] sm:text-4xl"
                 >
                   {title}
                 </h1>
                 <p
-                  className={cn(
-                    "max-w-[40rem] text-sm leading-7 sm:text-base",
-                    isGradient ? "text-[#D4DFEC]" : "text-[#5B708A]"
-                  )}
+                  className="max-w-[40rem] text-sm leading-7 text-[#5B708A] sm:text-base"
                 >
                   {description}
                 </p>
               </div>
 
               {children}
-
             </div>
           </div>
 
-          <div
-            className={cn(
-              "flex items-center justify-end gap-4 border-t pt-5 text-xs",
-              isGradient ? "border-white/15 text-white/70" : "border-[#DCE6EE] text-[#70849A]"
-            )}
-          >
+          <div className="flex items-center justify-end gap-4 border-t border-[#DCE6EE] pt-5 text-xs text-[#70849A]">
             <Link
               href="/"
-              className={cn(
-                "inline-flex items-center gap-1.5 font-semibold hover:text-[#14234B]",
-                isGradient ? "text-white hover:text-white" : "text-[#31547A]",
-                focusRing
-              )}
+              className={cn("inline-flex items-center gap-1.5 font-semibold text-[#31547A] hover:text-[#14234B]", focusRing)}
             >
               Back to home <ArrowUpRight size={13} aria-hidden="true" />
             </Link>
           </div>
         </section>
 
-        {!isGradient ? <aside className="relative hidden overflow-hidden bg-[#14234B] px-10 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16">
-          <div className="absolute -right-28 top-[-9rem] h-[34rem] w-[34rem] rounded-full bg-[#31547A]/35 blur-3xl" aria-hidden="true" />
-          <div className="absolute -bottom-40 -left-32 h-[30rem] w-[30rem] rounded-full bg-[#C85D2E]/20 blur-3xl" aria-hidden="true" />
+        <aside className="relative hidden min-h-screen overflow-hidden bg-[#14234B] text-white lg:block" aria-label="University campus">
+          <Image
+            src="/images/auth/university-campus.jpg"
+            alt="University campus building"
+            fill
+            sizes="(min-width: 1024px) 55vw, 0px"
+            className="object-cover object-[center_42%]"
+            priority
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(155deg,rgba(20,35,75,0.2)_0%,rgba(20,35,75,0.54)_54%,rgba(20,35,75,0.82)_100%)]" aria-hidden="true" />
+          <div className="absolute -right-32 top-[-8rem] h-[34rem] w-[34rem] rounded-full bg-[#1691C8]/25 blur-3xl" aria-hidden="true" />
+          <div className="absolute -bottom-40 -left-32 h-[30rem] w-[30rem] rounded-full bg-[#C85D2E]/30 blur-3xl" aria-hidden="true" />
 
-          <div className="relative z-10 flex items-center justify-between gap-6">
-            <div>
-              <p className="text-sm font-semibold text-white">A connected university workspace</p>
-              <p className="mt-1 text-sm text-[#B7C8D8]">One place for the work that keeps campus moving.</p>
+          <div className="relative z-10 flex h-full min-h-screen flex-col justify-between px-10 py-10 xl:px-16">
+            <div className="flex items-center gap-3 text-sm font-semibold text-white">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#FC8402]" aria-hidden="true" />
+              <span>{utilityLabel}</span>
             </div>
-            <div className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 sm:flex" aria-hidden="true">
-              <span className="h-3 w-3 rounded-full bg-[#C85D2E]" />
-            </div>
-          </div>
-
-          <div className="relative z-10 mx-auto w-full max-w-[640px] py-12 xl:py-20">
-            <div className="overflow-hidden rounded-[30px] border border-white/15 bg-[#F7FAFC] text-[#14234B] shadow-[0_30px_100px_rgba(5,15,35,0.3)]">
-              <div className="flex items-center justify-between border-b border-[#E2EAF0] px-5 py-4 sm:px-7">
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1.5" aria-hidden="true">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#D1DCE6]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#D1DCE6]" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-[#C85D2E]" />
-                  </div>
-                  <span className="text-sm font-bold text-[#31547A]">University workspace</span>
-                </div>
-                <span className="text-xs font-semibold text-[#70849A]">Illustrative view</span>
-              </div>
-
-              <div className="space-y-5 p-5 sm:p-7">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <WorkspaceCard title="Admissions" detail="Applications and enrolment" accent="terracotta" />
-                  <WorkspaceCard title="Academic operations" detail="Programs and timetables" accent="navy" />
-                  <WorkspaceCard title="Student support" detail="Attendance and progress" accent="mint" />
-                </div>
-
-                <div className="rounded-2xl border border-[#DDE7EF] bg-white p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-bold text-[#14234B]">Shared context</p>
-                      <p className="mt-1 text-xs leading-5 text-[#70849A]">Bring the right context into each conversation.</p>
-                    </div>
-                    <div className="flex items-center gap-1.5" aria-hidden="true">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#C85D2E]" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#A8D9C8]" />
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#A8BED4]" />
-                    </div>
-                  </div>
-                  <div className="mt-5 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2" aria-hidden="true">
-                    <div className="h-16 rounded-xl border border-[#F0D3C5] bg-[#FBECE5]" />
-                    <span className="h-px w-full bg-[#D5E0E9]" />
-                    <div className="h-16 rounded-xl border border-[#C8DBEB] bg-[#EAF1F7]" />
-                    <span className="h-px w-full bg-[#D5E0E9]" />
-                    <div className="h-16 rounded-xl border border-[#C5E6D9] bg-[#E7F6F0]" />
-                  </div>
-                </div>
-              </div>
+            <div className="flex justify-end">
+              <span className="h-20 w-20 rounded-full border border-white/15 bg-white/5 blur-[1px]" aria-hidden="true" />
             </div>
           </div>
-
-          <p className="relative z-10 max-w-[30rem] text-sm leading-7 text-[#B7C8D8]">
-            SkillArc gives university teams a shared view of admissions, academic operations, teaching, and student support.
-          </p>
-        </aside> : null}
+        </aside>
       </div>
     </main>
   )
 }
 
-function WorkspaceCard({
-  title,
-  detail,
-  accent,
-}: {
-  title: string
-  detail: string
-  accent: "terracotta" | "navy" | "mint"
-}) {
-  const styles = {
-    terracotta: "border-[#F0D3C5] bg-[#FBECE5] text-[#A94B22]",
-    navy: "border-[#C8DBEB] bg-[#EAF1F7] text-[#31547A]",
-    mint: "border-[#C5E6D9] bg-[#E7F6F0] text-[#087F62]",
-  }
-
-  return (
-    <div className={cn("rounded-2xl border p-4", styles[accent])}>
-      <span className="mb-8 block h-2.5 w-2.5 rounded-full bg-current" aria-hidden="true" />
-      <p className="text-sm font-bold">{title}</p>
-      <p className="mt-1 text-xs leading-5 text-[#5B708A]">{detail}</p>
-    </div>
-  )
-}
-
-export const AuthCard = forwardRef<HTMLDivElement, { children: ReactNode; className?: string }>(
-  ({ children, className }, ref) => (
+export const AuthCard = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ children, className, ...props }, ref) => (
     <div
       ref={ref}
+      {...props}
       className={cn(
         "rounded-[24px] border border-[#DCE6EE] bg-white p-5 shadow-[0_18px_50px_rgba(20,35,75,0.08)] sm:p-7",
         className
