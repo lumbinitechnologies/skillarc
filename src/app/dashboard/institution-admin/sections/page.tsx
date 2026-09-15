@@ -2,25 +2,24 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { SectionsClientPage } from "./sections-client"
 import { ROLES } from "@/constants/roles"
+import { getCurrentUserContext } from "@/lib/user-context"
 
 export const dynamic = "force-dynamic"
 
 export default async function SectionsPage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
+  const context = await getCurrentUserContext()
+  const contextMs = performance.now() - tContextStart
+
+  if (!context) redirect("/auth/login")
+  if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
+  if (!context.institution_id) redirect("/dashboard")
+
+  const institutionId = context.institution_id
   const supabase = await createSupabaseServerClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/auth/login")
-
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single()
-
-  if (userProfile?.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
-
-  const institutionId = userProfile.institution_id
-
+  const tBatchStart = performance.now()
   const [
     sectionsRes,
     programsRes,
@@ -53,10 +52,16 @@ export default async function SectionsPage() {
       .eq("institution_id", institutionId)
       .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
   ])
+  const batchMs = performance.now() - tBatchStart
+  const totalMs = performance.now() - tPageStart
 
   const sections = sectionsRes.data ?? []
   const programs = programsRes.data ?? []
   const faculty = facultyRes.data ?? []
+
+  console.info(
+    `[DashboardInstitutionAdminSections] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)}`
+  )
 
   return (
     <SectionsClientPage

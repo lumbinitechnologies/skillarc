@@ -36,7 +36,8 @@ export default function LoginPage() {
       }
 
       window.dispatchEvent(new Event('skillarc-auth-changed'))
-      router.push('/dashboard')
+      const targetDestination = 'destination' in result && result.destination ? result.destination : '/dashboard'
+      router.push(targetDestination)
     } catch (err) {
       console.error('Login error:', err)
       setError('We could not sign you in. Please try again.')

@@ -23,6 +23,7 @@ export function AccountNav() {
           <Link
             key={item.path}
             href={item.path}
+            prefetch={false}
             className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
                 ? "bg-primary/10 text-primary"

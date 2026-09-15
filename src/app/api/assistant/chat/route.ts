@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
       execute: async ({ writer }) => {
         const tools = createAssistantTools(principal, writer, (toolName) => toolNames.add(toolName))
         const result = streamText({
-          model: groq(process.env.GROQ_MODEL || "llama-3.3-70b-versatile"),
+          model: groq(process.env.GROQ_MODEL || "openai/gpt-oss-120b"),
           system: `${assistantSystem}\n\nEffective role: ${principal.role}. Effective institution scope: ${principal.institutionId ?? "none"}.`,
           messages: await convertToModelMessages([...history, userMessage], { tools }),
           tools,
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
           requestId,
           threadId,
           role: principal.role,
-          model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
+          model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
           finishReason: finishReason ?? "unknown",
           aborted: isAborted,
           latencyMs: Date.now() - startedAt,

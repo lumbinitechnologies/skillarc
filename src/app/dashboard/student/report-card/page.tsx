@@ -8,18 +8,38 @@ import { measureServer } from "@/lib/perf"
 export const dynamic = "force-dynamic"
 
 export default async function StudentReportCardPage() {
+  const tPageStart = performance.now()
+  const tContextStart = performance.now()
   const context = await getCurrentDashboardSession()
-  if (!context) redirect("/auth/login")
+  const contextMs = performance.now() - tContextStart
 
-  const adminClient = createSupabaseAdminClient()
+  if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  const { data: studentData } = await adminClient
-    .from("students")
-    .select("id, section_id, program_id, semester")
-    .eq("id", context.id)
-    .single()
+  const adminClient = createSupabaseAdminClient()
 
+  // 1. Fetch student academic info, timetable slots, and student submissions concurrently in Batch 1
+  const tBatch1Start = performance.now()
+  const [studentRes, timetableRes, submissionsRes] = await Promise.all([
+    adminClient
+      .from("students")
+      .select("id, section_id, program_id, semester")
+      .eq("id", context.id)
+      .maybeSingle(),
+    context.institution_id
+      ? adminClient
+          .from("timetable_slots")
+          .select("subject_id")
+          .eq("institution_id", context.institution_id)
+      : Promise.resolve({ data: [] }),
+    adminClient
+      .from("submissions")
+      .select("assignment_id, status, grade, feedback, submitted_at")
+      .eq("student_id", context.id),
+  ])
+  const batch1Ms = performance.now() - tBatch1Start
+
+  const studentData = studentRes.data
   const profile = {
     id: context.id,
     name: context.name || "Student",
@@ -27,21 +47,13 @@ export default async function StudentReportCardPage() {
     ...studentData,
   }
 
-  // 1. Fetch Enrolled Subjects for student section
-  const { data: timetableRows = [] } = profile.section_id
-    ? await adminClient
-        .from("timetable_slots")
-        .select("subject_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-    : { data: [] }
-
-  let subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+  const timetableRows = timetableRes.data ?? []
+  let subjectIds = Array.from(
+    new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))
+  ) as string[]
 
   if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
-    let subQuery = adminClient
-      .from("subjects")
-      .select("id")
+    let subQuery = adminClient.from("subjects").select("id")
     if (profile.program_id) {
       subQuery = subQuery.eq("program_id", profile.program_id)
     } else if (profile.institution_id) {
@@ -57,6 +69,10 @@ export default async function StudentReportCardPage() {
   }
 
   if (!subjectIds.length) {
+    const totalMs = performance.now() - tPageStart
+    console.info(
+      `[DashboardReportCard] contextMs=${contextMs.toFixed(1)} batch1Ms=${batch1Ms.toFixed(1)} batch2Ms=0.0 totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
+    )
     return (
       <div className="max-w-4xl mx-auto p-8 text-center bg-white border border-slate-100 rounded-3xl shadow-sm my-8">
         <h3 className="text-xl font-semibold text-gray-700">No Academic Records</h3>
@@ -65,23 +81,35 @@ export default async function StudentReportCardPage() {
     )
   }
 
-  const [subjectsResult, assignmentsResult, submissionsResult, gradeColumnsResult] = await measureServer("dashboard.student.report-card.data", () => Promise.all([
-    adminClient.from("subjects").select("id, name, code").in("id", subjectIds),
-    adminClient
-      .from("assignments")
-      .select("id, subject_id, title, description, type, max_score, due_date, section_ids, created_at")
-      .in("subject_id", subjectIds),
-    adminClient
-      .from("submissions")
-      .select("assignment_id, status, grade, feedback, submitted_at")
-      .eq("student_id", context.id),
-    adminClient
-      .from("grade_columns")
-      .select("id, subject_id, title, type, max_score, display_order")
-      .in("subject_id", subjectIds)
-      .eq("is_active", true)
-      .order("display_order", { ascending: true }),
-  ]))
+  // 2. Fetch subjects, assignments, grade columns, and student grade entries concurrently in Batch 2
+  const tBatch2Start = performance.now()
+  const [subjectsResult, assignmentsResult, gradeColumnsResult, gradeEntriesResult] = await measureServer(
+    "dashboard.student.report-card.data",
+    () =>
+      Promise.all([
+        adminClient.from("subjects").select("id, name, code").in("id", subjectIds),
+        adminClient
+          .from("assignments")
+          .select("id, subject_id, title, description, type, max_score, due_date, section_ids, created_at")
+          .in("subject_id", subjectIds),
+        adminClient
+          .from("grade_columns")
+          .select("id, subject_id, title, type, max_score, display_order")
+          .in("subject_id", subjectIds)
+          .eq("is_active", true)
+          .order("display_order", { ascending: true }),
+        adminClient
+          .from("grade_entries")
+          .select("column_id, score, feedback, graded_at")
+          .eq("student_id", context.id),
+      ])
+  )
+  const batch2Ms = performance.now() - tBatch2Start
+  const totalMs = performance.now() - tPageStart
+
+  console.info(
+    `[DashboardReportCard] contextMs=${contextMs.toFixed(1)} batch1Ms=${batch1Ms.toFixed(1)} batch2Ms=${batch2Ms.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
+  )
 
   const subjects = subjectsResult.data ?? []
   const allAssignments = assignmentsResult.data ?? []
@@ -94,24 +122,14 @@ export default async function StudentReportCardPage() {
     return a.section_ids.includes(sectionId)
   })
 
-  // 3. Fetch Student Submissions
-  const columnIds = (gradeColumnsResult.data ?? []).map((column: any) => column.id)
-  const gradeEntries = columnIds.length
-    ? await adminClient
-        .from("grade_entries")
-        .select("column_id, score, feedback, graded_at")
-        .eq("student_id", context.id)
-        .in("column_id", columnIds)
-    : { data: [] }
-
   return (
     <StudentReportCardClient
       studentName={profile.name}
       subjects={subjects ?? []}
       assignments={sectionAssignments}
-      submissions={submissionsResult.data ?? []}
+      submissions={submissionsRes.data ?? []}
       gradeColumns={gradeColumnsResult.data ?? []}
-      gradeEntries={gradeEntries.data ?? []}
+      gradeEntries={gradeEntriesResult.data ?? []}
     />
   )
 }
