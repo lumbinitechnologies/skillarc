@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
@@ -146,6 +147,8 @@ const roleAccents: Record<Role, { bg: string; color: string }> = {
 
 export default function Sidebar({ profile: initialProfile }: { profile: DashboardSession | null }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const prefetchedPaths = useRef(new Set<string>())
   const profile = initialProfile
     ? {
         name: initialProfile.name,
@@ -217,6 +220,12 @@ export default function Sidebar({ profile: initialProfile }: { profile: Dashboar
   const initials = profile
     ? profile.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
     : "U"
+
+  const prefetchOnIntent = (path: string) => {
+    if (prefetchedPaths.current.has(path)) return
+    prefetchedPaths.current.add(path)
+    router.prefetch(path)
+  }
 
   return (
     <>
@@ -304,6 +313,8 @@ export default function Sidebar({ profile: initialProfile }: { profile: Dashboar
                         <Link
                           href={item.path}
                           prefetch={false}
+                          onMouseEnter={() => prefetchOnIntent(item.path)}
+                          onFocus={() => prefetchOnIntent(item.path)}
                           onClick={() => document.body.classList.remove("sidebar-open")}
                           className={`group flex items-center gap-3 py-3 px-4 text-sm font-semibold tracking-[0.01em] rounded-2xl transition-all duration-200 ${
                             isActive
