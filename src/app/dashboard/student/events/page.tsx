@@ -1,6 +1,11 @@
 // src/app/dashboard/student/events/page.tsx
 import EventsPortalClient from "@/components/events/events-portal-client";
+import { getCurrentUserContext } from "@/lib/user-context";
+import { loadEventsDashboardData } from "@/lib/dashboard-read-models";
+import { redirect } from "next/navigation";
 
-export default function StudentEventsPage() {
-  return <EventsPortalClient />;
+export default async function StudentEventsPage() {
+  const context = await getCurrentUserContext()
+  if (!context) redirect("/auth/login")
+  return <EventsPortalClient initialData={await loadEventsDashboardData(context)} />;
 }
