@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useDashboardSession } from "@/components/dashboard-session-provider";
+import { useDashboardCache } from "@/components/dashboard-data-provider";
 import { startClientTiming } from "@/lib/client-perf";
 import {
   Users, Building2, TrendingUp, DollarSign, Award, Search, Plus, X, Video, VideoOff,
@@ -31,323 +32,117 @@ import {
 } from "@/lib/placements-mock";
 import { predictPlacementProbability, PredictionResult } from "@/lib/placements-predictor";
 import { PlacementsInterviewTerminal } from "@/components/placements/placements-interview-terminal";
+import type { PlacementDashboardData } from "@/lib/dashboard-read-model-types";
 
 type TabType = "overview" | "students" | "companies" | "drives" | "interview" | "comms" | "predictor";
 
 interface PlacementsPortalClientProps {
   role?: string;
   defaultTab?: TabType;
+  initialData?: PlacementDashboardData;
 }
 
-export default function PlacementsPortalClient({ role: enforcedRole, defaultTab = "overview" }: PlacementsPortalClientProps) {
+export default function PlacementsPortalClient({ role: enforcedRole, defaultTab = "overview", initialData }: PlacementsPortalClientProps) {
   const session = useDashboardSession();
+  const cache = useDashboardCache();
+  const cachedData = cache.read<PlacementDashboardData>("placements");
   const userId = session?.id ?? null;
   const userRole = enforcedRole || session?.role || null;
   const userName = session?.name || "User";
-  const [loading, setLoading] = useState<boolean>(true);
+  const seedData = cachedData ?? initialData;
+  const [loading, setLoading] = useState<boolean>(!seedData);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
   // Database-driven States
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [drives, setDrives] = useState<Drive[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [studentApplications, setStudentApplications] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<Company[]>(seedData?.companies ?? []);
+  const [drives, setDrives] = useState<Drive[]>(seedData?.drives ?? []);
+  const [students, setStudents] = useState<Student[]>(seedData?.students ?? []);
+  const [studentApplications, setStudentApplications] = useState<any[]>(seedData?.studentApplications ?? []);
 
   // Local metric states (e.g. attendance computed from DB)
-  const [dbAttendancePercent, setDbAttendancePercent] = useState<number>(85.0);
+  const [dbAttendancePercent, setDbAttendancePercent] = useState<number>(seedData?.attendancePercent ?? 85.0);
   const institutionId = session?.institution_id ?? null;
 
   // Analytical structures
-  const [analytics, setAnalytics] = useState(() => buildAnalytics());
-  const profileLoaded = Boolean(session);
-
-  // Load session-scoped placement data without another auth/profile round trip.
-  useEffect(() => {
-    async function loadStudentData() {
-      const finishTiming = startClientTiming("dashboard.placements.session-data")
-      try {
-        if (session && userId) {
-          const shouldLoadStudentData = ["student", "parent"].includes(session.role.toLowerCase()) || enforcedRole === "student";
-          if (!shouldLoadStudentData) return;
-
-          const [attendanceResult, applicationsResult] = await Promise.all([
-            supabase
-              .from("attendance_records")
-              .select("status")
-              .eq("student_id", userId),
-            supabase
-              .from("applications")
-              .select("*, job_posts(title, company_id)")
-              .eq("student_id", userId),
-          ]);
-
-          // Fetch attendance records from database to calculate real attendance
-          if (attendanceResult.data && attendanceResult.data.length > 0) {
-            const present = attendanceResult.data.filter(r => r.status === "PRESENT" || r.status === "LATE").length;
-            setDbAttendancePercent(Math.round((present / attendanceResult.data.length) * 100));
-          }
-
-          // Fetch student placements applications
-          if (applicationsResult.data) {
-            setStudentApplications(applicationsResult.data);
-          }
-        }
-      } catch (err) {
-        console.error("Session fetch error:", err);
-      } finally {
-        finishTiming();
-      }
-    }
-    void loadStudentData();
-  }, [enforcedRole, session, userId]);
+  const [analytics, setAnalytics] = useState(() => seedData?.analytics ?? buildAnalytics());
 
   // Fetch Companies & Job posts from Supabase database
+  const setPlacementData = (data: PlacementDashboardData) => {
+    cache.set("placements", data);
+    setCompanies(data.companies);
+    setDrives(data.drives);
+    setStudents(data.students);
+    setStudentApplications(data.studentApplications);
+    setDbAttendancePercent(data.attendancePercent);
+    setAnalytics(data.analytics);
+  };
+
+  const updatePlacementData = (update: (current: PlacementDashboardData) => PlacementDashboardData) => {
+    const current = cache.read<PlacementDashboardData>("placements") ?? {
+      companies,
+      drives,
+      students,
+      analytics,
+      studentApplications,
+      attendancePercent: dbAttendancePercent,
+    };
+    setPlacementData(update(current));
+  };
+
   const fetchPlacementsData = async () => {
     const finishTiming = startClientTiming("dashboard.placements.initialize")
-    setLoading(true);
+    setLoading(!companies.length && !drives.length && !students.length);
     try {
-      // 1. Fetch Companies
-      let compsQuery = supabase
-        .from("companies")
-        .select("*")
-        .order("name", { ascending: true });
-
-      if (institutionId) {
-        compsQuery = compsQuery.eq("institution_id", institutionId);
-      }
-
-      const { data: comps, error: compErr } = await compsQuery;
-      if (compErr) throw compErr;
-
-      // 2. Fetch Job Posts (Drives) Joined with companies
-      let postsQuery = supabase
-        .from("job_posts")
-        .select("*, companies(name, website, description)");
-
-      if (institutionId) {
-        postsQuery = postsQuery.eq("institution_id", institutionId);
-      }
-
-      const { data: posts, error: postErr } = await postsQuery;
-      if (postErr) throw postErr;
-
-      // Map to Placements structure
-      const fetchedCompanies: Company[] = (comps || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        industry: "Technology",
-        location: c.website || "Corporate",
-        email: "recruiting@" + (c.website || "company.com"),
-      }));
-
-      const fetchedDrives: Drive[] = (posts || []).map((p: any) => {
-        let deadlineStr = p.deadline || "2026-07-15";
-        return {
-          id: p.id,
-          company_id: p.company_id,
-          company_name: p.companies?.name || "Corporate Partner",
-          job_title: p.title,
-          job_type: "Full Time",
-          ctc: 8.5,
-          vacancies: 10,
-          eligible_branches: ["CSE", "IT", "ECE"],
-          min_cgpa: 7.0,
-          backlogs_allowed: 0,
-          skills_required: p.description || "System engineering",
-          rounds: ["Online Assessment", "Technical", "HR Screen"],
-          interview_mode: "Online",
-          drive_status: new Date(deadlineStr) < new Date() ? "Completed" : "Upcoming",
-          applied: 0,
-          shortlisted: 0,
-          selected: 0,
-          created_at: deadlineStr,
-        };
+      const data = await cache.revalidate("placements", async () => {
+        const response = await fetch("/api/dashboard/placements", { cache: "no-store" });
+        if (!response.ok) throw new Error("Failed to load placement dashboard");
+        return await response.json() as PlacementDashboardData;
       });
-
-      // 3. Fetch Placement Applications for students of this institution
-      let appsQuery = supabase
-        .from("applications")
-        .select(`
-          student_id,
-          status,
-          job_post_id,
-          users!inner(institution_id),
-          job_posts (
-            title,
-            company_id,
-            companies (
-              name
-            )
-          )
-        `);
-
-      if (institutionId) {
-        appsQuery = appsQuery.eq("users.institution_id", institutionId);
-      }
-
-      const { data: appsRes } = await appsQuery;
-      const allApps = appsRes || [];
-
-      // 4. Fetch Students from students table belonging to this institution
-      let studentsQuery = supabase
-        .from("students")
-        .select(`
-          id,
-          admission_year,
-          program:program_id (
-            name
-          )
-        `);
-
-      if (institutionId) {
-        studentsQuery = studentsQuery.eq("institution_id", institutionId);
-      }
-
-      const { data: studentsRes, error: studentsErr } = await studentsQuery;
-      if (studentsErr) throw studentsErr;
-
-      const studentIds = (studentsRes || []).map((s: any) => s.id);
-      let usersMap = new Map<string, { name: string; email: string }>();
-
-      if (studentIds.length > 0) {
-        const { data: usersRes } = await supabase
-          .from("users")
-          .select("id, name, email")
-          .in("id", studentIds)
-          .order("name");
-
-        (usersRes || []).forEach((u: any) => usersMap.set(u.id, u));
-      }
-
-      const fetchedStudents: Student[] = (studentsRes || []).map((s: any) => {
-        const userObj = usersMap.get(s.id);
-        const studentApps = allApps.filter((a: any) => a.student_id === s.id);
-        const placedApp = studentApps.find((a: any) => a.status === "SELECTED");
-        const companyName = (placedApp as any)?.job_posts?.companies?.name || 
-                            (placedApp as any)?.job_posts?.[0]?.companies?.name || 
-                            (placedApp as any)?.job_posts?.[0]?.companies?.[0]?.name || 
-                            undefined;
-
-        const progName = (s.program as any)?.name;
-
-        return {
-          student_id: s.id,
-          name: userObj?.name || userObj?.email?.split("@")[0] || "Unknown Student",
-          branch: progName || "Computer Science",
-          year: s.admission_year ? Math.max(1, Math.min(4, new Date().getFullYear() - s.admission_year + 1)) : 4,
-          skills: "React, TypeScript, SQL, Node.js",
-          hackathons: 1,
-          papers: 0,
-          conferences: 0,
-          sports: 0,
-          clubs: 1,
-          status: companyName ? "Placed" : "Not Placed",
-          company: companyName,
-          package: companyName ? 8.5 : undefined,
-          sgpa: { sem1: 8.0, sem2: 8.2, sem3: 8.5, sem4: 8.1, sem5: 8.3, sem6: 8.4, sem7: 8.0, sem8: 8.2 },
-          backlogs: { sem1: 0, sem2: 0, sem3: 0, sem4: 0, sem5: 0, sem6: 0, sem7: 0, sem8: 0 },
-          attendance: { sem1: 85, sem2: 85, sem3: 85, sem4: 85, sem5: 85, sem6: 85, sem7: 85, sem8: 85 },
-        };
-      });
-
-      function computeAnalytics(studs: Student[], compsList: Company[], drivesList: Drive[]) {
-        const total = studs.length;
-        const placed = studs.filter(s => s.status === "Placed");
-        const placedN = placed.length;
-        const avgPkg = placed.reduce((a, s) => a + (s.package || 0), 0) / (placedN || 1);
-
-        const yearMap: Record<number, { placements: number; total: number; pkgSum: number }> = {};
-        for (let y = 2020; y <= 2024; y++) yearMap[y] = { placements: 0, total: 0, pkgSum: 0 };
-        studs.forEach((s, i) => {
-          const yr = 2020 + (i % 5);
-          yearMap[yr].total++;
-          if (s.status === "Placed") {
-            yearMap[yr].placements++;
-            yearMap[yr].pkgSum += s.package || 0;
-          }
-        });
-
-        const trend = Object.entries(yearMap)
-          .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([year, v]) => ({
-            year: Number(year),
-            placements: v.placements,
-            placement_rate: Math.round((v.placements / (v.total || 1)) * 1000) / 10,
-            avg_package: Math.round((v.pkgSum / (v.placements || 1)) * 100) / 100,
-          }));
-
-        const branchMap: Record<string, { placed: number; total: number }> = {};
-        studs.forEach(s => {
-          const branch = s.branch || "Unknown";
-          if (!branchMap[branch]) branchMap[branch] = { placed: 0, total: 0 };
-          branchMap[branch].total++;
-          if (s.status === "Placed") branchMap[branch].placed++;
-        });
-
-        const branches = Object.entries(branchMap).map(([branch, v]) => ({
-          branch,
-          placements: v.placed,
-          total: v.total,
-          rate: Math.round((v.placed / v.total) * 1000) / 10,
-        }));
-
-        const compMap: Record<string, { selected: number; pkgSum: number; total: number }> = {};
-        studs.forEach(s => {
-          if (!s.company) return;
-          if (!compMap[s.company]) compMap[s.company] = { selected: 0, pkgSum: 0, total: 0 };
-          compMap[s.company].total++;
-          if (s.status === "Placed") {
-            compMap[s.company].selected++;
-            compMap[s.company].pkgSum += s.package || 0;
-          }
-        });
-
-        const company_stats = Object.entries(compMap)
-          .map(([company, v]) => ({
-            company,
-            applicants: v.total,
-            selected: v.selected,
-            avg_package: Math.round((v.pkgSum / (v.selected || 1)) * 100) / 100,
-            selection_rate: Math.round((v.selected / v.total) * 1000) / 10,
-          }))
-          .sort((a, b) => b.selected - a.selected);
-
-        return {
-          kpi: {
-            total_students: total,
-            placed_students: placedN,
-            companies: compsList.length,
-            avg_package: Math.round(avgPkg * 100) / 100,
-            placement_rate: Math.round((placedN / (total || 1)) * 1000) / 10,
-          },
-          trend,
-          branches,
-          company_stats,
-        };
-      }
-
-      const realAnalytics = computeAnalytics(fetchedStudents, fetchedCompanies, fetchedDrives);
-
-      setCompanies(fetchedCompanies);
-      setDrives(fetchedDrives);
-      setStudents(fetchedStudents);
-      setAnalytics(realAnalytics);
+      setPlacementData(data);
+      setLoadError(null);
     } catch (err) {
       console.error("Supabase placements load error:", err);
-      setCompanies([]);
-      setDrives([]);
-      setStudents([]);
+      setLoadError("We couldn't load placement data.");
+      if (!seedData) {
+        setCompanies([]);
+        setDrives([]);
+        setStudents([]);
+      }
     } finally {
       setLoading(false);
       finishTiming();
     }
   };
 
+  const reconcilePlacements = async () => {
+    cache.invalidate("placements");
+    await fetchPlacementsData();
+  };
+
   useEffect(() => {
-    if (profileLoaded) {
-      fetchPlacementsData();
+    if (initialData) cache.seed("placements", initialData);
+    // The fallback is only used when a server loader was unavailable.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!seedData) void fetchPlacementsData();
+  }, [cache, initialData, seedData]);
+
+  useEffect(() => {
+    if (seedData && process.env.NEXT_PUBLIC_PERF_DIAGNOSTICS === "true") {
+      const finishTiming = startClientTiming("dashboard.placements.data-ready");
+      finishTiming();
     }
-  }, [profileLoaded]);
+  }, [seedData]);
+
+  if (loadError && !companies.length && !drives.length && !students.length) {
+    return (
+      <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-700">
+        <p className="font-bold">{loadError}</p>
+        <p className="mt-1">Check your connection and try again.</p>
+        <Button className="mt-4" variant="secondary" onClick={() => void fetchPlacementsData()}>Retry</Button>
+      </div>
+    );
+  }
 
   if (loading || !userRole) {
     return (
@@ -379,6 +174,10 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
             students={students}
             studentApplications={studentApplications}
             setStudentApplications={setStudentApplications}
+            onStudentApplication={(application) => updatePlacementData((current) => ({
+              ...current,
+              studentApplications: [...current.studentApplications, application],
+            }))}
           />
         ) : (
           <div className="space-y-6">
@@ -455,17 +254,29 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
             {activeTab === "companies" && (
               <CompaniesTabView
                 companies={companies}
-                refreshData={fetchPlacementsData}
+                refreshData={reconcilePlacements}
                 analytics={analytics}
                 institutionId={institutionId}
+                onCompanyCreated={(company) => updatePlacementData((current) => ({
+                  ...current,
+                  companies: [...current.companies, company],
+                  analytics: {
+                    ...current.analytics,
+                    kpi: { ...current.analytics.kpi, companies: current.analytics.kpi.companies + 1 },
+                  },
+                }))}
               />
             )}
             {activeTab === "drives" && (
               <DrivesTabView
                 drives={drives}
                 companies={companies}
-                refreshData={fetchPlacementsData}
+                refreshData={reconcilePlacements}
                 institutionId={institutionId}
+                onDriveCreated={(drive) => updatePlacementData((current) => ({
+                  ...current,
+                  drives: [...current.drives, drive],
+                }))}
               />
             )}
             {activeTab === "interview" && (
@@ -494,6 +305,7 @@ function StudentPortalView({
   students,
   studentApplications,
   setStudentApplications,
+  onStudentApplication,
 }: {
   userName: string;
   userId: string | null;
@@ -503,6 +315,7 @@ function StudentPortalView({
   students: Student[];
   studentApplications: any[];
   setStudentApplications: React.Dispatch<React.SetStateAction<any[]>>;
+  onStudentApplication: (application: any) => void;
 }) {
   const [subTab, setSubTab] = useState<"interview" | "predictor" | "drives">("interview");
 
@@ -584,25 +397,33 @@ function StudentPortalView({
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(driveId);
       if (!isUuid) {
-        setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
+        const application = { job_post_id: driveId, status: "APPLIED" };
+        setStudentApplications((prev) => [...prev, application]);
+        onStudentApplication(application);
         alert("Application submitted successfully using your uploaded resume!");
         return;
       }
 
-      const { error } = await supabase
+      const { data: insertedApplication, error } = await supabase
         .from("applications")
-        .insert([{ job_post_id: driveId, student_id: userId, status: "APPLIED", resume_url: resumeUrl }]);
+        .insert([{ job_post_id: driveId, student_id: userId, status: "APPLIED", resume_url: resumeUrl }])
+        .select("id, student_id, job_post_id, status, resume_url")
+        .single();
 
       if (error) {
         if (error.code === "23503" || error.code === "P0001") {
-          setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
+          const application = { job_post_id: driveId, status: "APPLIED" };
+          setStudentApplications((prev) => [...prev, application]);
+          onStudentApplication(application);
           alert("Application submitted successfully using your uploaded resume!");
           return;
         }
         throw error;
       }
 
-      setStudentApplications((prev) => [...prev, { job_post_id: driveId, status: "APPLIED" }]);
+      const application = insertedApplication ?? { job_post_id: driveId, status: "APPLIED" };
+      setStudentApplications((prev) => [...prev, application]);
+      onStudentApplication(application);
       alert("Application submitted successfully!");
     } catch (err: any) {
       console.error("Apply error:", err);
@@ -930,11 +751,13 @@ function CompaniesTabView({
   refreshData,
   analytics,
   institutionId,
+  onCompanyCreated,
 }: {
   companies: Company[];
-  refreshData: () => void;
+  refreshData: () => Promise<void>;
   analytics: any;
   institutionId: string | null;
+  onCompanyCreated: (company: Company) => void;
 }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -952,18 +775,30 @@ function CompaniesTabView({
     if (!newCo.name) return;
 
     try {
-      const { error } = await supabase
+      const { data: insertedCompany, error } = await supabase
         .from("companies")
         .insert([{
           name: newCo.name,
           website: newCo.website,
           description: newCo.description,
           institution_id: institutionId,
-        }]);
+        }])
+        .select("id, name, website")
+        .single();
 
       if (error) throw error;
 
-      refreshData();
+      if (insertedCompany) {
+        onCompanyCreated({
+          id: insertedCompany.id,
+          name: insertedCompany.name,
+          website: insertedCompany.website,
+          location: insertedCompany.website || "Corporate",
+          industry: "Technology",
+          email: "recruiting@" + (insertedCompany.website || "company.com"),
+        });
+      }
+      void refreshData();
       setNewCo({ name: "", website: "", description: "" });
       setShowForm(false);
       alert("Recruiter registered in database!");
@@ -1118,11 +953,13 @@ function DrivesTabView({
   companies,
   refreshData,
   institutionId,
+  onDriveCreated,
 }: {
   drives: Drive[];
   companies: Company[];
-  refreshData: () => void;
+  refreshData: () => Promise<void>;
   institutionId: string | null;
+  onDriveCreated: (drive: Drive) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -1137,7 +974,7 @@ function DrivesTabView({
     if (!form.company_id || !form.job_title) return;
 
     try {
-      const { error } = await supabase
+      const { data: insertedPost, error } = await supabase
         .from("job_posts")
         .insert([{
           company_id: form.company_id,
@@ -1145,11 +982,39 @@ function DrivesTabView({
           description: form.description,
           deadline: form.deadline || new Date().toISOString().split("T")[0],
           institution_id: institutionId,
-        }]);
+        }])
+        .select("id, company_id, title, description, deadline, companies(name)")
+        .single();
 
       if (error) throw error;
 
-      refreshData();
+      if (insertedPost) {
+        const companyRelation = Array.isArray(insertedPost.companies)
+          ? insertedPost.companies[0]
+          : insertedPost.companies;
+        const deadline = insertedPost.deadline || new Date().toISOString().split("T")[0];
+        onDriveCreated({
+          id: insertedPost.id,
+          company_id: insertedPost.company_id,
+          company_name: companyRelation?.name || companies.find((company) => company.id === insertedPost.company_id)?.name || "Corporate Partner",
+          job_title: insertedPost.title,
+          job_type: "Full Time",
+          ctc: 8.5,
+          vacancies: 10,
+          eligible_branches: ["CSE", "IT", "ECE"],
+          min_cgpa: 7,
+          backlogs_allowed: 0,
+          skills_required: insertedPost.description || "System engineering",
+          rounds: ["Online Assessment", "Technical", "HR Screen"],
+          interview_mode: "Online",
+          drive_status: new Date(deadline) < new Date() ? "Completed" : "Upcoming",
+          applied: 0,
+          shortlisted: 0,
+          selected: 0,
+          created_at: deadline,
+        });
+      }
+      void refreshData();
       setShowForm(false);
       setForm({ company_id: "", job_title: "", deadline: "", description: "" });
       alert("Recruitment drive posted successfully!");
