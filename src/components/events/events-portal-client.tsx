@@ -5,7 +5,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useDashboardSession } from "@/components/dashboard-session-provider";
+import { useDashboardCache } from "@/components/dashboard-data-provider";
 import { startClientTiming } from "@/lib/client-perf";
+import type { EventsDashboardData, DashboardEvent } from "@/lib/dashboard-read-model-types";
 import {
   Calendar as CalIcon, MapPin, User as UserIcon, Users, Search, Plus, Grid, List, CheckCircle2,
   ChevronLeft, ChevronRight, X, Clock, Tag, Brain, BookOpen, Flame, Camera, Image as ImageIcon,
@@ -22,26 +24,7 @@ export interface GalleryImage {
   uploaded_by?: string;
 }
 
-interface EventItem {
-  id: string;
-  name: string;
-  department: string;
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM (12-hour display version)
-  location: string;
-  description: string;
-  capacity: number;
-  filled: number;
-  organizer: string;
-  organizerRole?: string;
-  staff_coord_phone?: string;
-  student_coord?: string;
-  student_coord_phone?: string;
-  tags: string[];
-  registeredUsers: string[];
-  image_url?: string | null;
-  gallery_images?: GalleryImage[];
-}
+type EventItem = DashboardEvent;
 
 const PRESET_BANNERS = [
   { label: "Hackathon & Tech", url: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1200&q=80" },
@@ -59,7 +42,8 @@ const parseTime12To24 = (timeStr: string) => {
   const parts = timeStr.split(" ");
   if (parts.length < 2) return timeStr;
   const [time, modifier] = parts;
-  let [hours, minutes] = time.split(":");
+  let [hours] = time.split(":");
+  const minutes = time.split(":")[1] || "00";
   if (hours === "12") {
     hours = "00";
   }
@@ -67,16 +51,6 @@ const parseTime12To24 = (timeStr: string) => {
     hours = String(parseInt(hours, 10) + 12);
   }
   return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
-};
-
-const formatTime24To12 = (time24: string) => {
-  if (!time24) return "12:00 PM";
-  const parts = time24.split(":");
-  const hours = parseInt(parts[0], 10);
-  const minutes = parts[1] || "00";
-  const ampm = hours >= 12 ? "PM" : "AM";
-  const displayHours = hours % 12 || 12;
-  return `${String(displayHours).padStart(2, "0")}:${minutes} ${ampm}`;
 };
 
 const parseLocalDate = (dateStr: string) => {
@@ -124,17 +98,21 @@ const DEPT_COLOR_HEX: Record<string, string> = {
   "history": "#ef4444",
 };
 
-export default function EventsPortalClient() {
+export default function EventsPortalClient({ initialData }: { initialData?: EventsDashboardData }) {
   const pathname = usePathname() || "";
   const session = useDashboardSession();
+  const cache = useDashboardCache();
+  const cachedData = cache.read<EventsDashboardData>("events");
+  const seedData = cachedData ?? initialData;
   const userId = session?.id ?? null;
   const userName = session?.name ?? "";
   const userEmail = session?.email ?? "";
   const userRole = session?.role ?? "student";
   const institutionId = session?.institution_id ?? null;
 
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [events, setEvents] = useState<EventItem[]>(seedData?.events ?? []);
+  const [loading, setLoading] = useState<boolean>(!seedData);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [dept, setDept] = useState("all");
@@ -152,7 +130,7 @@ export default function EventsPortalClient() {
   const [uploadingCover, setUploadingCover] = useState(false);
   const [form, setForm] = useState({
     name: "",
-    department: "",
+    department: seedData?.departments[0]?.id ?? "",
     date: "",
     time: "09:00 AM",
     location: "",
@@ -184,7 +162,7 @@ export default function EventsPortalClient() {
   const [deletingGalleryUrl, setDeletingGalleryUrl] = useState<string | null>(null);
 
   // Dynamic Departments from DB
-  const [colgDepts, setColgDepts] = useState<{ id: string; name: string }[]>([]);
+  const [colgDepts, setColgDepts] = useState<{ id: string; name: string }[]>(seedData?.departments ?? []);
 
   // Delete Confirmation States
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -230,30 +208,6 @@ export default function EventsPortalClient() {
     imageUrl?: string | null;
     department?: string;
   } | null>(null);
-
-  const profileLoaded = Boolean(session);
-
-  useEffect(() => {
-    async function fetchCollegeDepts() {
-      if (!institutionId) return;
-      try {
-        const { data, error } = await supabase
-          .from("departments")
-          .select("id, name")
-          .eq("institution_id", institutionId)
-          .order("name", { ascending: true });
-        if (data) {
-          setColgDepts(data);
-          if (data.length > 0) {
-            setForm(p => ({ ...p, department: data[0].id }));
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching departments:", err);
-      }
-    }
-    fetchCollegeDepts();
-  }, [institutionId]);
 
   // Robust Role Detection
   const isAdmin = ["super_admin", "org_admin", "institution_admin"].includes(userRole?.toLowerCase()) ||
@@ -318,187 +272,64 @@ export default function EventsPortalClient() {
     setShowTimePicker(false);
   };
 
-  // Fetch Events from Supabase Database with resilient fallbacks
+  const setEventsData = (data: EventsDashboardData) => {
+    cache.set("events", data);
+    setEvents(data.events);
+    setColgDepts(data.departments);
+    setForm((previous) => previous.department || !data.departments.length
+      ? previous
+      : { ...previous, department: data.departments[0].id });
+  };
+
+  const updateEventsData = (update: (current: EventsDashboardData) => EventsDashboardData) => {
+    const current = cache.read<EventsDashboardData>("events") ?? {
+      events,
+      departments: colgDepts,
+    };
+    setEventsData(update(current));
+  };
+
+  // Read the server-side dashboard model. The server owns authorization, tenant
+  // scoping, mapping, and schema fallbacks; the browser only handles one request.
   const fetchEvents = async () => {
-    const finishTiming = startClientTiming("dashboard.events.initialize")
-    setLoading(true);
+    const finishTiming = startClientTiming("dashboard.events.initialize");
+    setLoading(events.length === 0);
     try {
-      let data: any[] | null = null;
-      let primaryError: any = null;
-
-      try {
-        let query = supabase
-          .from("events")
-          .select(`
-            id,
-            title,
-            description,
-            event_date,
-            venue,
-            created_by,
-            image_url,
-            gallery_images,
-            event_registrations (
-              user_id
-            )
-          `);
-
-        if (institutionId) {
-          query = query.eq("institution_id", institutionId);
-        }
-
-        const res = await query.order("event_date", { ascending: true });
-        if (res.error) {
-          primaryError = res.error;
-        } else {
-          data = res.data;
-        }
-      } catch (err) {
-        primaryError = err;
-      }
-
-      if (primaryError || !data) {
-        try {
-          let fbQuery = supabase
-            .from("events")
-            .select(`
-              id,
-              title,
-              description,
-              event_date,
-              venue,
-              created_by,
-              event_registrations (
-                user_id
-              )
-            `);
-
-          if (institutionId) {
-            fbQuery = fbQuery.eq("institution_id", institutionId);
-          }
-
-          const fbRes = await fbQuery.order("event_date", { ascending: true });
-          if (!fbRes.error) {
-            data = fbRes.data;
-          } else {
-            let bareQuery = supabase.from("events").select("id, title, description, event_date, venue, created_by");
-            if (institutionId) {
-              bareQuery = bareQuery.eq("institution_id", institutionId);
-            }
-            const bareRes = await bareQuery.order("event_date", { ascending: true });
-            if (!bareRes.error) {
-              data = bareRes.data;
-            } else {
-              const simpleRes = await supabase.from("events").select("*");
-              if (!simpleRes.error) {
-                data = simpleRes.data;
-              } else {
-                console.warn("Could not query events table:", simpleRes.error?.message || simpleRes.error);
-                setEvents([]);
-                return;
-              }
-            }
-          }
-        } catch (tierErr) {
-          console.warn("Fallback query encountered error:", tierErr);
-        }
-      }
-
-      const todayStr = new Date().toISOString().split("T")[0];
-
-      const mapped: EventItem[] = (data || []).map((e: any) => {
-        let descText = e.description || "";
-        let deptName = "";
-        let tagsList: string[] = ["Academic"];
-        let staffName = "Staff Coordinator";
-        let staffRole = "Faculty";
-        let staffPhone = "";
-        let studCoord = "";
-        let studPhone = "";
-        let coverImg = e.image_url || null;
-        let galleryImgs: GalleryImage[] = Array.isArray(e.gallery_images) ? e.gallery_images : [];
-        
-        try {
-          const json = JSON.parse(e.description);
-          if (json && typeof json === "object" && "description" in json) {
-            descText = json.description;
-            deptName = json.department || "";
-            tagsList = json.tags || [];
-            staffName = json.organizer || "Staff Coordinator";
-            staffRole = json.organizerRole || "Faculty";
-            staffPhone = json.staff_coord_phone || "";
-            studCoord = json.student_coord || "";
-            studPhone = json.student_coord_phone || "";
-            if (!coverImg && json.image_url) {
-              coverImg = json.image_url;
-            }
-            if (galleryImgs.length === 0 && Array.isArray(json.gallery_images)) {
-              galleryImgs = json.gallery_images;
-            }
-          }
-        } catch {
-          // Plain text fallback
-        }
-
-        galleryImgs = galleryImgs.map((g: any) => {
-          if (typeof g === "string") {
-            return { url: g, uploaded_at: new Date().toISOString() };
-          }
-          return g;
-        });
-
-        let dateVal = todayStr;
-        let timeVal = "12:00 PM";
-        const rawDate = e.event_date || e.start_time || e.date;
-        if (rawDate) {
-          const parts = rawDate.split("T");
-          dateVal = parts[0] || todayStr;
-          if (parts[1]) {
-            const time24 = parts[1].slice(0, 5);
-            timeVal = formatTime24To12(time24);
-          }
-        }
-
-        const registeredUsers = Array.isArray(e.event_registrations)
-          ? e.event_registrations.map((r: any) => r.user_id)
-          : [];
-
-        return {
-          id: e.id,
-          name: e.title || "Untitled Event",
-          department: deptName,
-          date: dateVal,
-          time: timeVal,
-          location: e.venue || e.location || "Campus Hall",
-          description: descText,
-          capacity: 100,
-          filled: registeredUsers.length,
-          organizer: staffName,
-          organizerRole: staffRole,
-          staff_coord_phone: staffPhone,
-          student_coord: studCoord,
-          student_coord_phone: studPhone,
-          tags: tagsList,
-          registeredUsers,
-          image_url: coverImg,
-          gallery_images: galleryImgs,
-        };
+      const data = await cache.revalidate("events", async () => {
+        const response = await fetch("/api/dashboard/events", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Dashboard events request failed (${response.status})`);
+        return await response.json() as EventsDashboardData;
       });
-
-      setEvents(mapped);
+      setEventsData(data);
+      setLoadError(null);
     } catch (err: any) {
       console.error("Error fetching events:", err?.message || err);
+      setLoadError("We couldn't load events.");
+      if (!seedData) setEvents([]);
     } finally {
       setLoading(false);
       finishTiming();
     }
   };
 
+  const reconcileEvents = async () => {
+    cache.invalidate("events");
+    await fetchEvents();
+  };
+
   useEffect(() => {
-    if (profileLoaded) {
-      fetchEvents();
+    if (initialData) cache.seed("events", initialData);
+    // The fallback is only used when a server loader was unavailable.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!seedData) void fetchEvents();
+  }, [cache, initialData, seedData]);
+
+  useEffect(() => {
+    if (seedData && process.env.NEXT_PUBLIC_PERF_DIAGNOSTICS === "true") {
+      const finishTiming = startClientTiming("dashboard.events.data-ready");
+      finishTiming();
     }
-  }, [profileLoaded]);
+  }, [seedData]);
 
   // Timeline Helper (Date comparisons in local timezone)
   const getTimelineStatus = (dateStr: string) => {
@@ -742,6 +573,7 @@ export default function EventsPortalClient() {
 
     setUploadingGallery(true);
     try {
+      const uploadedImages: GalleryImage[] = [];
       for (const file of galleryUploadFiles) {
         const formData = new FormData();
         formData.append("file", file);
@@ -760,13 +592,28 @@ export default function EventsPortalClient() {
         if (!res.ok) {
           throw new Error(data.error || "Failed to upload some gallery photos");
         }
+        if (data.url) {
+          uploadedImages.push({
+            url: data.url,
+            caption: galleryCaption.trim() || undefined,
+            uploaded_at: new Date().toISOString(),
+          });
+        }
       }
 
       triggerToast(`${galleryUploadFiles.length} photo${galleryUploadFiles.length > 1 ? "s" : ""} added to event gallery!`);
       setGalleryUploadFiles([]);
       setGalleryCaption("");
       setShowGalleryModal(false);
-      fetchEvents();
+      if (uploadedImages.length > 0) {
+        updateEventsData((current) => ({
+          ...current,
+          events: current.events.map((event) => event.id === selectedEvent.id
+            ? { ...event, gallery_images: [...(event.gallery_images ?? []), ...uploadedImages] }
+            : event),
+        }));
+      }
+      void reconcileEvents();
     } catch (err: any) {
       console.error("Gallery upload error:", err);
       alert(err.message || "Error uploading photos.");
@@ -800,7 +647,13 @@ export default function EventsPortalClient() {
       if (lightboxOpen) {
         setLightboxOpen(false);
       }
-      fetchEvents();
+      updateEventsData((current) => ({
+        ...current,
+        events: current.events.map((event) => event.id === selectedEvent.id
+          ? { ...event, gallery_images: (event.gallery_images ?? []).filter((image) => image.url !== imgUrl) }
+          : event),
+      }));
+      void reconcileEvents();
     } catch (err: any) {
       console.error("Delete photo error:", err);
       alert(err.message || "Failed to delete photo.");
@@ -845,6 +698,7 @@ export default function EventsPortalClient() {
     };
 
     try {
+      let savedEventId = editingEventId;
       if (isEditing && editingEventId) {
         const res = await fetch(`/api/events/${editingEventId}`, {
           method: "PATCH",
@@ -852,8 +706,10 @@ export default function EventsPortalClient() {
           body: JSON.stringify(payload),
         });
 
+        const responseData = await res.json().catch(() => null);
+        savedEventId = responseData?.id || editingEventId;
+
         if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
           // Fallback to direct supabase update
           const { error } = await supabase
             .from("events")
@@ -866,7 +722,7 @@ export default function EventsPortalClient() {
               .from("events")
               .update(payload)
               .eq("id", editingEventId);
-            if (err2) throw new Error(errJson.error || err2.message);
+            if (err2) throw new Error(responseData?.error || err2.message);
           }
         }
         triggerToast("Event successfully updated");
@@ -877,8 +733,10 @@ export default function EventsPortalClient() {
           body: JSON.stringify(payload),
         });
 
+        const responseData = await res.json().catch(() => null);
+        savedEventId = responseData?.id || null;
+
         if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
           // Fallback to direct supabase insert
           const { error } = await supabase
             .from("events")
@@ -889,13 +747,41 @@ export default function EventsPortalClient() {
             const { error: err2 } = await supabase
               .from("events")
               .insert([payload]);
-            if (err2) throw new Error(errJson.error || err2.message);
+            if (err2) throw new Error(responseData?.error || err2.message);
           }
         }
         triggerToast("Event successfully scheduled");
       }
 
-      fetchEvents();
+      if (savedEventId) {
+        const localEvent: EventItem = {
+          id: savedEventId,
+          name: form.name,
+          department: form.department,
+          date: form.date,
+          time: form.time,
+          location: form.location || "Campus Hall",
+          description: form.description,
+          capacity: Number(form.capacity) || 100,
+          filled: isEditing ? (events.find((event) => event.id === savedEventId)?.filled ?? 0) : 0,
+          organizer: form.organizer || "Staff Coordinator",
+          organizerRole: form.organizerRole || "Faculty",
+          staff_coord_phone: form.staff_coord_phone,
+          student_coord: form.student_coord,
+          student_coord_phone: form.student_coord_phone,
+          tags: form.tags ? form.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : ["Event"],
+          registeredUsers: isEditing ? (events.find((event) => event.id === savedEventId)?.registeredUsers ?? []) : [],
+          image_url: form.image_url || null,
+          gallery_images: isEditing ? (events.find((event) => event.id === savedEventId)?.gallery_images ?? []) : [],
+        };
+        updateEventsData((current) => ({
+          ...current,
+          events: isEditing
+            ? current.events.map((event) => event.id === savedEventId ? localEvent : event)
+            : [localEvent, ...current.events],
+        }));
+      }
+      void reconcileEvents();
       setShowForm(false);
       setShowPreviewModal(false);
       setIsEditing(false);
@@ -945,7 +831,11 @@ export default function EventsPortalClient() {
 
       triggerToast("Event deleted successfully");
       setSelectedEventId(null);
-      fetchEvents();
+      updateEventsData((current) => ({
+        ...current,
+        events: current.events.filter((event) => event.id !== id),
+      }));
+      void reconcileEvents();
       setDeleteConfirmOpen(false);
       setDeletingEventId(null);
     } catch (err: any) {
@@ -992,6 +882,16 @@ export default function EventsPortalClient() {
   }
 
   const currentGallery = selectedEvent?.gallery_images || [];
+
+  if (loadError && !events.length) {
+    return (
+      <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm text-red-700">
+        <p className="font-bold">{loadError}</p>
+        <p className="mt-1">Check your connection and try again.</p>
+        <Button className="mt-4" variant="secondary" onClick={() => void fetchEvents()}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -1159,6 +1059,7 @@ export default function EventsPortalClient() {
                           <img
                             src={item.image_url}
                             alt={item.name}
+                            loading="lazy"
                             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-black/30" />
@@ -1226,6 +1127,7 @@ export default function EventsPortalClient() {
                       <img
                         src={item.image_url}
                         alt={item.name}
+                        loading="lazy"
                         className="w-14 h-14 rounded-2xl object-cover shrink-0 border border-slate-100 shadow-sm"
                       />
                     ) : (
@@ -1374,6 +1276,7 @@ export default function EventsPortalClient() {
                     <img
                       src={selectedEvent.image_url}
                       alt={selectedEvent.name}
+                      loading="lazy"
                       className="absolute inset-0 w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/30 to-black/20" />
@@ -1535,8 +1438,8 @@ export default function EventsPortalClient() {
                           <img
                             src={img.url}
                             alt={img.caption || `Event photo ${idx + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             loading="lazy"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5">
                             <div className="flex justify-end">

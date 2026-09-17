@@ -3,6 +3,7 @@ import Navbar from "@/components/navbar"
 import ImpersonationBanner from "@/components/impersonation-banner"
 import DashboardRouteTransition from "@/components/dashboard-route-transition"
 import { DashboardSessionProvider } from "@/components/dashboard-session-provider"
+import { DashboardDataProvider } from "@/components/dashboard-data-provider"
 import { CourseProvider } from "@/modules/courses/course-context"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 
@@ -15,16 +16,27 @@ export default async function DashboardLayout({
 
   return (
     <DashboardSessionProvider value={userContext}>
-      <CourseProvider>
-        <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(108,99,255,0.16),_transparent_22%),radial-gradient(circle_at_top_right,_rgba(139,92,246,0.14),_transparent_18%),radial-gradient(circle_at_bottom_left,_rgba(0,194,168,0.12),_transparent_18%),linear-gradient(180deg,#f8fafc,#eff6ff)] text-slate-950">
-          <Sidebar profile={userContext} />
-          <div className="flex flex-col flex-1 min-w-0">
-            <Navbar profile={userContext} />
-            <DashboardRouteTransition>{children}</DashboardRouteTransition>
+      <DashboardDataProvider
+        key={[userContext?.id, userContext?.role, userContext?.institution_id, userContext?.organization_id, userContext?.isImpersonating ? userContext.originalProfile.id : null].join(":")}
+        scope={{
+          userId: userContext?.id ?? null,
+          role: userContext?.role ?? null,
+          institutionId: userContext?.institution_id ?? null,
+          organizationId: userContext?.organization_id ?? null,
+          impersonationId: userContext?.isImpersonating ? userContext.originalProfile.id : null,
+        }}
+      >
+        <CourseProvider>
+          <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(108,99,255,0.16),_transparent_22%),radial-gradient(circle_at_top_right,_rgba(139,92,246,0.14),_transparent_18%),radial-gradient(circle_at_bottom_left,_rgba(0,194,168,0.12),_transparent_18%),linear-gradient(180deg,#f8fafc,#eff6ff)] text-slate-950">
+            <Sidebar profile={userContext} />
+            <div className="flex flex-col flex-1 min-w-0">
+              <Navbar profile={userContext} />
+              <DashboardRouteTransition>{children}</DashboardRouteTransition>
+            </div>
+            <ImpersonationBanner profile={userContext} />
           </div>
-          <ImpersonationBanner profile={userContext} />
-        </div>
-      </CourseProvider>
+        </CourseProvider>
+      </DashboardDataProvider>
     </DashboardSessionProvider>
   )
 }
