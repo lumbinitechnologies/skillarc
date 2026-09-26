@@ -53,11 +53,15 @@ export default function OrgAdminPage({
 
   async function handleDelete(id: string) {
     try {
-      await deleteInstitution(id)
-      setDeletingId(null)
-      startTransition(() => router.refresh())
+      const res = await deleteInstitution(id)
+      if (res && !res.success) {
+        alert(res.error || "Failed to delete institution")
+      } else {
+        setDeletingId(null)
+        startTransition(() => router.refresh())
+      }
     } catch (err: any) {
-      alert(err?.message)
+      alert(err?.message || "Failed to delete institution")
     }
   }
 

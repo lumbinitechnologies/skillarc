@@ -5,6 +5,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createClient } from "@supabase/supabase-js"
 import { ROLES } from "@/constants/roles"
+import { cascadeDeleteInstitution, cascadeDeleteOrganization } from "@/lib/cascade-delete"
 
 // ─── Auth guard helper ────────────────────────────────────────────────────────
 async function requireSuperAdmin() {
@@ -60,13 +61,19 @@ export async function editOrganization(id: string, name: string, features: strin
 }
 
 export async function deleteOrganization(id: string) {
-  const { error: authError, supabase } = await requireSuperAdmin()
-  if (authError || !supabase) return { success: false, error: authError }
+  const { error: authError, adminClient } = await requireSuperAdmin()
+  if (authError || !adminClient) return { success: false, error: authError }
 
-  const { error } = await supabase.from("organizations").delete().eq("id", id)
-  if (error) return { success: false, error: error.message }
+  const result = await cascadeDeleteOrganization(adminClient, id)
+  return result
+}
 
-  return { success: true }
+export async function deleteInstitution(id: string) {
+  const { error: authError, adminClient } = await requireSuperAdmin()
+  if (authError || !adminClient) return { success: false, error: authError }
+
+  const result = await cascadeDeleteInstitution(adminClient, id)
+  return result
 }
 
 // ─── Org Admins ───────────────────────────────────────────────────────────────
