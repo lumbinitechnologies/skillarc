@@ -355,8 +355,11 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
       {deleteTarget && (
         <Modal title="Delete Organization" subtitle="This action cannot be undone." onClose={() => setDeleteTarget(null)}>
           <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 16px", marginBottom:20 }}>
-            <p style={{ margin:0, fontSize:14, color:"#991b1b", fontWeight:500 }}>
-              Are you sure you want to delete <strong>"{deleteTarget.name}"</strong>? This will remove all associated data.
+            <p style={{ margin:0, fontSize:14, color:"#991b1b", fontWeight:600 }}>
+              Are you sure you want to delete "{deleteTarget.name}"?
+            </p>
+            <p style={{ margin:"8px 0 0", fontSize:12, color:"#b91c1c", lineHeight:"1.4" }}>
+              This will permanently delete this organization along with all of its child institutions, departments, courses, students, faculty, and academic records.
             </p>
           </div>
           <div style={{ display:"flex", gap:10 }}>

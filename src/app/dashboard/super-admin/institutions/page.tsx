@@ -1,6 +1,5 @@
-// app/dashboard/super-admin/institutions/page.tsx
-
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { deleteInstitution } from "../actions"
 import InstitutionsClient from "./institutions-client"
 
 export default async function InstitutionsPage() {
@@ -47,5 +46,5 @@ export default async function InstitutionsPage() {
     user_count: countMap[inst.id] ?? 0,
   }))
 
-  return <InstitutionsClient institutions={institutions} />
+  return <InstitutionsClient institutions={institutions} onDeleteInstitution={deleteInstitution} />
 }

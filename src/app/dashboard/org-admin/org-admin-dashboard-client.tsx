@@ -37,6 +37,9 @@ export default function OrgAdminDashboardClient({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editDomain, setEditDomain] = useState("")
+  const [deleteTarget, setDeleteTarget] = useState<Institution | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
 
   const isValid = name.trim().length > 0 && adminEmail.trim().length > 0
 
@@ -57,11 +60,16 @@ export default function OrgAdminDashboardClient({
     }
   }
 
-  async function handleDelete(id: string) {
-    const res = await deleteInstitution(id)
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    setDeleteError("")
+    const res = await deleteInstitution(deleteTarget.id)
+    setIsDeleting(false)
     if (res && !res.success) {
-      alert(res.error || "Failed to delete institution")
+      setDeleteError(res.error || "Failed to delete institution")
     } else {
+      setDeleteTarget(null)
       setEditingId(null)
       startTransition(() => router.refresh())
     }
@@ -246,8 +254,12 @@ export default function OrgAdminDashboardClient({
                               <Pencil size={16} />
                             </button>
                             <button
-                              onClick={() => handleDelete(inst.id)}
+                              onClick={() => {
+                                setDeleteTarget(inst)
+                                setDeleteError("")
+                              }}
                               className="inline-flex h-10 items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                              title="Delete institution"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -276,6 +288,66 @@ export default function OrgAdminDashboardClient({
           </motion.section>
         </div>
       </div>
+
+      {/* Delete Warning Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeleting) setDeleteTarget(null)
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-md rounded-[28px] border border-rose-100 bg-white p-6 sm:p-7 shadow-2xl"
+          >
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-xl font-bold">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Institution</h3>
+                <p className="text-xs font-semibold uppercase tracking-wider text-rose-600">Permanent Action</p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50/70 p-4 text-sm leading-relaxed text-rose-900">
+              <p className="font-semibold">
+                Are you sure you want to delete <span className="underline">{deleteTarget.name}</span>?
+              </p>
+              <p className="mt-2 text-xs text-rose-700">
+                This will permanently delete all associated departments, programs, courses, faculty, students, admissions, and academic records. This action cannot be undone.
+              </p>
+            </div>
+
+            {deleteError && (
+              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-700">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="inline-flex items-center justify-center rounded-2xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-600/20 transition hover:bg-rose-700 active:scale-95 disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Yes, Delete Institution"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   )
 }

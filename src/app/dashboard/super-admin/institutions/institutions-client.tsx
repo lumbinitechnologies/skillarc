@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Fragment } from "react"
+import { useState, useTransition, Fragment } from "react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Institution = {
@@ -17,6 +17,7 @@ type Institution = {
 
 type Props = {
   institutions: Institution[]
+  onDeleteInstitution?: (id: string) => Promise<{ success: boolean; error?: string }>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -26,14 +27,49 @@ const typeIcon: Record<string, string> = { college:"🎓", school:"🏫", univer
 const typeBg: Record<string, string> = { college:"#d1fae5", school:"#dbeafe", university:"#ede9fe", institute:"#fef3c7", other:"#f3f4f6" }
 const typeColor: Record<string, string> = { college:"#065f46", school:"#1d4ed8", university:"#6d28d9", institute:"#b45309", other:"#374151" }
 
+function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", backdropFilter:"blur(4px)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100, padding:20 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:16, width:"100%", maxWidth:480, padding:"28px 32px", boxShadow:"0 20px 40px rgba(0,0,0,0.15)" }}>
+        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
+          <div>
+            <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:"#111827" }}>{title}</h2>
+            <p style={{ margin:"4px 0 0", fontSize:12, color:"#9ca3af" }}>{subtitle}</p>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:22, color:"#9ca3af", padding:4, borderRadius:6 }}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Toast({ message, type }: { message: string; type: "success" | "error" }) {
+  return (
+    <div style={{ position:"fixed", bottom:32, right:32, background: type==="success" ? "#0f766e" : "#dc2626", color:"#fff", padding:"12px 20px", borderRadius:12, fontSize:14, fontWeight:500, zIndex:200, boxShadow:"0 8px 24px rgba(0,0,0,0.2)", display:"flex", alignItems:"center", gap:8 }}>
+      <span>{type==="success" ? "✓" : "✕"}</span>{message}
+    </div>
+  )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export default function InstitutionsPage({ institutions: initial = [] }: Props) {
+export default function InstitutionsPage({ institutions: initial = [], onDeleteInstitution }: Props) {
+  const [list, setList] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState("")
   const [filterOrg, setFilterOrg] = useState("")
   const [filterActive, setFilterActive] = useState("")
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Institution | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  function showToast(message: string, type: "success" | "error") {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3500)
+  }
 
   async function handleEnterInstitution(instId: string) {
     try {
@@ -56,18 +92,33 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
     }
   }
 
-  const orgs = Array.from(new Set(initial.map(i => i.organization_id)))
-    .map(id => ({ id, name: initial.find(i => i.organization_id === id)?.organization_name ?? id }))
+  async function handleDelete() {
+    if (!deleteTarget) return
+    startTransition(async () => {
+      const res = await onDeleteInstitution?.(deleteTarget.id)
+      if (res?.success) {
+        setList(prev => prev.filter(i => i.id !== deleteTarget.id))
+        showToast(`"${deleteTarget.name}" deleted successfully`, "success")
+        setDeleteTarget(null)
+      } else {
+        showToast(res?.error || "Failed to delete institution", "error")
+        setDeleteTarget(null)
+      }
+    })
+  }
 
-  const filtered = initial.filter(inst =>
+  const orgs = Array.from(new Set(list.map(i => i.organization_id)))
+    .map(id => ({ id, name: list.find(i => i.organization_id === id)?.organization_name ?? id }))
+
+  const filtered = list.filter(inst =>
     (inst.name.toLowerCase().includes(search.toLowerCase()) || inst.code.toLowerCase().includes(search.toLowerCase())) &&
     (!filterType || inst.type === filterType) &&
     (!filterOrg || inst.organization_id === filterOrg) &&
     (!filterActive || (filterActive === "active" ? inst.active : !inst.active))
   )
 
-  const totalUsers = initial.reduce((s,i) => s+i.user_count, 0)
-  const activeCount = initial.filter(i=>i.active).length
+  const totalUsers = list.reduce((s,i) => s+i.user_count, 0)
+  const activeCount = list.filter(i=>i.active).length
 
   return (
     <>
@@ -88,7 +139,6 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
           font-size: 12px;
           font-weight: 700;
           cursor: pointer;
-          margin-left: auto;
           box-shadow: 0 4px 12px rgba(0, 194, 168, 0.2);
           transition: all 0.15s ease;
           font-family: inherit;
@@ -100,6 +150,22 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
         }
         .sa-btn-mint:active {
           transform: scale(0.97) translateY(0);
+        }
+        .inst-del-btn {
+          background: #fff;
+          border: 1px solid #fecaca;
+          color: #dc2626;
+          border-radius: 7px;
+          padding: 4px 10px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: inherit;
+          transition: all 0.12s;
+        }
+        .inst-del-btn:hover {
+          background: #fef2f2;
+          border-color: #ef4444;
         }
       `}</style>
 
@@ -118,7 +184,7 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
               {activeCount} Active
             </span>
             <span style={{ background:"#fee2e2", color:"#991b1b", fontSize:12, fontWeight:700, padding:"4px 12px", borderRadius:99 }}>
-              {initial.length - activeCount} Inactive
+              {list.length - activeCount} Inactive
             </span>
           </div>
         </div>
@@ -126,10 +192,10 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
         {/* Stats */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
           {[
-            { label:"Total Institutions", value:initial.length, bg:"#d1fae5", color:"#065f46", icon:"🏫" },
+            { label:"Total Institutions", value:list.length, bg:"#d1fae5", color:"#065f46", icon:"🏫" },
             { label:"Active", value:activeCount, bg:"#dbeafe", color:"#1d4ed8", icon:"✅" },
             { label:"Total Users", value:totalUsers, bg:"#ede9fe", color:"#6d28d9", icon:"👥" },
-            { label:"Avg Users / Inst", value:initial.length ? Math.round(totalUsers/initial.length) : 0, bg:"#fef3c7", color:"#b45309", icon:"📊" },
+            { label:"Avg Users / Inst", value:list.length ? Math.round(totalUsers/list.length) : 0, bg:"#fef3c7", color:"#b45309", icon:"📊" },
           ].map(s => (
             <div key={s.label} style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:"16px 20px", display:"flex", alignItems:"center", gap:12 }}>
               <div style={{ width:40, height:40, borderRadius:10, background:s.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>{s.icon}</div>
@@ -144,7 +210,7 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
         {/* Type breakdown */}
         <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
           {["college","school","university","institute","other"].map(t => {
-            const count = initial.filter(i=>i.type===t).length
+            const count = list.filter(i=>i.type===t).length
             if (!count) return null
             return (
               <button key={t} onClick={() => setFilterType(filterType===t ? "" : t)}
@@ -184,7 +250,7 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f0fdf4" }}>
-                  {["Institution","Code","Type","Organization","Users","Status","Created"].map(h => (
+                  {["Institution","Code","Type","Organization","Users","Status","Created","Actions"].map(h => (
                     <th key={h} style={{ textAlign:"left", padding:"10px 20px", fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.07em", borderBottom:"1px solid #dcfce7" }}>{h}</th>
                   ))}
                 </tr>
@@ -217,25 +283,48 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
                         </span>
                       </td>
                       <td style={{ padding:"12px 20px", color:"#9ca3af", fontSize:13 }}>{fmt(inst.created_at)}</td>
+                      <td style={{ padding:"12px 20px" }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <button
+                            onClick={() => setDeleteTarget(inst)}
+                            className="inst-del-btn"
+                            title="Delete institution"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                     {expandedId === inst.id && (
                       <tr key={`${inst.id}-expanded`} style={{ borderBottom:"1px solid #f3f4f6" }}>
-                        <td colSpan={7} style={{ padding:"0 20px 16px 64px", background:"#f0fdf4" }}>
+                        <td colSpan={8} style={{ padding:"0 20px 16px 64px", background:"#f0fdf4" }}>
                           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:16, fontSize:13 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
                               <div><span style={{ color:"#9ca3af" }}>Institution ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.id}</span></div>
                               <div><span style={{ color:"#9ca3af" }}>Org ID: </span><span style={{ fontFamily:"'DM Mono',monospace", color:"#374151" }}>{inst.organization_id}</span></div>
                               <div><span style={{ color:"#9ca3af" }}>Total Users: </span><span style={{ fontWeight:600, color:"#111827" }}>{inst.user_count}</span></div>
                             </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleEnterInstitution(inst.id)
-                              }}
-                              className="sa-btn-mint"
-                            >
-                              Enter Institution Dashboard
-                            </button>
+                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleEnterInstitution(inst.id)
+                                }}
+                                className="sa-btn-mint"
+                              >
+                                Enter Institution Dashboard
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteTarget(inst)
+                                }}
+                                className="inst-del-btn"
+                                style={{ padding: "6px 14px", fontSize: 12 }}
+                              >
+                                Delete Institution
+                              </button>
+                            </div>
                           </div>
 
                           {/* Public Admissions Portal URL */}
@@ -304,6 +393,42 @@ export default function InstitutionsPage({ institutions: initial = [] }: Props) 
           )}
         </div>
       </div>
+
+      {/* Delete Warning Confirmation Modal */}
+      {deleteTarget && (
+        <Modal
+          title="Delete Institution"
+          subtitle="This action cannot be undone."
+          onClose={() => setDeleteTarget(null)}
+        >
+          <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 16px", marginBottom:20 }}>
+            <p style={{ margin:0, fontSize:14, color:"#991b1b", fontWeight:600 }}>
+              Are you sure you want to delete "{deleteTarget.name}"?
+            </p>
+            <p style={{ margin:"8px 0 0", fontSize:12, color:"#b91c1c", lineHeight:"1.4" }}>
+              This will permanently delete this institution along with all its departments, courses, faculty, students, timetables, admissions, and academic records.
+            </p>
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={isPending}
+              style={{ flex:1, padding:10, background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isPending}
+              style={{ flex:1, padding:10, background:"#dc2626", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", opacity: isPending ? 0.6 : 1 }}
+            >
+              {isPending ? "Deleting…" : "Yes, Delete Institution"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {toast && <Toast message={toast.message} type={toast.type} />}
     </>
   )
 }
