@@ -96,11 +96,11 @@ export default function TimetableDemo() {
 
       {/* FEATURE TYPOGRAPHY NARRATIVE BLOCK */}
       <section ref={textNarrativeRef} className="max-w-7xl mx-auto px-6 lg:px-8 py-32 text-center relative z-10">
-        <span className="text-xs font-mono tracking-[0.25em] text-[#94BAC4] uppercase mb-8 block">
-          [ PHILOSOPHY // RELATIONAL INTEGRITY ]
+        <span className="text-xs font-mono tracking-[0.25em] text-[#94BAC4] uppercase mb-8 block font-bold">
+          [ CONNECTED ACADEMIC OPERATIONS ]
         </span>
         <h2 className="text-4xl sm:text-6xl md:text-7xl font-extrabold uppercase tracking-tight leading-[0.95] max-w-5xl mx-auto font-sans text-[#ECDFCB]">
-          We replace <span className="highlight-keyword">fragmented worksheets</span> with a unified <span className="highlight-keyword">relational schema</span> that catches conflicts, automates rosters, and connects <span className="highlight-keyword">students directly</span>.
+          We replace <span className="highlight-keyword">fragmented worksheets</span> with a connected <span className="highlight-keyword">academic platform</span> that catches conflicts, aligns teams, and keeps <span className="highlight-keyword">everyone in the loop</span>.
         </h2>
       </section>
 
@@ -110,22 +110,22 @@ export default function TimetableDemo() {
 
           {/* Left Feature Column */}
           <div className="space-y-6 lg:col-span-5">
-            <span className="text-[10px] font-mono tracking-[0.2em] text-[#E57D37] uppercase bg-[#E57D37]/10 border border-[#E57D37]/30 px-4 py-1.5 rounded-full inline-block">
+            <span className="text-[10px] font-mono tracking-[0.2em] text-[#E57D37] uppercase bg-[#E57D37]/10 border border-[#E57D37]/30 px-4 py-1.5 rounded-full inline-block font-bold">
               [ ACADEMIC OPERATIONS ]
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold uppercase tracking-tight text-[#ECDFCB] leading-tight">
               From departments to timetables.
             </h2>
             <p className="text-sm text-[#94BAC4] leading-relaxed font-sans font-light">
-              Architect the logical structural hierarchy of your institution. Organize departments, assign program directors, map course syllabi, allocate faculty capacity, and build schedules without overlaps.
+              Connect departments, programs, courses, faculty, sections, and timetables so teams can plan and publish with confidence.
             </p>
 
             <div className="grid grid-cols-2 gap-4 pt-4 font-sans">
               {[
-                { title: "Departments", desc: "Organize structural branches." },
-                { title: "Programs", desc: "Manage curriculum leaders." },
-                { title: "Subjects", desc: "Connect syllabus & students." },
-                { title: "Timetables", desc: "Build visual conflict tools." },
+                { title: "Departments", desc: "Organize campus branches." },
+                { title: "Programs", desc: "Coordinate cohort leaders." },
+                { title: "Courses", desc: "Connect subjects & students." },
+                { title: "Timetables", desc: "Visual conflict-free schedules." },
               ].map((item) => (
                 <div key={item.title} className="p-4 bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 rounded-2xl hover:border-[#EAAD62]/50 transition-all">
                   <h3 className="text-sm font-bold text-[#ECDFCB]">{item.title}</h3>
@@ -138,23 +138,23 @@ export default function TimetableDemo() {
           {/* Right Operational Workflow HUD */}
           <div className="bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 rounded-3xl p-8 space-y-6 lg:col-span-7 backdrop-blur-2xl relative shadow-2xl">
             <div className="flex items-center justify-between border-b border-[#3A6DAF]/20 pb-4">
-              <span className="text-xs font-mono text-[#94BAC4] uppercase tracking-widest flex items-center gap-2">
+              <span className="text-xs font-mono text-[#94BAC4] uppercase tracking-widest flex items-center gap-2 font-bold">
                 <Layers size={14} className="text-[#3A6DAF]" />
                 <span>OPERATIONAL WORKFLOW</span>
               </span>
-              <span className="text-[10px] font-mono px-2.5 py-1 bg-[#EAAD62]/10 border border-[#EAAD62]/30 text-[#EAAD62] rounded-full uppercase">
-                AUTOMATED
+              <span className="text-[10px] font-mono px-2.5 py-1 bg-[#EAAD62]/10 border border-[#EAAD62]/30 text-[#EAAD62] rounded-full uppercase font-bold">
+                STREAMLINED
               </span>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-3 font-mono text-xs">
               {[
-                "Department Hub Configuration",
-                "Program Head Assignment",
-                "Subject Curricular Mapping",
-                "Faculty Roster Allocation",
-                "Timetable Class Scheduling",
-                "Real-Time Student Delivery",
+                "Department Setup & Leadership",
+                "Program & Course Mapping",
+                "Faculty & Section Allocation",
+                "Timetable Planning & Drafts",
+                "Conflict Checking & Review",
+                "Publish for Staff & Students",
               ].map((step, idx) => (
                 <div key={step} className="flex items-center gap-3 p-3 rounded-xl bg-[#14234B]/60 border border-[#3A6DAF]/20 text-[#ECDFCB]">
                   <span className="h-6 w-6 rounded-lg bg-[#E57D37]/15 border border-[#E57D37]/40 text-[#E57D37] flex items-center justify-center text-xs font-bold shrink-0">
@@ -175,15 +175,15 @@ export default function TimetableDemo() {
 
           {/* Text narrative column */}
           <div className="lg:col-span-5 space-y-6">
-            <span className="text-xs font-mono tracking-[0.2em] text-[#94BAC4] uppercase flex items-center gap-2">
+            <span className="text-xs font-mono tracking-[0.2em] text-[#94BAC4] uppercase flex items-center gap-2 font-bold">
               <Sparkles size={14} className="text-[#EAAD62]" />
-              <span>CONFLICT RESOLVER ENGINE</span>
+              <span>TIMETABLE BUILDER</span>
             </span>
             <h3 className="text-3xl sm:text-5xl font-extrabold uppercase tracking-tight text-[#ECDFCB] leading-tight">
-              Build timetables without calendar chaos.
+              Timetables your teams can trust.
             </h3>
             <p className="text-sm text-[#94BAC4] leading-relaxed font-sans font-light">
-              Drag subjects, allocate periods, and resolve faculty constraints in real time. SkillArc evaluates double-booking rules instantly.
+              Build schedules visually, catch double-bookings as you work, then save, print, and publish the timetable for staff and students.
             </p>
 
             {/* Visual Conflict Guard Badge */}
@@ -192,16 +192,16 @@ export default function TimetableDemo() {
                 <Check size={20} className="stroke-[3]" />
               </div>
               <div>
-                <p className="text-sm font-bold text-[#ECDFCB] font-sans">Visual Conflict Guard Active</p>
-                <p className="text-xs text-[#EAAD62] font-mono">// 0 SCHEDULING OVERLAPS DETECTED</p>
+                <p className="text-sm font-bold text-[#ECDFCB] font-sans">Conflict Checking Active</p>
+                <p className="text-xs text-[#EAAD62] font-mono">// 0 SCHEDULE CLASHES DETECTED</p>
               </div>
             </div>
 
             <div className="space-y-3 pt-2 text-xs text-[#94BAC4] font-sans">
               {[
-                "Conflict-aware slot suggestions",
-                "Instant faculty availability tracking",
-                "Drag, Assign, Save, and Publish instantly",
+                "Visual drag-and-drop planning",
+                "Instant conflict and overlap detection",
+                "Ready to save, print, and publish",
               ].map((feat) => (
                 <div key={feat} className="checklist-item opacity-0 flex items-center gap-3">
                   <div className="h-5 w-5 rounded-full bg-[#EAAD62]/20 border border-[#EAAD62]/40 text-[#EAAD62] flex items-center justify-center text-xs font-bold shrink-0">
@@ -215,12 +215,12 @@ export default function TimetableDemo() {
 
           {/* Timetable Interactive Canvas */}
           <div className="lg:col-span-7 flex flex-col gap-4">
-            <div className="flex items-center justify-between text-xs font-mono text-[#94BAC4] px-2">
+            <div className="flex items-center justify-between text-xs font-mono text-[#94BAC4] px-2 font-bold">
               <span className="flex items-center gap-2">
                 <Calendar size={14} className="text-[#E57D37]" />
-                <span>SCHEDULING MATRIX SIMULATION</span>
+                <span>TIMETABLE MATRIX PREVIEW</span>
               </span>
-              <span className="text-[10px] text-[#E57D37]">// LIVE DRAG STATE</span>
+              <span className="text-[10px] text-[#E57D37]">// LIVE SCHEDULE VIEW</span>
             </div>
 
             <div className="bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 rounded-3xl p-6 shadow-2xl overflow-x-auto backdrop-blur-2xl">
@@ -257,8 +257,8 @@ export default function TimetableDemo() {
                                 ref={daaRef}
                                 className="bg-[#E57D37]/20 border border-[#E57D37]/50 rounded-xl p-2.5 h-full flex flex-col justify-between shadow-lg shadow-[#E57D37]/10"
                               >
-                                <span className="font-extrabold text-xs text-[#E57D37] font-sans">DAA</span>
-                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Dr. Roy • R304</span>
+                                <span className="font-extrabold text-xs text-[#E57D37] font-sans">Algorithms</span>
+                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Dr. Roy • Room 304</span>
                               </div>
                             )}
                             {isDCN && (
@@ -266,8 +266,8 @@ export default function TimetableDemo() {
                                 ref={dcnRef}
                                 className="bg-[#3A6DAF]/30 border border-[#3A6DAF]/60 rounded-xl p-2.5 h-full flex flex-col justify-between shadow-lg shadow-[#3A6DAF]/20"
                               >
-                                <span className="font-extrabold text-xs text-[#94BAC4] font-sans">DCN</span>
-                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Prof. Sen • R102</span>
+                                <span className="font-extrabold text-xs text-[#94BAC4] font-sans">Data Networks</span>
+                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Prof. Sen • Room 102</span>
                               </div>
                             )}
                             {isWT && (
@@ -275,8 +275,8 @@ export default function TimetableDemo() {
                                 ref={wtRef}
                                 className="bg-[#EAAD62]/20 border border-[#EAAD62]/50 rounded-xl p-2.5 h-full flex flex-col justify-between shadow-lg shadow-[#EAAD62]/10"
                               >
-                                <span className="font-extrabold text-xs text-[#EAAD62] font-sans">WT</span>
-                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Dr. Minus • R201</span>
+                                <span className="font-extrabold text-xs text-[#EAAD62] font-sans">Web Tech</span>
+                                <span className="text-[9px] text-[#ECDFCB]/70 font-mono">Dr. Minus • Lab 2</span>
                               </div>
                             )}
                             {!isDAA && !isDCN && !isWT && (
@@ -291,8 +291,8 @@ export default function TimetableDemo() {
               </table>
             </div>
 
-            <p className="text-xs text-[#94BAC4] font-mono text-center pt-2">
-              // DRAG. ASSIGN. RESOLVE. PUBLISH.
+            <p className="text-xs text-[#94BAC4] font-mono text-center pt-2 font-bold">
+              // PLAN. CHECK. RESOLVE. PUBLISH.
             </p>
           </div>
 

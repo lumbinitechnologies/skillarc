@@ -9,54 +9,54 @@ export default function Roles() {
 
   const rolesData = [
     {
-      title: "Organization Admin",
-      tagline: "Control the bigger picture.",
-      desc: "Centralize your operations. Supervise multiple institutions, global configurations, administrative access, and systems analytics.",
+      title: "University Leadership",
+      tagline: "See the bigger picture.",
+      desc: "Understand what is happening across institutions, teams, and student services without requesting separate updates from every campus.",
       icon: <Shield size={24} className="text-[#FF5500]" />,
       color: "from-[#FF5500]/10 to-transparent",
-      tag: "org_admin_telemetry.sh",
+      tag: "leadership_workspace",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ ORG OVERVIEW ]</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ LEADERSHIP OVERVIEW ]</span>
             <span className="text-[10px] border border-[#FF5500]/20 text-[#FF5500] bg-[#FF5500]/5 px-3 py-1 rounded font-bold uppercase">Active</span>
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-white/40">Campuses</span>
-              <span className="font-bold text-[#F4F4F0] text-base">6 Active</span>
+              <span className="text-white/40">Institutions</span>
+              <span className="font-bold text-[#F4F4F0] text-base">6 Campuses</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-white/40">Admins</span>
+              <span className="text-white/40">Administrators</span>
               <span className="font-bold text-[#F4F4F0] text-base">4 Members</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-white/40">Users</span>
+              <span className="text-white/40">Total Community</span>
               <span className="font-bold text-[#F4F4F0] text-base">14,280</span>
             </div>
           </div>
           <div className="bg-[#FF5500]/5 border border-[#FF5500]/20 p-3 rounded-xl text-xs text-[#FF5500] text-center font-bold">
-            // 6 active campuses synced
+            // Multi-institution overview up to date
           </div>
         </div>
       ),
     },
     {
-      title: "Institution Admin",
+      title: "Institution Administrator",
       tagline: "Run your institution.",
-      desc: "Manage departments, program headers, curriculum blueprints, faculty assignments, and students roster configuration.",
+      desc: "Manage admissions, programs, departments, faculty, students, fees, schedules, attendance, events, and placements from one workspace.",
       icon: <Building size={24} className="text-[#38BDF8]" />,
       color: "from-[#38BDF8]/10 to-transparent",
-      tag: "campus_dashboard.sh",
+      tag: "campus_operations",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ CAMPUS DASHBOARD ]</span>
-            <span className="text-[10px] border border-white/20 text-white/70 px-3 py-1 rounded font-bold uppercase">Inst-A</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ CAMPUS OPERATIONS ]</span>
+            <span className="text-[10px] border border-white/20 text-white/70 px-3 py-1 rounded font-bold uppercase">Main Campus</span>
           </div>
           <div className="grid grid-cols-2 gap-4 text-center text-sm">
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
-              <span className="text-[10px] text-white/40 block uppercase">Depts</span>
+              <span className="text-[10px] text-white/40 block uppercase">Departments</span>
               <span className="text-lg font-bold text-[#38BDF8] mt-1 block">12</span>
             </div>
             <div className="p-3 bg-white/5 border border-white/10 rounded-xl">
@@ -68,22 +68,22 @@ export default function Roles() {
             <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
               <div className="bg-[#38BDF8] h-full w-[80%]" />
             </div>
-            <span className="text-white/40 block text-right">80% syllabus completed</span>
+            <span className="text-white/40 block text-right">80% term syllabus completed</span>
           </div>
         </div>
       ),
     },
     {
-      title: "Department Head (HOD)",
-      tagline: "Lead your department.",
-      desc: "Supervise departmental course schedules, assign faculty slots, configure program settings, and review telemetry details.",
+      title: "Department Head",
+      tagline: "Keep your department on track.",
+      desc: "Coordinate courses, sections, faculty assignments, schedules, events, and student progress across your department.",
       icon: <Users size={24} className="text-[#FF5500]" />,
       color: "from-[#FF5500]/10 to-transparent",
-      tag: "cse_dept_hub.sh",
+      tag: "department_hub",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ CSE DEPT HUB ]</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ DEPARTMENT HUB ]</span>
             <span className="text-[10px] border border-[#FF5500]/20 text-[#FF5500] bg-[#FF5500]/5 px-3 py-1 rounded font-bold uppercase">Active</span>
           </div>
           <div className="space-y-3 text-sm">
@@ -98,28 +98,28 @@ export default function Roles() {
             ))}
           </div>
           <div className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs text-white/60 text-center">
-            // 4 Assigned Program Heads
+            // Faculty assignments & schedules ready
           </div>
         </div>
       ),
     },
     {
       title: "Program Head",
-      tagline: "Own your program.",
-      desc: "Assign student batches, evaluate course blueprints, publish semester calendars, and coordinate placement opportunities.",
+      tagline: "Coordinate cohorts and courses.",
+      desc: "Oversee cohort milestones, evaluate course mappings, publish semester schedules, and coordinate student placement readiness.",
       icon: <Award size={24} className="text-[#38BDF8]" />,
       color: "from-[#38BDF8]/10 to-transparent",
-      tag: "program_head_engine.sh",
+      tag: "program_workspace",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ B.TECH IT METRICS ]</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ PROGRAM OVERVIEW ]</span>
             <span className="text-[10px] border border-[#38BDF8]/20 text-[#38BDF8] bg-[#38BDF8]/5 px-3 py-1 rounded font-bold uppercase">Supervised</span>
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between items-center">
               <span className="text-white/40">Sections</span>
-              <span className="font-bold text-[#F4F4F0]">3 Sects</span>
+              <span className="font-bold text-[#F4F4F0]">3 Sections</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-white/40">Courses</span>
@@ -127,22 +127,22 @@ export default function Roles() {
             </div>
           </div>
           <div className="p-3 bg-[#38BDF8]/5 border border-[#38BDF8]/20 rounded-xl text-xs text-[#38BDF8] text-center font-bold">
-            ✓ Curriculum checks OK
+            ✓ Cohort requirements on track
           </div>
         </div>
       ),
     },
     {
       title: "Faculty",
-      tagline: "Teach. Manage. Track.",
-      desc: "Publish syllabus materials, mark active attendance rosters, download lesson blueprints, and review assignment submissions.",
+      tagline: "Teach with less administration.",
+      desc: "View your timetable, share course materials, take attendance, create assignments, review submissions, and update grades.",
       icon: <BookOpen size={24} className="text-[#FF5500]" />,
       color: "from-[#FF5500]/10 to-transparent",
-      tag: "faculty_node.sh",
+      tag: "faculty_workspace",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ FACULTY CONSOLE ]</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ FACULTY WORKSPACE ]</span>
             <span className="text-[10px] border border-white/20 text-white/70 px-3 py-1 rounded font-bold uppercase">CS-302</span>
           </div>
           <div className="space-y-2">
@@ -164,20 +164,20 @@ export default function Roles() {
     },
     {
       title: "Student",
-      tagline: "Everything you need to learn.",
-      desc: "Manage syllabus resources, check timetables, submit reports, and track parameters.",
+      tagline: "Know what comes next.",
+      desc: "View timetables, courses, assignments, attendance, grades, fees, events, and placement opportunities in one straightforward experience.",
       icon: <Calendar size={24} className="text-[#38BDF8]" />,
       color: "from-[#38BDF8]/10 to-transparent",
-      tag: "student_dashboard.sh",
+      tag: "student_workspace",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ STUDENT DESK ]</span>
-            <span className="text-[10px] border border-[#38BDF8]/20 text-[#38BDF8] bg-[#38BDF8]/5 px-3 py-1 rounded font-bold uppercase">Sathvik</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ STUDENT WORKSPACE ]</span>
+            <span className="text-[10px] border border-[#38BDF8]/20 text-[#38BDF8] bg-[#38BDF8]/5 px-3 py-1 rounded font-bold uppercase">Active</span>
           </div>
           <div className="space-y-2 text-xs">
             <div className="flex justify-between text-sm">
-              <span className="text-white/40">Target GPA</span>
+              <span className="text-white/40">Academic GPA</span>
               <span className="font-bold text-[#F4F4F0]">3.95</span>
             </div>
             <div className="flex justify-between text-sm">
@@ -186,28 +186,28 @@ export default function Roles() {
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
-            <span className="text-[9px] font-bold text-white/40 block uppercase">PENDING TASK</span>
+            <span className="text-[9px] font-bold text-white/40 block uppercase">UPCOMING DUE</span>
             <span className="text-xs font-bold text-[#F4F4F0] block truncate">Lab Assignment 4</span>
           </div>
         </div>
       ),
     },
     {
-      title: "Parent",
+      title: "Parent & Family",
       tagline: "Stay connected to progress.",
-      desc: "Track academic schedules, review grade updates, check logs, and maintain active notification parameters.",
+      desc: "Keep track of academic schedules, attendance updates, grade reports, and campus communications without the guesswork.",
       icon: <Heart size={24} className="text-[#FF5500]" />,
       color: "from-[#FF5500]/10 to-transparent",
-      tag: "parent_telemetry.sh",
+      tag: "family_portal",
       mockup: (
         <div className="bg-[#111111]/80 border border-white/10 rounded-2xl p-6 md:p-8 space-y-5 shadow-2xl backdrop-blur-xl h-full flex flex-col justify-between w-full font-mono">
           <div className="flex justify-between items-center pb-3 border-b border-white/5">
-            <span className="text-xs font-bold text-white/40 tracking-wider">[ PARENT CONSOLE ]</span>
+            <span className="text-xs font-bold text-white/40 tracking-wider">[ FAMILY PORTAL ]</span>
             <span className="text-[10px] border border-white/20 text-white/70 px-3 py-1 rounded font-bold uppercase">Linked</span>
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between items-center">
-              <span className="text-white/40">Last Marked</span>
+              <span className="text-white/40">Attendance</span>
               <span className="font-semibold text-[#F4F4F0]">Today, 9:02 AM</span>
             </div>
             <div className="flex justify-between items-center">
@@ -216,7 +216,7 @@ export default function Roles() {
             </div>
           </div>
           <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white/60 text-center">
-            // Telemetry alerts ON
+            // Real-time notifications enabled
           </div>
         </div>
       ),
@@ -237,14 +237,14 @@ export default function Roles() {
           <div>
             <div className="font-mono text-xs text-[#EAAD62] tracking-[0.2em] uppercase mb-2 flex items-center gap-2 font-bold">
               <span className="text-[#FF5500]">//</span>
-              <span>[ ROLE-BASED ARCHITECTURE ]</span>
+              <span>[ ROLE-BASED WORKSPACES ]</span>
             </div>
             <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tight text-[#F4F4F0]">
-              Everyone gets the experience they need.
+              Everyone sees the work that matters to them.
             </h2>
           </div>
           <p className="font-mono text-xs text-[#94BAC4] max-w-xs mt-4 md:mt-0 uppercase font-bold">
-            SkillArc morphs according to user roles, providing tailored dashboards and views.
+            Keep the university connected while leadership, administrators, department heads, faculty, students, and families each get a focused workspace.
           </p>
         </div>
 
@@ -338,9 +338,9 @@ export default function Roles() {
               <div className="pt-4 border-t border-white/15 flex justify-between items-center text-[10px] font-mono text-[#94BAC4] font-bold">
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#FF5500] animate-pulse" />
-                  <span>Role-Based Access Verified</span>
+                  <span>Role-Based Workspace Ready</span>
                 </span>
-                <span className="text-[#EAAD62]">SECURE_SESSION</span>
+                <span className="text-[#EAAD62]">ACCESS: VERIFIED</span>
               </div>
 
             </div>

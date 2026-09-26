@@ -23,7 +23,7 @@ export function SecuritySection() {
           </h3>
 
           <p className="text-sm text-white/60 leading-relaxed font-sans font-light">
-            Role-based access controls keep academic information strictly partitioned according to staff responsibilities, department boundaries, and institutional hierarchy.
+            University administrators, department heads, faculty, students, and parents each get a focused view of the information relevant to their work and relationship.
           </p>
 
           {/* Breadcrumb Hierarchy Trail */}
@@ -46,13 +46,13 @@ export function SecuritySection() {
               <ShieldCheck size={24} />
             </div>
             <div>
-              <h4 className="text-lg font-bold text-white font-sans">Strict Tenant Isolation</h4>
-              <p className="text-xs font-mono text-[#38BDF8]">// DATABASE-LEVEL ROW SECURITY</p>
+              <h4 className="text-lg font-bold text-white font-sans">Access matched to your role</h4>
+              <p className="text-xs font-mono text-[#38BDF8]">// ROLE-BASED WORKSPACE ACCESS</p>
             </div>
           </div>
 
           <p className="text-sm text-white/60 leading-relaxed font-sans font-light border-t border-white/5 pt-6">
-            Institutional records are partitioned at the database schema layer. Department Heads are constrained strictly to their subject scopes, and students can only view their own registered courses and grades.
+            Institutional records are kept separate. Department heads see their own scope, faculty see courses and attendance, and students only see their own courses and grades.
           </p>
         </div>
 
@@ -76,10 +76,10 @@ export function MultiInstitutionSection() {
             [ SYSTEM SCALABILITY ]
           </span>
           <h2 className="text-4xl sm:text-6xl font-extrabold font-sans uppercase tracking-tight text-white leading-tight">
-            One organization. <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF5500] to-[#FF8800]">Multiple institutions.</span>
+            One organization. <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF5500] to-[#FF8800]">Local control where it matters.</span>
           </h2>
           <p className="text-sm text-white/60 font-sans font-light max-w-xl mx-auto">
-            Scale your academic ecosystem smoothly without losing unified administrative overviews or cross-campus analytics.
+            Keep a shared overview across institutions while each campus and department manages the daily work in its own context.
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export function MultiInstitutionSection() {
           {/* Footer Callout */}
           <div className="text-center pt-6 border-t border-white/5">
             <span className="text-xs font-bold text-[#38BDF8] font-mono uppercase tracking-widest">
-              // ZERO PERFORMANCE DEGRADATION AT SCALE
+              // ONE SHARED VIEW, LOCAL CONTROL
             </span>
           </div>
 
@@ -137,20 +137,20 @@ export function InfrastructureSection() {
             // TELEMETRY INFRASTRUCTURE
           </span>
           <h3 className="text-3xl sm:text-4xl font-extrabold uppercase text-white font-sans tracking-tight">
-            Built on modern cloud architecture.
+            A dependable workspace for the way universities work.
           </h3>
           <p className="text-sm text-white/60 leading-relaxed font-sans font-light">
-            SkillArc pairs serverless relational databases with low-latency client state synchronization to deliver fast timetable calculations and reliable updates.
+            Organize the structure behind the university, then give each team a practical way to act on what they see.
           </p>
         </div>
 
         {/* Right Tech Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-7">
           {[
-            { label: "Next.js & React 19", sub: "Speed & SEO optimized", icon: <Cpu size={18} className="text-[#FF5500]" /> },
-            { label: "Supabase DB", sub: "Real-time query engine", icon: <Database size={18} className="text-[#38BDF8]" /> },
-            { label: "PostgreSQL Engine", sub: "Strict relational integrity", icon: <Server size={18} className="text-[#FF5500]" /> },
-            { label: "Role Security Auth", sub: "Identity & tenant bounds", icon: <Lock size={18} className="text-[#38BDF8]" /> },
+            { label: "One shared view", sub: "Keep important updates together", icon: <Cpu size={18} className="text-[#FF5500]" /> },
+            { label: "Clear responsibilities", sub: "Give each team the right view", icon: <Database size={18} className="text-[#38BDF8]" /> },
+            { label: "Consistent records", sub: "Work from the same information", icon: <Server size={18} className="text-[#FF5500]" /> },
+            { label: "Room to grow", sub: "Support more programs and campuses", icon: <Lock size={18} className="text-[#38BDF8]" /> },
           ].map((tech) => (
             <div key={tech.label} className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl backdrop-blur-2xl hover:border-white/20 transition-all flex items-start gap-4">
               <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">

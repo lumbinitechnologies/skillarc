@@ -65,35 +65,35 @@ export default function Ecosystem() {
 
   const pillars = {
     management: {
-      tag: "CORE_SYSTEM // 01",
-      title: "Central Administrative OS",
-      code: "sys.config.tenant_isolation = STRICT;\nsys.audit_log.stream(REALTIME);",
+      tag: "PRIORITY // 01",
+      title: "Administration & operations",
+      code: "admissions.review_applications();\ntimetable.check_conflicts();",
       features: [
-        "Multi-Institution Multi-Tenant Schema",
-        "Role-Based Access Guardrails (RBAC)",
-        "Global Telemetry & Institutional Audits",
+        "Admissions and student records",
+        "Role-based access for each team",
+        "Shared overview across institutions",
       ],
       color: "#FF5500",
     },
     academics: {
-      tag: "CORE_SYSTEM // 02",
-      title: "Algorithmic Academic Hub",
-      code: "engine.timetable.resolve_conflicts();\nsyllabus.sync_status == 100%;",
+      tag: "PRIORITY // 02",
+      title: "Academic structure & scheduling",
+      code: "timetable.resolve_conflicts();\ncourses.map_to_programs();",
       features: [
-        "Conflict-Free Timetable Resolver",
-        "Program & Department Tree Mapping",
-        "Faculty Load & Resource Allocation",
+        "Timetable builder with conflict checking",
+        "Programs, departments, and courses",
+        "Faculty assignments and workload",
       ],
       color: "#38BDF8",
     },
     learning: {
-      tag: "CORE_SYSTEM // 03",
-      title: "Active Learning Mesh",
-      code: "student.analytics.push_gpa_metric();\ngradebook.auto_compile();",
+      tag: "PRIORITY // 03",
+      title: "Student progress & support",
+      code: "attendance.follow_up();\ngrades.publish_results();",
       features: [
-        "Live Course Outlines & Progress Tracking",
-        "Automated Grading & Assessment Grids",
-        "Direct Parent-Faculty Telemetry Loop",
+        "Attendance tracking and follow-up",
+        "Assignments, grades, and assessments",
+        "Connected view for students and families",
       ],
       color: "#FF5500",
     },
@@ -109,15 +109,15 @@ export default function Ecosystem() {
       <section className="scrub-text-container max-w-7xl mx-auto px-6 lg:px-8 py-32 text-center relative z-10">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EFEAD8]/5 border border-[#EFEAD8]/10 text-[10px] font-mono text-[#38BDF8] uppercase tracking-widest mb-8 font-black">
           <Terminal size={12} />
-          <span>[ OPERATIONAL REVOLUTION ]</span>
+          <span>[ CONNECTED UNIVERSITY ]</span>
         </div>
 
         <h2 className="scrub-text text-4xl sm:text-6xl md:text-7xl font-black uppercase tracking-tight leading-[0.95] max-w-5xl mx-auto text-[#EFEAD8]">
-          {"We kill administrative friction with a ".split(" ").map((word, i) => (
+          {"Bring the work together without making every team work the same way with a ".split(" ").map((word, i) => (
             <span key={i} className="inline-block mr-3">{word}</span>
           ))}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#FF5500] via-[#FF8800] to-[#38BDF8] inline-block">
-            relational telemetry engine.
+            connected university platform.
           </span>
         </h2>
       </section>
@@ -129,20 +129,20 @@ export default function Ecosystem() {
           {/* Legacy Chaos Left Side */}
           <div className="lg:col-span-5 space-y-6">
             <span className="text-[10px] font-mono tracking-[0.25em] text-[#FF5500] uppercase font-black">
-              [ THE FRAGMENTATION PROBLEM ]
+              [ THE COORDINATION PROBLEM ]
             </span>
             <h3 className="text-3xl font-black uppercase tracking-tight text-[#EFEAD8]">
-              Legacy spreadsheets break at scale.
+              Disconnected tools create busywork.
             </h3>
             <p className="text-xs font-mono text-[#EFEAD8]/70 leading-relaxed uppercase font-black">
-              // DISCONNECTED PORTALS, MANUAL CONFLICT CHECKING, AND SILOED DATA CAUSE CONTINUOUS OPERATIONAL CHAOS.
+              // SEPARATE SYSTEMS, MANUAL UPDATES, AND DUPLICATE RECORDS MAKE IT HARDER TO SUPPORT STUDENTS.
             </p>
 
             <div className="space-y-3 pt-4">
               {[
-                { title: "Siloed Student Records", err: "CRITICAL_ERR: 404 DATA_MISMATCH" },
-                { title: "Manual Timetable Overlaps", err: "CONFLICT: FACULTY_DOUBLE_BOOKED" },
-                { title: "Zero Real-Time Visibility", err: "WARN: NO_TELEMETRY_FOUND" },
+                { title: "Separate student records", err: "ISSUE: INFORMATION SPREAD ACROSS SYSTEMS" },
+                { title: "Manual timetable checking", err: "RISK: DOUBLE-BOOKINGS FOUND TOO LATE" },
+                { title: "No shared view", err: "GAP: TEAMS WORKING FROM DIFFERENT INFORMATION" },
               ].map((item) => (
                 <div key={item.title} className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl flex justify-between items-center">
                   <div>
@@ -174,10 +174,10 @@ export default function Ecosystem() {
 
               {/* Terminal Code Preview */}
               <div className="font-mono text-xs space-y-3 text-[#EFEAD8]/90 bg-[#0B132B] p-5 rounded-xl border border-[#EFEAD8]/10 font-black">
-                <p className="text-[#38BDF8]">// Initializing Relational Operational Schema...</p>
-                <p className="text-[#00FF66]">✓ Tenant isolation verified (Org_ID: 0x8F9A)</p>
-                <p className="text-[#EFEAD8]/70">→ Loading timetables across 14 Departments...</p>
-                <p className="text-[#FF5500]">⚡ Conflict Guard active: 0 Scheduling overlaps detected</p>
+                <p className="text-[#38BDF8]">// Connecting your university structure...</p>
+                <p className="text-[#00FF66]">✓ Shared records ready for all teams</p>
+                <p className="text-[#EFEAD8]/70">→ Loading timetables across 14 departments...</p>
+                <p className="text-[#FF5500]">⚡ No scheduling conflicts found</p>
                 <div className="pt-2 border-t border-[#EFEAD8]/10 flex items-center justify-between text-[10px] text-[#EFEAD8]/50">
                   <span>LATENCY: 12ms</span>
                   <span>STATUS: SYNCED</span>
@@ -196,10 +196,10 @@ export default function Ecosystem() {
 
           <div className="text-center max-w-2xl mx-auto space-y-4 mb-20">
             <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase font-black">
-              [ SYSTEM ARCHITECTURE ]
+              [ HOW IT ALL CONNECTS ]
             </span>
             <h2 className="text-3xl sm:text-5xl font-black uppercase tracking-tight text-[#EFEAD8]">
-              Modular Ecosystem Pillars
+              One platform, the priorities your teams actually manage.
             </h2>
           </div>
 
@@ -251,8 +251,8 @@ export default function Ecosystem() {
               </div>
 
               <div className="mt-8 pt-4 border-t border-[#EFEAD8]/10 flex justify-between items-center text-[10px] font-mono text-[#EFEAD8]/50 font-black">
-                <span>SECURITY: ENCRYPTED_TENANT</span>
-                <span>STATE: OPTIMAL</span>
+                <span>ACCESS: ROLE-BASED</span>
+                <span>STATUS: CONNECTED</span>
               </div>
             </div>
 

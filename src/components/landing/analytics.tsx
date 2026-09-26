@@ -119,24 +119,24 @@ export default function Analytics() {
           <div className="space-y-4 max-w-2xl">
             <div className="font-mono text-xs uppercase text-[#94BAC4] tracking-[0.25em] flex items-center gap-2">
               <Activity size={14} className="animate-pulse text-[#EAAD62]" />
-              <span>[ SYSTEM TELEMETRY ]</span>
+              <span>[ PRACTICAL VIEWS ]</span>
             </div>
             <h2 className="text-4xl sm:text-6xl font-extrabold tracking-tight font-sans uppercase leading-[0.95] text-[#ECDFCB]">
-              Turn raw data into <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E57D37] to-[#EAAD62]">institutional foresight.</span>
+              Turn raw data into <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E57D37] to-[#EAAD62]">useful information.</span>
             </h2>
           </div>
           <p className="text-[#94BAC4] font-sans text-sm md:text-base max-w-md leading-relaxed">
-            Eliminate operational blindness. Monitor real-time student trajectories, attendance patterns, and departmental throughput from a unified interface.
+            Use the information you already have to see what needs attention. SkillArc keeps practical views close to the teams responsible for acting on them.
           </p>
         </div>
 
         {/* Counter KPI Cards */}
         <div className="analytics-cards-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
           {[
-            { label: "Active Students", ref: studentValRef, icon: <Users size={16} className="text-[#E57D37]" />, change: "+12.4%" },
-            { label: "Faculty Members", ref: facultyValRef, icon: <BookOpen size={16} className="text-[#94BAC4]" />, change: "+4.1%" },
-            { label: "Programs Offered", ref: programValRef, icon: <TrendingUp size={16} className="text-[#EAAD62]" />, change: "OPTIMAL" },
-            { label: "Average Attendance", ref: attendanceValRef, icon: <Clock size={16} className="text-[#3A6DAF]" />, change: "STABLE" },
+            { label: "Students", ref: studentValRef, icon: <Users size={16} className="text-[#E57D37]" />, change: "View by program" },
+            { label: "Faculty", ref: facultyValRef, icon: <BookOpen size={16} className="text-[#94BAC4]" />, change: "See assignments" },
+            { label: "Programs", ref: programValRef, icon: <TrendingUp size={16} className="text-[#EAAD62]" />, change: "Track progress" },
+            { label: "Attendance", ref: attendanceValRef, icon: <Clock size={16} className="text-[#3A6DAF]" />, change: "Spot follow-up" },
           ].map((item) => (
             <div
               key={item.label}
@@ -173,8 +173,8 @@ export default function Analytics() {
           <div className="lg:col-span-7 bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 p-8 rounded-3xl backdrop-blur-2xl space-y-6 flex flex-col justify-between relative overflow-hidden group hover:border-[#EAAD62]/50 transition-all">
             <div className="flex justify-between items-center pb-4 border-b border-[#3A6DAF]/20">
               <div className="space-y-1">
-                <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Student Enrollment Trajectory</h3>
-                <p className="text-xs font-mono text-[#94BAC4]">// MULTI-TERM GROWTH TELEMETRY</p>
+                <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Progress at a glance</h3>
+                <p className="text-xs font-mono text-[#94BAC4]">// UNDERSTAND THE STUDENT PICTURE</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-mono text-[#E57D37] bg-[#E57D37]/10 border border-[#E57D37]/30 px-3 py-1.5 rounded-full">
                 <ArrowUpRight size={14} />
@@ -226,8 +226,8 @@ export default function Analytics() {
           <div className="lg:col-span-5 bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 p-8 rounded-3xl backdrop-blur-2xl space-y-6 flex flex-col justify-between bar-chart-container hover:border-[#EAAD62]/50 transition-all">
             <div className="flex justify-between items-center pb-4 border-b border-[#3A6DAF]/20">
               <div className="space-y-1">
-                <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Weekly Attendance Matrix</h3>
-                <p className="text-xs font-mono text-[#94BAC4]">// ACTIVE TARGET: 90%</p>
+                <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Attendance overview</h3>
+                <p className="text-xs font-mono text-[#94BAC4]">// WHERE TO FOLLOW UP</p>
               </div>
               <span className="text-xs font-mono text-[#EAAD62] bg-[#EAAD62]/10 border border-[#EAAD62]/30 px-3 py-1.5 rounded-full">
                 92% AVG

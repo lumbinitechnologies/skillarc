@@ -20,10 +20,10 @@ export default function StudentExperience() {
   const panels: PanelData[] = [
     {
       id: "01",
-      title: "Student Workspace",
-      tagline: "STUDENT PORTAL",
-      headline: "A personal academic dashboard.",
-      desc: "Enable students to manage active courses, check timetables, submit reports, and track term GPA metrics from a unified visual dashboard.",
+      title: "Student & Family",
+      tagline: "STUDENT & FAMILY",
+      headline: "Make the next step easier to see.",
+      desc: "Keep timetables, courses, assignments, attendance, grades, fees, events, and placement opportunities connected in one clear view.",
       iconColor: "#38BDF8",
       color: "from-[#38BDF8]/10 to-transparent",
       mockup: (
@@ -37,7 +37,7 @@ export default function StudentExperience() {
           </div>
           <div className="p-5 space-y-4">
             <span className="text-[9px] font-black text-[#EFEAD8]/50 uppercase tracking-widest block font-mono">
-              [ TODAY'S CLASSES ]
+              [ TODAY'S SCHEDULE ]
             </span>
             <div className="space-y-2.5">
               {[
@@ -63,10 +63,10 @@ export default function StudentExperience() {
     },
     {
       id: "02",
-      title: "Faculty Console",
-      tagline: "TEACHER CONSOLE",
-      headline: "Everything faculty need to teach.",
-      desc: "Give teachers administrative consoles to record roll call, coordinate course blueprints, publish assignment specifications, and update grades instantly.",
+      title: "Faculty",
+      tagline: "FACULTY WORKSPACE",
+      headline: "Teach with less administration.",
+      desc: "Give faculty a focused view of schedules, course materials, attendance, assignments, submissions, and grades.",
       iconColor: "#FF5500",
       color: "from-[#FF5500]/10 to-transparent",
       mockup: (
@@ -77,18 +77,18 @@ export default function StudentExperience() {
               <p className="text-[9px] text-[#EFEAD8]/50 font-mono font-black">Associate Professor • Computer Science</p>
             </div>
             <span className="text-[8px] border border-[#FF5500]/30 text-[#FF5500] bg-[#FF5500]/10 px-2 py-0.5 rounded font-black uppercase font-mono">
-              Council
+              Faculty
             </span>
           </div>
           <div className="p-5 space-y-3">
             <span className="text-[9px] font-black text-[#EFEAD8]/50 uppercase tracking-widest block font-mono">
-              [ ACTIVITIES FEED ]
+              [ TODAY'S PRIORITIES ]
             </span>
             <div className="space-y-2">
               {[
-                { label: "Today's Schedule", val: "3 lectures periods assigned", icon: <Calendar size={13} className="text-[#FF5500]" /> },
-                { label: "Pending Assessments", val: "42 Lab reports to review", icon: <ClipboardCheck size={13} className="text-[#FF5500]" /> },
-                { label: "Active Subjects", val: "CS-302 (DAA), CS-501 (DBMS)", icon: <BookMarked size={13} className="text-[#38BDF8]" /> },
+                { label: "Today's Schedule", val: "3 lectures scheduled", icon: <Calendar size={13} className="text-[#FF5500]" /> },
+                { label: "Pending Assessments", val: "42 submissions to review", icon: <ClipboardCheck size={13} className="text-[#FF5500]" /> },
+                { label: "Active Courses", val: "CS-302 (Algorithms), CS-501 (Databases)", icon: <BookMarked size={13} className="text-[#38BDF8]" /> },
               ].map((act, idx) => (
                 <div key={idx} className="flex items-center gap-3 bg-[#EFEAD8]/5 border border-[#EFEAD8]/10 p-2.5 rounded-xl">
                   <div className="h-7 w-7 rounded-lg bg-[#0B132B] border border-[#EFEAD8]/10 flex items-center justify-center">
@@ -107,31 +107,31 @@ export default function StudentExperience() {
     },
     {
       id: "03",
-      title: "Administration Hub",
-      tagline: "ADMIN BLUEPRINT",
-      headline: "Configure settings centrally.",
-      desc: "Synchronize department Blueprints, track syllabus completion benchmarks across divisions, resolve timetable clashes, and review global academic telemetry.",
+      title: "Institution Administration",
+      tagline: "INSTITUTION ADMIN",
+      headline: "Run the institution with the day in view.",
+      desc: "Bring admissions, programs, faculty, students, fees, schedules, attendance, events, and placements into one practical workspace.",
       iconColor: "#38BDF8",
       color: "from-[#38BDF8]/10 to-transparent",
       mockup: (
         <div className="bg-[#050B1E]/90 border border-[#EFEAD8]/15 rounded-2xl overflow-hidden w-full max-w-md shadow-2xl backdrop-blur-xl">
           <div className="bg-[#0B132B]/60 px-5 py-3.5 border-b border-[#EFEAD8]/10 flex items-center justify-between">
             <div>
-              <h4 className="text-xs font-black text-[#EFEAD8]">Central Command</h4>
-              <p className="text-[9px] text-[#EFEAD8]/50 font-mono font-black">Institution Admin Console</p>
+              <h4 className="text-xs font-black text-[#EFEAD8]">Campus Operations</h4>
+              <p className="text-[9px] text-[#EFEAD8]/50 font-mono font-black">Institution Admin Dashboard</p>
             </div>
             <span className="text-[8px] border border-[#38BDF8]/30 text-[#38BDF8] bg-[#38BDF8]/10 px-2 py-0.5 rounded font-black uppercase font-mono">
-              Live OS
+              Active
             </span>
           </div>
           <div className="p-5 space-y-4">
             <span className="text-[9px] font-black text-[#EFEAD8]/50 uppercase tracking-widest block font-mono">
-              [ TELEMETRY ALERTS ]
+              [ CAMPUS PRIORITIES ]
             </span>
             <div className="space-y-2.5">
               {[
-                { title: "Conflict Resolution", desc: "No conflicts detected in Semester 6 drafts" },
-                { title: "Syllabus Sync", desc: "Batch A Computer Science synced (80% complete)" },
+                { title: "Timetable Status", desc: "No schedule conflicts detected in published drafts" },
+                { title: "Academic Progress", desc: "Computer Science cohort syllabus 80% complete" },
               ].map((alert, idx) => (
                 <div key={idx} className="bg-[#EFEAD8]/5 border border-[#EFEAD8]/10 p-3 rounded-xl flex items-start gap-3">
                   <div className="h-2 w-2 rounded-full bg-[#FF5500] mt-1.5 shrink-0" />
@@ -156,13 +156,13 @@ export default function StudentExperience() {
       {/* Header */}
       <div className="max-w-7xl mx-auto px-6 lg:px-8 mb-16 text-center md:text-left">
         <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase bg-[#EFEAD8]/5 px-4 py-1.5 rounded-full border border-[#EFEAD8]/10 inline-block mb-4 font-black">
-          [ ACADEMIC PORTALS ]
+          [ WORKSPACES IN ACTION ]
         </span>
         <h2 className="text-3xl sm:text-5xl font-sans font-black uppercase tracking-tight text-[#EFEAD8] leading-none">
-          One system. Dedicated consoles.
+          One system. Dedicated workspaces.
         </h2>
         <p className="text-[#EFEAD8]/70 text-sm max-w-xl mt-3 font-mono uppercase tracking-wider font-black">
-          Explore customized dashboard workspaces designed to align academic operations across different organizational layers.
+          The university stays connected while administrators, faculty, students, and families each get a clear, focused workspace.
         </p>
       </div>
 
@@ -252,7 +252,7 @@ export default function StudentExperience() {
                       className="flex items-center gap-2 text-xs font-black uppercase tracking-widest font-mono hover:underline cursor-pointer"
                       style={{ color: panel.iconColor }}
                     >
-                      <span>Explore Portal Workspace</span>
+                      <span>Explore Workspace</span>
                       <ArrowRight size={13} />
                     </button>
                   </div>

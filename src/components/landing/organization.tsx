@@ -9,7 +9,13 @@ gsap.registerPlugin(ScrollTrigger)
 
 export default function Organization() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [selectedNode, setSelectedNode] = useState("Central Org")
+  const [selectedNode, setSelectedNode] = useState("Central University Group")
+
+  const nodeDescriptions: Record<string, string> = {
+    "Central University Group": "A shared view across institutions, campuses, and executive priorities.",
+    "Institution A (Engineering Campus)": "The operational view for administrators, departments, admissions, and campus operations.",
+    "Department of Computer Science": "The academic structure behind cohorts, faculty assignments, courses, and schedules.",
+  }
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -40,24 +46,24 @@ export default function Organization() {
 
           {/* Left Text Narrative */}
           <div className="lg:col-span-5 space-y-6">
-            <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase">
-              [ RELATIONAL HIERARCHY ]
+            <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase font-bold">
+              [ INSTITUTIONAL STRUCTURE ]
             </span>
             <h2 className="text-3xl sm:text-5xl font-extrabold uppercase tracking-tight leading-none">
-              Hierarchical Architecture Engine
+              The right information, in the right hands.
             </h2>
             <p className="text-xs font-mono text-white/50 leading-relaxed uppercase">
-              // DEFINE YOUR ENTIRE CAMPUS ECOSYSTEM FROM A SINGLE RELATIONAL TREE WITHOUT ISOLATION LOSS.
+              // BRING YOUR EXISTING STRUCTURE INTO ONE DEPENDABLE WORKSPACE, WITH CLEAR RESPONSIBILITIES FOR EACH TEAM.
             </p>
 
             {/* Inspector Readout Card */}
             <div className="p-6 bg-[#0A0A0A] border border-white/10 rounded-2xl space-y-3 font-mono text-xs">
               <div className="flex items-center justify-between text-[#FF5500]">
-                <span>INSPECTOR: {selectedNode}</span>
+                <span className="font-bold">VIEW: {selectedNode}</span>
                 <Cpu size={14} />
               </div>
               <p className="text-white/60 text-[11px] leading-relaxed">
-                Active tenant node maintaining isolated data schemas, role assignment contexts, and live schedule telemetry.
+                {nodeDescriptions[selectedNode] || "Bring your existing structure into one dependable workspace, with clear responsibilities for each team."}
               </p>
             </div>
           </div>
@@ -65,8 +71,8 @@ export default function Organization() {
           {/* Right Interactive Tree Node Console */}
           <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/15 rounded-2xl p-8 shadow-2xl relative font-mono">
             <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-              <span className="text-xs text-white/40 uppercase">// CAMPUS_SCHEMA_MAPPING</span>
-              <span className="text-[9px] px-2 py-0.5 bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] rounded uppercase">
+              <span className="text-xs text-white/40 uppercase">// CAMPUS_STRUCTURE</span>
+              <span className="text-[9px] px-2 py-0.5 bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] rounded uppercase font-bold">
                 INTERACTIVE
               </span>
             </div>
@@ -74,15 +80,15 @@ export default function Organization() {
             <div className="space-y-4">
               {/* Central Org Node */}
               <button
-                onClick={() => setSelectedNode("Central Org")}
-                className={`tree-item w-full flex items-center justify-between p-4 rounded-xl border transition-all ${selectedNode === "Central Org"
+                onClick={() => setSelectedNode("Central University Group")}
+                className={`tree-item w-full flex items-center justify-between p-4 rounded-xl border transition-all ${selectedNode === "Central University Group"
                     ? "bg-[#FF5500]/10 border-[#FF5500] text-white"
                     : "bg-white/5 border-white/10 text-white/60 hover:border-white/30"
                   }`}
               >
                 <div className="flex items-center gap-3">
                   <Landmark size={16} className="text-[#FF5500]" />
-                  <span className="text-xs font-bold uppercase">Central University Organization</span>
+                  <span className="text-xs font-bold uppercase">Central University Group</span>
                 </div>
                 <ChevronRight size={14} />
               </button>
@@ -90,15 +96,15 @@ export default function Organization() {
               {/* Sub-Branch Institutions */}
               <div className="pl-6 border-l border-dashed border-white/15 space-y-3 ml-4">
                 <button
-                  onClick={() => setSelectedNode("Engineering Campus")}
-                  className={`tree-item w-full flex items-center justify-between p-3.5 rounded-xl border transition-all ${selectedNode === "Engineering Campus"
+                  onClick={() => setSelectedNode("Institution A (Engineering Campus)")}
+                  className={`tree-item w-full flex items-center justify-between p-3.5 rounded-xl border transition-all ${selectedNode === "Institution A (Engineering Campus)"
                       ? "bg-[#38BDF8]/10 border-[#38BDF8] text-white"
                       : "bg-white/5 border-white/10 text-white/60 hover:border-white/30"
                     }`}
                 >
                   <div className="flex items-center gap-3">
                     <Building2 size={15} className="text-[#38BDF8]" />
-                    <span className="text-xs uppercase">Institution A (Engineering Campus)</span>
+                    <span className="text-xs uppercase font-bold">Institution A (Engineering Campus)</span>
                   </div>
                   <ChevronRight size={14} />
                 </button>
@@ -106,15 +112,15 @@ export default function Organization() {
                 {/* Sub-Branch Departments */}
                 <div className="pl-6 border-l border-dashed border-white/15 space-y-2 ml-3">
                   <button
-                    onClick={() => setSelectedNode("Department of CS")}
-                    className={`tree-item w-full flex items-center justify-between p-3 rounded-lg border transition-all ${selectedNode === "Department of CS"
+                    onClick={() => setSelectedNode("Department of Computer Science")}
+                    className={`tree-item w-full flex items-center justify-between p-3 rounded-lg border transition-all ${selectedNode === "Department of Computer Science"
                         ? "bg-[#FF5500]/10 border-[#FF5500] text-white"
                         : "bg-[#050505] border-white/10 text-white/50 hover:border-white/30"
                       }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <FolderGit2 size={14} className="text-[#FF5500]" />
-                      <span className="text-[11px] uppercase">Department of Computer Science</span>
+                      <span className="text-[11px] uppercase font-bold">Department of Computer Science</span>
                     </div>
                     <ChevronRight size={12} />
                   </button>
@@ -122,7 +128,7 @@ export default function Organization() {
                   <div className="pl-6 border-l border-dashed border-white/15 space-y-1.5 ml-2">
                     <div className="p-2 bg-white/5 rounded-md text-[10px] text-white/40 flex items-center gap-2">
                       <GraduationCap size={12} className="text-[#38BDF8]" />
-                      <span>B.Tech CSE Program</span>
+                      <span>B.Tech Computer Science Program</span>
                     </div>
                   </div>
                 </div>

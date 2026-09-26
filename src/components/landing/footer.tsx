@@ -77,27 +77,27 @@ export function CtaSection({ variant = "orange" }: { variant?: FooterVariant }) 
     >
       <div className={`absolute inset-x-10 top-10 h-40 rounded-full blur-3xl ${styles.glow} pointer-events-none`} />
       <h2 className={`relative text-4xl sm:text-5xl font-sans font-black uppercase tracking-tight ${styles.title} leading-tight`}>
-        Ready to simplify academic management?
+        Need a university-specific conversation?
       </h2>
       <p className={`relative text-xs sm:text-sm max-w-lg mx-auto leading-relaxed font-mono uppercase tracking-wider font-bold ${styles.body}`}>
-        Bring your institutions, teams and students onto one connected platform. Set up your custom academic operating system today.
+        Talk with the SkillArc team. Bring your current workflow, campus structure, and student-support priorities. We’ll show you where the platform fits.
       </p>
       <div className="relative flex flex-wrap justify-center gap-4 pt-4">
-        <Link
-          href="/auth/login"
-          className={`px-8 py-3.5 border font-black text-xs font-mono uppercase tracking-wider rounded-full transition-all duration-300 shadow-lg ${styles.primary}`}
-        >
-          Request a Demo
-        </Link>
         <a
           href="https://www.lumbinitechnologies.com/Contact"
           target="_blank"
           rel="noopener noreferrer"
+          className={`px-8 py-3.5 border font-black text-xs font-mono uppercase tracking-wider rounded-full transition-all duration-300 shadow-lg ${styles.primary}`}
+        >
+          Book a Demo
+        </a>
+        <Link
+          href="/platform"
           className={`px-8 py-3.5 border font-black text-xs font-mono uppercase tracking-wider rounded-full transition-all duration-300 flex items-center gap-2 shadow-lg ${styles.secondary}`}
         >
-          <span>Talk to our team</span>
+          <span>Explore the platform</span>
           <ArrowRight size={14} />
-        </a>
+        </Link>
       </div>
     </motion.section>
   )
@@ -121,9 +121,9 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
     {
       title: "Platform",
       links: [
-        { label: "Platform Architecture", href: "/platform" },
-        { label: "Role Solutions", href: "/solutions" },
-        { label: "Core Engines", href: "/features" },
+        { label: "Platform Overview", href: "/platform" },
+        { label: "Solutions by Role", href: "/solutions" },
+        { label: "Features & Tools", href: "/features" },
         { label: "Admissions Portal", href: "/apply" },
       ],
     },
@@ -131,17 +131,17 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
       title: "Company",
       links: [
         { label: "About SkillArc", href: "/about" },
-        { label: "Contact Us", href: "https://www.lumbinitechnologies.com/Contact", external: true },
+        { label: "Contact our team", href: "https://www.lumbinitechnologies.com/Contact", external: true },
         { label: "Lumbini Technologies", href: "https://www.lumbinitechnologies.com", external: true },
-        { label: "Account Sign In", href: "/auth/login" },
+        { label: "Sign in", href: "/auth/login" },
       ],
     },
     {
       title: "Resources",
       links: [
-        { label: "Resource Library", href: "/resources" },
+        { label: "Resource Hub", href: "/resources" },
         { label: "Application Status", href: "/apply/status" },
-        { label: "Request Access", href: "/auth/login" },
+        { label: "Admissions Portal", href: "/apply" },
       ],
     },
   ]
@@ -165,7 +165,7 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
             />
           </Link>
           <p className="text-xs text-[#0B132B]/80 max-w-sm leading-relaxed font-mono font-bold">
-            The unified academic operating system designed for modern educational institutions, multi-campus organizations, and student success.
+            A connected university management platform for clearer operations and better student support.
           </p>
         </div>
 

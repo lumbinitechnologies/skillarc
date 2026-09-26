@@ -375,7 +375,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 backdrop-blur-md border border-amber-400/40 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FCD34D] animate-pulse shadow-[0_0_8px_#FCD34D]" />
           <span className="text-[10px] uppercase tracking-[0.25em] text-[#FCD34D] font-mono font-bold">
-            ARCH // CORE
+            ARCH // STRUCTURE
           </span>
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
@@ -384,7 +384,7 @@ export default function BookScrollAnimation() {
           </span>
         </h2>
         <p className="mt-4 text-xs sm:text-sm text-white/75 font-mono font-medium max-w-[260px] leading-[1.65] hidden sm:block">
-          A living database architecture for modern universities and colleges.
+          A connected platform for modern universities, colleges, and students.
         </p>
       </div>
 
@@ -393,7 +393,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E57D37]/20 backdrop-blur-md border border-[#E57D37]/60 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(229,125,55,0.3)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FFA366] animate-pulse shadow-[0_0_8px_#FFA366]" />
           <span className="text-[10px] uppercase tracking-[0.25em] text-[#FFA366] font-mono font-bold">
-            OS // TELEMETRY
+            OPERATIONS // VISIBILITY
           </span>
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(229,125,55,0.3)]">
@@ -402,7 +402,7 @@ export default function BookScrollAnimation() {
           </span>
         </h2>
         <p className="mt-4 text-xs sm:text-sm text-[#ECDFCB]/75 font-mono font-medium max-w-[260px] leading-[1.65] hidden sm:block">
-          Unified operational engine orchestrating schedules, placements & telemetry.
+          Unified platform orchestrating admissions, schedules, academics & student success.
         </p>
       </div>
 
@@ -429,16 +429,16 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-sky-500/20 backdrop-blur-md border border-sky-400/60 mb-3.5 shadow-[0_0_15px_rgba(56,189,248,0.35)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8]" />
           <span className="text-[10px] uppercase tracking-[0.2em] text-[#38BDF8] font-mono font-bold">
-            02 // TELEMETRY
+            02 // STUDENT PROGRESS
           </span>
         </div>
         <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight mb-3 sm:mb-4 leading-tight">
           <span className="text-transparent bg-clip-text bg-gradient-to-b from-white/95 via-white/60 to-white/20 [-webkit-text-stroke:1px_rgba(255,255,255,0.2)]">
-            REAL-TIME <br className="hidden sm:inline" />INTELLIGENCE
+            CONNECTED <br className="hidden sm:inline" />PROGRESS
           </span>
         </h2>
         <p className="text-xs sm:text-sm md:text-base text-white/80 leading-[1.65] font-normal">
-          Automated class attendance, direct student engagement telemetry, and real-time corporate recruitment sync.
+          Everyday attendance, course milestones, assignment tracking, and placement opportunities in clear view.
         </p>
       </div>
 
@@ -456,7 +456,7 @@ export default function BookScrollAnimation() {
 
       <div className="beat-d-bottom absolute inset-x-6 bottom-20 sm:bottom-24 md:bottom-20 flex flex-col items-center text-center pointer-events-none opacity-0 z-20 max-w-sm sm:max-w-lg mx-auto">
         <p className="text-xs sm:text-sm md:text-base text-white/85 mb-5 sm:mb-6 leading-[1.65] font-normal max-w-xs sm:max-w-md">
-          Deploy SkillArc across your institution with unified curriculum structures and zero operational downtime.
+          Deploy SkillArc across your institution to bring teams, faculty, and students onto one connected platform.
         </p>
         <button
           onClick={() => {
@@ -464,7 +464,7 @@ export default function BookScrollAnimation() {
           }}
           className="pointer-events-auto px-8 sm:px-9 py-3.5 sm:py-4 rounded-full bg-[#E57D37] text-white hover:bg-white hover:text-[#0B132B] font-bold text-xs sm:text-sm uppercase tracking-wider shadow-[0_0_35px_rgba(229,125,55,0.6)] hover:shadow-[0_0_50px_rgba(255,255,255,0.8)] transition-all duration-300 transform hover:scale-105 active:scale-95 border-none cursor-pointer flex items-center gap-2.5"
         >
-          <span>Access Gateway</span>
+          <span>Explore Platform</span>
           <ArrowRight size={14} />
         </button>
       </div>
