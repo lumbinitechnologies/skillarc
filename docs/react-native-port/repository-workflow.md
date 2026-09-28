@@ -29,8 +29,8 @@ Each feature PR declares AI use and human verification, test commands, and Andro
 
 ## Enable protection in order
 
-1. Merge the initial CI/CODEOWNERS PR and confirm check names on a fork test PR. Verify wrong-group paths and missing Keane approval fail the review check.
-2. `@lumbinitechnologies` enables the existing disabled `protect-main` ruleset: PR, one CODEOWNER approval, stale-approval dismissal, resolved conversations, required CI/review checks, linear history, no deletion/force push, and squash merge. Disable direct merge commits and rebase merging in repo settings. Avoid routine bypass.
+1. Independently review and merge the initial [CI/CODEOWNERS PR](https://github.com/lumbinitechnologies/skillarc-mobile/pull/18). Disposable [fork PR #19](https://github.com/lumbinitechnologies/skillarc-mobile/pull/19) passed `checks` and was closed. Then confirm `governance/review-policy` on a new fork PR against `main`; verify wrong-group paths and missing Keane approval fail. GitHub has not yet installed the review workflow on the default branch, so the first fork probe could only test CI.
+2. `@lumbinitechnologies` enables the existing disabled `protect-main` ruleset: PR, one CODEOWNER approval, stale-approval dismissal, resolved conversations, required `checks` and `governance/review-policy`, linear history, no deletion/force push, and squash merge. Disable direct merge commits and rebase merging in repo settings. Avoid routine bypass.
 3. Verify missing check, unresolved thread and missing approval block merge. Enable available public-repo secret scanning, push protection and dependency alerts.
 
 [GitHub Free rulesets apply to public repos](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets). The SkillArc repo is private and its ruleset API currently returns a GitHub Free upgrade error; use lead-controlled server PR review unless the account plan changes.
