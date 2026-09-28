@@ -6,6 +6,8 @@
 
 Create one **public user-level Project**, `SkillArc Mobile R1`, under `lumbinitechnologies`, then grant `keanesc` admin access. Use weekly W01–W06 iterations from [delivery](delivery.md), Group values G1–G8/Solo/Backend, and statuses `Backlog`, `Ready`, `In Progress`, `Review`, `Blocked`, `Done`. Add current-sprint, group, and review-queue views. The owner must create/grant access; `keanesc` needs the GitHub CLI `project` scope to edit it.
 
+**Owner handoff:** `keanesc` now has the `project` scope, but GitHub rejected `gh project create --owner lumbinitechnologies` because he cannot create a Project under that user account. The `@lumbinitechnologies` operator should run `gh project create --owner lumbinitechnologies --title 'SkillArc Mobile R1'`, set visibility to public, grant `keanesc` admin, then add the six one-week iterations starting 30 September in the Project UI. Configure the Group and Status fields and the three views there; Keane can then add issues #1–#17 and manage the board with `gh project item-add` or the UI.
+
 Each W01/W02 Jira group task gets a complete intern-facing GitHub issue with Jira key/URL, `mobile-gN` and `mobile-wNN` labels, captain, allowed paths, API dependency, acceptance criteria and device evidence. GitHub is the daily board; Keane updates Jira at Tuesday review. Later, a Jira site admin and GitHub account owner connect **both** repos via [GitHub for Atlassian](https://marketplace.atlassian.com/apps/1219592/github-for-jira?tab=overview). Put Jira keys in issue titles, branch names, commits and PR titles; verify one PR appears on its Jira issue. This does not give interns Jira access.
 
 ## Branches and reviews
