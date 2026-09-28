@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -6,8 +7,6 @@ import { getCurrentUserContext } from "@/lib/user-context"
 // POST - Create Program
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createSupabaseServerClient()
-
     const profile = await getCurrentUserContext()
     if (!profile) {
       return NextResponse.json(
@@ -35,29 +34,38 @@ export async function POST(request: NextRequest) {
       organization_id,
     } = body
 
-    if (
-      !name ||
-      !department_id ||
-      !institution_id
-    ) {
+    if (!name?.trim()) {
       return NextResponse.json(
         {
-          error:
-            "Missing required fields",
+          error: "Program name is required.",
         },
         { status: 400 }
       )
     }
+
+    const targetInstitutionId = institution_id || profile.institution_id
+    const targetOrgId = organization_id || profile.organization_id
+
+    if (!targetInstitutionId) {
+      return NextResponse.json(
+        {
+          error: "Institution ID is required.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const supabase = createSupabaseAdminClient()
 
     const { data, error } =
       await supabase
         .from("programs")
         .insert([
           {
-            name,
-            department_id,
-            institution_id,
-            organization_id,
+            name: name.trim(),
+            department_id: department_id || null,
+            institution_id: targetInstitutionId,
+            organization_id: targetOrgId,
           },
         ])
         .select(`
@@ -69,19 +77,25 @@ export async function POST(request: NextRequest) {
         `)
         .single()
 
-    if (error) throw error
+    if (error) {
+      console.error("Program creation error:", error)
+      return NextResponse.json(
+        { error: error.message || "Failed to create program" },
+        { status: 400 }
+      )
+    }
 
     return NextResponse.json(data)
   } catch (error) {
     console.error(
-      "Program creation error:",
+      "Program creation unexpected error:",
       error
     )
 
     return NextResponse.json(
       {
         error:
-          "Internal server error",
+          error instanceof Error ? error.message : "Internal server error",
       },
       { status: 500 }
     )

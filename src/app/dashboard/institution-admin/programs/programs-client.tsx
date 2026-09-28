@@ -114,8 +114,9 @@ export function ProgramsClientPage({
         }),
       })
 
+      const resData = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error("Failed to create program")
+        throw new Error(resData.error || "Failed to create program")
       }
 
       await loadPrograms()
@@ -136,6 +137,7 @@ export function ProgramsClientPage({
             : "Failed to create program",
         variant: "destructive",
       })
+      throw error
     } finally {
       setIsLoading(false)
     }
@@ -161,8 +163,9 @@ export function ProgramsClientPage({
         }
       )
 
+      const resData = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error("Failed to update program")
+        throw new Error(resData.error || "Failed to update program")
       }
 
       await loadPrograms()
@@ -185,6 +188,7 @@ export function ProgramsClientPage({
             : "Failed to update program",
         variant: "destructive",
       })
+      throw error
     } finally {
       setIsLoading(false)
     }
@@ -206,8 +210,9 @@ export function ProgramsClientPage({
         }
       )
 
+      const resData = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error("Failed to delete")
+        throw new Error(resData.error || "Failed to delete program")
       }
 
       await loadPrograms()

@@ -18,6 +18,7 @@ interface FacultyListProps {
   isLoading?: boolean
   onEdit?: (faculty: FacultyWithStats) => void
   onDelete?: (facultyId: string) => void
+  onResendInvite?: (faculty: FacultyWithStats) => void
 }
 
 export function FacultyList({
@@ -25,6 +26,7 @@ export function FacultyList({
   isLoading = false,
   onEdit,
   onDelete,
+  onResendInvite,
 }: FacultyListProps) {
   if (isLoading) {
     return (

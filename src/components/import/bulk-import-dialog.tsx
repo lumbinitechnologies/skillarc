@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog"
 import { Button } from "../ui/button"
 import { useToast } from "../ui/use-toast"
-import { AlertCircle, CheckCircle2, FileText, UploadCloud } from "lucide-react"
+import { AlertCircle, CheckCircle2, Download, FileText, UploadCloud } from "lucide-react"
 import { normalizeImportRows, parseCsvText } from "@/lib/bulk-import"
 
 interface BulkImportDialogProps {
@@ -15,36 +15,55 @@ interface BulkImportDialogProps {
   onImported?: () => void
 }
 
-const ENTITY_META: Record<BulkImportDialogProps["entity"], { title: string; description: string; hints: string[] }> = {
+const ENTITY_META: Record<BulkImportDialogProps["entity"], { title: string; description: string; hints: string[]; sampleCsv: string }> = {
   students: {
     title: "Import Students",
     description: "Upload a CSV with student details and section assignments.",
     hints: ["Required: name, email", "Optional: section_name, program_name, semester, registration_number, phone, admission_year"],
+    sampleCsv: `name,email,section_name,semester,registration_number,phone,admission_year
+John Doe,john.doe@example.com,Section A,1,REG1001,+1234567890,2024
+Jane Smith,jane.smith@example.com,Section B,2,REG1002,+1234567891,2024`,
   },
   faculty: {
     title: "Import Faculty",
     description: "Upload a CSV with faculty details and department assignments.",
     hints: ["Required: name, email", "Optional: department_name"],
+    sampleCsv: `name,email,department_name
+Dr. Robert Smith,robert.smith@example.com,Computer Science
+Prof. Sarah Connor,sarah.connor@example.com,Information Technology
+Dr. James Wilson,james.wilson@example.com,Mechanical Engineering`,
   },
   subjects: {
     title: "Import Subjects",
     description: "Upload a CSV with subjects and optional program mapping.",
-    hints: ["Required: name, code", "Optional: semester, program_name, credits, subject_type"],
+    hints: ["Required: name, code", "Optional: semester, program_name, credits, subject_type (THEORY, LAB, ELECTIVE)"],
+    sampleCsv: `name,code,semester,program_name,credits,subject_type
+Data Structures,CS201,3,Computer Science,4,THEORY
+Operating Systems,CS301,5,Computer Science,4,LAB`,
   },
   "faculty-subjects": {
     title: "Import Faculty Subject Mapping",
     description: "Upload a CSV where each row assigns a faculty member to a subject.",
     hints: ["Required: faculty_email or faculty_name", "Required: subject_code or subject_name"],
+    sampleCsv: `faculty_email,subject_code
+robert.smith@example.com,CS201
+sarah.connor@example.com,CS301`,
   },
   parents: {
     title: "Import Parents",
     description: "Upload a CSV with parent account details.",
     hints: ["Required: name, email", "Optional: phone"],
+    sampleCsv: `name,email,phone
+Michael Doe,michael.doe@example.com,+1234567890
+Mary Smith,mary.smith@example.com,+1234567891`,
   },
   timetable: {
     title: "Import Timetable",
     description: "Upload a CSV with timetable slots for sections.",
     hints: ["Required: day, period, section_name, subject_code", "Optional: semester, faculty_email"],
+    sampleCsv: `day,period,section_name,subject_code,faculty_email
+Monday,1,Section A,CS201,robert.smith@example.com
+Monday,2,Section A,CS301,sarah.connor@example.com`,
   },
 }
 
@@ -118,6 +137,18 @@ export function BulkImportDialog({ open, onOpenChange, entity, institutionId, on
     }
   }
 
+  function handleDownloadTemplate() {
+    const blob = new Blob([meta.sampleCsv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", `${entity}-sample.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -135,6 +166,16 @@ export function BulkImportDialog({ open, onOpenChange, entity, institutionId, on
               <p className="text-sm font-semibold text-slate-800">Upload CSV</p>
               <p className="text-xs text-slate-500">Accepted format: .csv</p>
             </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+              className="text-xs h-8 gap-1.5 border-slate-200 hover:bg-slate-50 text-slate-700"
+            >
+              <Download className="h-3.5 w-3.5 text-slate-500" />
+              Sample CSV
+            </Button>
           </div>
 
           <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center transition hover:border-indigo-400 hover:bg-indigo-50/50">

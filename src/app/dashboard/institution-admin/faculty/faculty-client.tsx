@@ -129,7 +129,8 @@ export function FacultyClientPage({
       const response = await fetch(`/api/faculty/${deleteId}`, {
         method: "DELETE",
       })
-      if (!response.ok) throw new Error("Failed to delete faculty")
+      const resData = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(resData.error || "Failed to delete faculty")
       await loadFaculty()
       setDeleteOpen(false)
       setDeleteId(null)
@@ -145,6 +146,38 @@ export function FacultyClientPage({
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleResendInvite = async (targetFaculty: FacultyWithStats) => {
+    try {
+      toast({
+        title: "Sending Invitation...",
+        description: `Sending invite email to ${targetFaculty.email}.`,
+      })
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: targetFaculty.email,
+          role: targetFaculty.role || "FACULTY",
+          institutionId,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "Failed to resend invite")
+      }
+      toast({
+        title: "Invitation Sent",
+        description: `Fresh invitation email sent to ${targetFaculty.email}.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to resend invitation",
+        variant: "destructive",
+      })
     }
   }
 
@@ -196,6 +229,7 @@ export function FacultyClientPage({
             setIsOpen(true)
           }}
           onDelete={triggerDelete}
+          onResendInvite={handleResendInvite}
         />
       </Card>
       </motion.div>

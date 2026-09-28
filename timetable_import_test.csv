@@ -1,0 +1,4 @@
+day,period,section_name,subject_code,faculty_email
+Monday,1,cse *a,t101,ada.lovelace.test@example.com
+Monday,2,cse *a,t101,grace.hopper.test@example.com
+Tuesday,1,cse *a,t101,ada.lovelace.test@example.com

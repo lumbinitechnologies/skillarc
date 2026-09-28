@@ -143,7 +143,7 @@ export function CreateFacultyDialog({
           </div>
 
           {/* Department select */}
-          {departments.length > 1 && (
+          {departments.length > 0 ? (
             <div className="space-y-1.5">
               <Label htmlFor="department" className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Academic Department</Label>
               <select
@@ -152,13 +152,17 @@ export function CreateFacultyDialog({
                 onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
                 className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300"
               >
-                <option value="">Select department...</option>
+                <option value="">No Department (Unassigned)</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
                     {dept.name}
                   </option>
                 ))}
               </select>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-500">
+              💡 No departments configured yet. You can register faculty now and assign them to a department later from the Departments tab.
             </div>
           )}
 

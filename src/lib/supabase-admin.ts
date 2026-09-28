@@ -7,7 +7,7 @@ export function createSupabaseAdminClient() {
   }
   // Defensively strip any accidentally pasted trailing environment variables (e.g. from copy-paste mistakes)
   const serviceRoleKey = rawKey.split(/\s+/)[0].trim();
-  
+
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceRoleKey

@@ -57,7 +57,8 @@ export async function proxy(request: NextRequest) {
 
   const isPublicApiRoute =
     pathname === "/api/assistant/public" ||
-    pathname.startsWith("/api/admissions/public-")
+    pathname.startsWith("/api/admissions/public-") ||
+    pathname.startsWith("/api/auth/")
 
   // Fast-path public marketing and admission landing routes that require no auth checks
   const isPublicMarketingRoute =

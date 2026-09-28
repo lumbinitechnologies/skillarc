@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { ROLES } from "@/constants/roles"
 import { inviteUser, resolveAppOrigin } from "@/lib/invite-user"
 
@@ -38,63 +39,68 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid import payload" }, { status: 400 })
     }
 
+    const admin = createSupabaseAdminClient()
     const origin = resolveAppOrigin(request.headers)
     let createdCount = 0
 
+    // ─────────────────────────────────────────────────────────────
+    // 1. STUDENTS
+    // ─────────────────────────────────────────────────────────────
     if (entity === "students") {
       for (const row of rows) {
         const email = String(row.email || "").trim()
         const name = String(row.name || "").trim()
         if (!email || !name) continue
 
-        await inviteUser({
-          email,
-          role: ROLES.STUDENT,
-          institutionId: institution_id,
-          organizationId: profile.organization_id,
-          origin,
-        })
+        try {
+          const inviteResult = await inviteUser({
+            email,
+            role: ROLES.STUDENT,
+            institutionId: institution_id,
+            organizationId: profile.organization_id,
+            origin,
+          })
 
-        const sectionName = String(row.section_name || "").trim()
-        const semester = Number(row.semester || 1)
+          const studentUserId = inviteResult?.userId
+          if (!studentUserId) continue
 
-        let sectionId: string | null = null
-        if (sectionName) {
-          const { data: section } = await supabase
-            .from("sections")
-            .select("id")
-            .eq("institution_id", institution_id)
-            .ilike("name", `%${sectionName}%`)
-            .maybeSingle()
-          sectionId = section?.id ?? null
-        }
+          const sectionName = String(row.section_name || "").trim()
+          const programName = String(row.program_name || "").trim()
+          const semester = Number(row.semester || 1)
 
-        const { data: invitedUser } = await supabase
-          .from("users")
-          .select("id")
-          .eq("email", email)
-          .single()
+          let sectionId: string | null = null
+          let programId: string | null = null
 
-        if (invitedUser?.id) {
-          await supabase.from("users").update({
+          if (sectionName) {
+            const { data: section } = await admin
+              .from("sections")
+              .select("id, program_id")
+              .eq("institution_id", institution_id)
+              .ilike("name", `%${sectionName}%`)
+              .maybeSingle()
+            sectionId = section?.id ?? null
+            programId = section?.program_id ?? null
+          }
+
+          if (!programId && programName) {
+            const { data: prog } = await admin
+              .from("programs")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .ilike("name", `%${programName}%`)
+              .maybeSingle()
+            programId = prog?.id ?? null
+          }
+
+          await admin.from("users").update({
             name: toTitleCase(name),
             role: ROLES.STUDENT,
             institution_id: institution_id,
             phone: row.phone || null,
-          }).eq("id", invitedUser.id)
+          }).eq("id", studentUserId)
 
-          let programId: string | null = null
-          if (sectionId) {
-            const { data: sec } = await supabase
-              .from("sections")
-              .select("program_id")
-              .eq("id", sectionId)
-              .maybeSingle()
-            programId = sec?.program_id ?? null
-          }
-
-          await supabase.from("students").upsert({
-            id: invitedUser.id,
+          await admin.from("students").upsert({
+            id: studentUserId,
             institution_id: institution_id,
             section_id: sectionId,
             program_id: programId,
@@ -104,72 +110,124 @@ export async function POST(request: NextRequest) {
           }, { onConflict: "id" })
 
           createdCount += 1
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import student (${email}):`, rowError)
         }
       }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. FACULTY
+    // ─────────────────────────────────────────────────────────────
     } else if (entity === "faculty") {
       for (const row of rows) {
         const email = String(row.email || "").trim()
         const name = String(row.name || "").trim()
         if (!email || !name) continue
 
-        await inviteUser({
-          email,
-          role: ROLES.FACULTY,
-          institutionId: institution_id,
-          organizationId: profile.organization_id,
-          origin,
-        })
+        try {
+          await inviteUser({
+            email,
+            role: ROLES.FACULTY,
+            institutionId: institution_id,
+            organizationId: profile.organization_id,
+            origin,
+          })
 
-        const departmentName = String(row.department_name || "").trim()
-        let departmentId: string | null = null
-        if (departmentName) {
-          const { data: department } = await supabase
-            .from("departments")
-            .select("id")
-            .eq("institution_id", institution_id)
-            .ilike("name", `%${departmentName}%`)
-            .maybeSingle()
-          departmentId = department?.id ?? null
+          const departmentName = String(row.department_name || "").trim()
+          let departmentId: string | null = null
+          if (departmentName) {
+            const { data: department } = await admin
+              .from("departments")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .ilike("name", `%${departmentName}%`)
+              .maybeSingle()
+            departmentId = department?.id ?? null
+          }
+
+          await admin.from("users").update({
+            name: toTitleCase(name),
+            role: ROLES.FACULTY,
+            institution_id: institution_id,
+            department_id: departmentId,
+          }).eq("email", email)
+
+          createdCount += 1
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import faculty row (${email}):`, rowError)
         }
-
-        await supabase.from("users").update({
-          name: toTitleCase(name),
-          role: ROLES.FACULTY,
-          institution_id: institution_id,
-          department_id: departmentId,
-        }).eq("email", email)
-        createdCount += 1
       }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. SUBJECTS
+    // ─────────────────────────────────────────────────────────────
     } else if (entity === "subjects") {
       for (const row of rows) {
         const name = String(row.name || "").trim()
         const code = String(row.code || "").trim()
         if (!name || !code) continue
 
-        let programId: string | null = null
-        const programName = String(row.program_name || "").trim()
-        if (programName) {
-          const { data: program } = await supabase
-            .from("programs")
+        try {
+          let programId: string | null = null
+          const programName = String(row.program_name || "").trim()
+          if (programName) {
+            const { data: program } = await admin
+              .from("programs")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .ilike("name", `%${programName}%`)
+              .maybeSingle()
+            programId = program?.id ?? null
+          }
+
+          const { data: existingSub } = await admin
+            .from("subjects")
             .select("id")
             .eq("institution_id", institution_id)
-            .ilike("name", `%${programName}%`)
+            .ilike("code", code)
             .maybeSingle()
-          programId = program?.id ?? null
+
+          let normalizedType: string = "THEORY"
+          const rawType = String(row.subject_type || "").trim().toUpperCase()
+          if (rawType === "LAB" || rawType === "PRACTICAL") {
+            normalizedType = "LAB"
+          } else if (rawType === "ELECTIVE") {
+            normalizedType = "ELECTIVE"
+          } else {
+            normalizedType = "THEORY"
+          }
+
+          if (existingSub?.id) {
+            const { error: updErr } = await admin.from("subjects").update({
+              name: toTitleCase(name),
+              semester: row.semester ? Number(row.semester) : null,
+              program_id: programId,
+              credits: row.credits ? Number(row.credits) : null,
+              subject_type: normalizedType,
+            }).eq("id", existingSub.id)
+            if (updErr) throw updErr
+          } else {
+            const { error: insErr } = await admin.from("subjects").insert({
+              institution_id: institution_id,
+              name: toTitleCase(name),
+              code: code.toUpperCase(),
+              semester: row.semester ? Number(row.semester) : null,
+              program_id: programId,
+              credits: row.credits ? Number(row.credits) : null,
+              subject_type: normalizedType,
+            })
+            if (insErr) throw insErr
+          }
+
+          createdCount += 1
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import subject (${code}):`, rowError)
         }
-
-        const { error } = await supabase.from("subjects").insert({
-          institution_id: institution_id,
-          name: toTitleCase(name),
-          code: code.toUpperCase(),
-          semester: row.semester ? Number(row.semester) : null,
-          program_id: programId,
-          credits: row.credits ? Number(row.credits) : null,
-          subject_type: row.subject_type || null,
-        })
-
-        if (!error) createdCount += 1
       }
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. FACULTY-SUBJECTS
+    // ─────────────────────────────────────────────────────────────
     } else if (entity === "faculty-subjects") {
       for (const row of rows) {
         const facultyEmail = String(row.faculty_email || "").trim()
@@ -178,91 +236,202 @@ export async function POST(request: NextRequest) {
         const subjectName = String(row.subject_name || "").trim()
         if ((!facultyEmail && !facultyName) || (!subjectCode && !subjectName)) continue
 
-        const { data: faculty } = await supabase
-          .from("users")
-          .select("id")
-          .eq("institution_id", institution_id)
-          .eq("role", ROLES.FACULTY)
-          .or(`email.eq.${facultyEmail},name.ilike.%${facultyName}%`)
-          .maybeSingle()
+        try {
+          let facultyId: string | null = null
+          if (facultyEmail) {
+            const { data: faculty } = await admin
+              .from("users")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .eq("role", ROLES.FACULTY)
+              .eq("email", facultyEmail)
+              .maybeSingle()
+            facultyId = faculty?.id ?? null
+          } else if (facultyName) {
+            const { data: faculty } = await admin
+              .from("users")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .eq("role", ROLES.FACULTY)
+              .ilike("name", `%${facultyName}%`)
+              .maybeSingle()
+            facultyId = faculty?.id ?? null
+          }
 
-        const { data: subject } = await supabase
-          .from("subjects")
-          .select("id")
-          .eq("institution_id", institution_id)
-          .or(`code.eq.${subjectCode},name.ilike.%${subjectName}%`)
-          .maybeSingle()
+          let subjectId: string | null = null
+          if (subjectCode) {
+            const { data: subject } = await admin
+              .from("subjects")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .ilike("code", subjectCode)
+              .maybeSingle()
+            subjectId = subject?.id ?? null
+          } else if (subjectName) {
+            const { data: subject } = await admin
+              .from("subjects")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .ilike("name", `%${subjectName}%`)
+              .maybeSingle()
+            subjectId = subject?.id ?? null
+          }
 
-        if (faculty?.id && subject?.id) {
-          const { error } = await supabase.from("faculty_subjects").insert({
-            institution_id: institution_id,
-            faculty_id: faculty.id,
-            subject_id: subject.id,
-          })
-          if (!error) createdCount += 1
+          if (facultyId && subjectId) {
+            const { data: existingMap } = await admin
+              .from("faculty_subjects")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .eq("faculty_id", facultyId)
+              .eq("subject_id", subjectId)
+              .maybeSingle()
+
+            if (!existingMap) {
+              await admin.from("faculty_subjects").insert({
+                institution_id: institution_id,
+                faculty_id: facultyId,
+                subject_id: subjectId,
+              })
+            }
+            createdCount += 1
+          }
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import faculty-subject mapping:`, rowError)
         }
       }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. PARENTS
+    // ─────────────────────────────────────────────────────────────
     } else if (entity === "parents") {
       for (const row of rows) {
         const email = String(row.email || "").trim()
         const name = String(row.name || "").trim()
         if (!email || !name) continue
 
-        const adminClient = (await import("@/lib/supabase-admin")).createSupabaseAdminClient()
-        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-          email,
-          password: String(row.password || Math.random().toString(36).slice(-12)),
-          email_confirm: true,
-        })
+        try {
+          let parentUserId: string | null = null
 
-        if (authError || !authData.user) continue
+          try {
+            const inviteRes = await inviteUser({
+              email,
+              role: ROLES.PARENT,
+              institutionId: institution_id,
+              organizationId: profile.organization_id,
+              origin,
+            })
+            parentUserId = inviteRes.userId
+          } catch (invErr) {
+            const { data: existingUser } = await admin
+              .from("users")
+              .select("id")
+              .eq("email", email)
+              .maybeSingle()
+            parentUserId = existingUser?.id ?? null
+          }
 
-        const { error } = await adminClient.from("users").upsert({
-          id: authData.user.id,
-          name: toTitleCase(name),
-          email,
-          role: ROLES.PARENT,
-          institution_id: institution_id,
-          organization_id: profile.organization_id,
-          phone: row.phone || null,
-        }, { onConflict: "id" })
-        if (!error) createdCount += 1
+          if (parentUserId) {
+            await admin.from("users").upsert({
+              id: parentUserId,
+              name: toTitleCase(name),
+              email,
+              role: ROLES.PARENT,
+              institution_id: institution_id,
+              organization_id: profile.organization_id,
+              phone: row.phone || null,
+            }, { onConflict: "id" })
+
+            createdCount += 1
+          }
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import parent row (${email}):`, rowError)
+        }
       }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. TIMETABLE
+    // ─────────────────────────────────────────────────────────────
     } else if (entity === "timetable") {
       for (const row of rows) {
         const day = String(row.day || "").trim()
         const period = Number(row.period)
         const sectionName = String(row.section_name || "").trim()
         const subjectCode = String(row.subject_code || "").trim()
+        const facultyEmail = String(row.faculty_email || "").trim()
         if (!day || !Number.isFinite(period) || !sectionName || !subjectCode) continue
 
-        const { data: section } = await supabase
-          .from("sections")
-          .select("id")
-          .eq("institution_id", institution_id)
-          .ilike("name", `%${sectionName}%`)
-          .maybeSingle()
+        try {
+          const { data: section } = await admin
+            .from("sections")
+            .select("id, semester")
+            .eq("institution_id", institution_id)
+            .ilike("name", `%${sectionName}%`)
+            .maybeSingle()
 
-        const { data: subject } = await supabase
-          .from("subjects")
-          .select("id")
-          .eq("institution_id", institution_id)
-          .ilike("code", `%${subjectCode}%`)
-          .maybeSingle()
+          const { data: subject } = await admin
+            .from("subjects")
+            .select("id")
+            .eq("institution_id", institution_id)
+            .ilike("code", `%${subjectCode}%`)
+            .maybeSingle()
 
-        if (!section?.id || !subject?.id) continue
+          if (!section?.id || !subject?.id) {
+            console.warn(`[bulk-import] Timetable row missing section or subject: section=${sectionName}, subject=${subjectCode}`)
+            continue
+          }
 
-        const { error } = await supabase.from("timetable_slots").upsert({
-          institution_id: institution_id,
-          section_id: section.id,
-          semester: row.semester ? Number(row.semester) : null,
-          day: day.charAt(0).toUpperCase() + day.slice(1),
-          period,
-          subject_id: subject.id,
-          faculty_id: null,
-        }, { onConflict: "institution_id,section_id,semester,day,period" })
+          let facultyId: string | null = null
+          if (facultyEmail) {
+            const { data: facultyUser } = await admin
+              .from("users")
+              .select("id")
+              .eq("institution_id", institution_id)
+              .eq("email", facultyEmail)
+              .maybeSingle()
+            facultyId = facultyUser?.id ?? null
+          }
 
-        if (!error) createdCount += 1
+          const semesterVal = row.semester ? Number(row.semester) : (section.semester ?? 1)
+          const normalizedDay = day.charAt(0).toUpperCase() + day.slice(1).toLowerCase()
+
+          // Check if slot already exists in this logical cell (institution, section, day, period)
+          const { data: existingSlot } = await admin
+            .from("timetable_slots")
+            .select("id")
+            .eq("institution_id", institution_id)
+            .eq("section_id", section.id)
+            .eq("day", normalizedDay)
+            .eq("period", period)
+            .maybeSingle()
+
+          if (existingSlot?.id) {
+            await admin
+              .from("timetable_slots")
+              .update({
+                subject_id: subject.id,
+                faculty_id: facultyId,
+                semester: semesterVal,
+              })
+              .eq("id", existingSlot.id)
+          } else {
+            await admin
+              .from("timetable_slots")
+              .insert({
+                institution_id: institution_id,
+                organization_id: profile.organization_id,
+                section_id: section.id,
+                semester: semesterVal,
+                day: normalizedDay,
+                period,
+                subject_id: subject.id,
+                faculty_id: facultyId,
+              })
+          }
+
+          createdCount += 1
+        } catch (rowError) {
+          console.error(`[bulk-import] Failed to import timetable row:`, rowError)
+        }
       }
     } else {
       return NextResponse.json({ error: "Unsupported entity" }, { status: 400 })
