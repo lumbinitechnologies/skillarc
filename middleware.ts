@@ -41,16 +41,13 @@ function extractAccessToken(request: NextRequest): string | null {
   const cookies = request.cookies
 
   // Pattern 1: sb-<project-ref>-auth-token (modern chunked format)
-  // The first chunk contains the full access_token JSON
-  for (const [name, cookie] of cookies) {
-    if (name.startsWith("sb-") && name.endsWith("-auth-token")) {
-      // May be chunked: sb-<ref>-auth-token.0, sb-<ref>-auth-token.1, ...
-      // The first chunk is the main one
+  const allCookies = cookies.getAll()
+  for (const cookie of allCookies) {
+    if (cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token")) {
       try {
         const parsed = JSON.parse(cookie.value)
         if (parsed?.access_token) return parsed.access_token
       } catch {
-        // Could be base64 — try decoding
         try {
           const decoded = atob(cookie.value.replace(/-/g, "+").replace(/_/g, "/"))
           const parsed = JSON.parse(decoded)

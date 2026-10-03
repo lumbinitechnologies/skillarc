@@ -17,9 +17,6 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Turbopack (Next.js 16 default bundler) — no custom config needed.
-  turbopack: {},
-
   // Strip console.* calls in production (errors preserved).
   compiler: {
     ...(process.env.NODE_ENV === "production" && {
