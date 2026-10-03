@@ -1,173 +1,177 @@
-import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
 import ParentDashboardClient from "./parent-dashboard-client"
 import { ROLES } from "@/constants/roles"
-
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
-import { measureServer } from "@/lib/perf"
 
 export const dynamic = "force-dynamic"
 
 export default async function ParentDashboardPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
   const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.PARENT) redirect("/auth/login")
 
   const profile = context
-  const supabase = await createSupabaseServerClient()
+  // Use admin client so RLS doesn't block reading other users' data
+  const admin = createSupabaseAdminClient()
 
-  // Consolidated parallel batch: Fetch parent relations (with joined students, sections, programs, advisors), timetable slots, attendance, and institution in ONE single Promise.all
-  const tBatchStart = performance.now()
-  const [relationsRes, timetableRes, attendanceRes, institutionRes] = await measureServer(
-    "dashboard.parent.overview.data",
-    () =>
-      Promise.all([
-        supabase
-          .from("parent_student_relations")
+  // 1. Get all student relations for this parent
+  const { data: relations } = await admin
+    .from("parent_student_relations")
+    .select("student_id, relationship")
+    .eq("parent_id", profile.id)
+
+  const studentIds = (relations ?? []).map((r) => r.student_id)
+
+  // 2. Fetch all student data in parallel
+  const [
+    usersRes,
+    studentsRes,
+    institutionRes,
+    attendanceRes,
+    timetableRes,
+  ] = await Promise.all([
+    // student user profiles
+    studentIds.length
+      ? admin.from("users").select("id, name, email, phone").in("id", studentIds)
+      : Promise.resolve({ data: [] }),
+
+    // student academic records with section + program
+    studentIds.length
+      ? admin
+          .from("students")
           .select(`
-            student_id,
-            relationship,
-            users:users!student_id(
-              id,
-              name,
-              email,
-              phone,
-              students:students!id(
-                id,
-                section_id,
-                semester,
-                registration_number,
-                admission_year,
-                sections:sections!section_id(
-                  id,
-                  name,
-                  semester,
-                  users:users!faculty_advisor_id(id, name, email, phone)
-                ),
-                programs:programs!program_id(id, name)
-              )
-            )
+            id, semester, registration_number, admission_year, section_id, program_id,
+            sections:section_id(
+              id, name, semester,
+              advisor:faculty_advisor_id(id, name, email, phone)
+            ),
+            programs:program_id(id, name)
           `)
-          .eq("parent_id", profile.id),
-        profile.institution_id
-          ? supabase
-              .from("timetable_slots")
-              .select("day, period, section_id, subject_id, faculty_id, subjects(id, name, code), users!faculty_id(id, name)")
-              .eq("institution_id", profile.institution_id)
-              .order("day")
-              .order("period")
-          : Promise.resolve({ data: [] }),
-        supabase
+          .in("id", studentIds)
+      : Promise.resolve({ data: [] }),
+
+    // institution name
+    profile.institution_id
+      ? admin.from("institutions").select("id, name").eq("id", profile.institution_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+
+    // attendance — only for these students
+    studentIds.length
+      ? admin
           .from("attendance_records")
-          .select("student_id, status, attendance_sessions!inner(section_id, subject_id)"),
-        profile.institution_id
-          ? supabase
-              .from("institutions")
-              .select("id, name")
-              .eq("id", profile.institution_id)
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-      ])
-  )
-  const batchMs = performance.now() - tBatchStart
+          .select("student_id, status, subject_id")
+          .in("student_id", studentIds)
+      : Promise.resolve({ data: [] }),
 
-  const rawRelations = (relationsRes.data ?? []) as any[]
-  const allSlots = (timetableRes.data ?? []) as any[]
-  const allAttendance = (attendanceRes.data ?? []) as any[]
-  const institution = institutionRes.data
+    // timetable — only for this institution
+    profile.institution_id
+      ? admin
+          .from("timetable_slots")
+          .select(`
+            section_id, day, period,
+            subjects:subject_id(id, name, code),
+            faculty:faculty_id(id, name)
+          `)
+          .eq("institution_id", profile.institution_id)
+      : Promise.resolve({ data: [] }),
+  ])
 
-  const childrenData = rawRelations.map((rel) => {
-    const studentUser = Array.isArray(rel.users) ? rel.users[0] : rel.users
-    const studentData = Array.isArray(studentUser?.students) ? studentUser.students[0] : studentUser?.students
-    if (!studentUser || !studentData) return null
+  const users = (usersRes.data ?? []) as any[]
+  const students = (studentsRes.data ?? []) as any[]
+  const institution = institutionRes.data as any
+  const attendance = (attendanceRes.data ?? []) as any[]
+  const timetableSlots = (timetableRes.data ?? []) as any[]
 
-    const section = Array.isArray(studentData.sections) ? studentData.sections[0] : studentData.sections
-    const program = Array.isArray(studentData.programs) ? studentData.programs[0] : studentData.programs
-    const advisor = Array.isArray(section?.users) ? section.users[0] : section?.users
+  const childrenList = (relations ?? []).map((rel) => {
+    const user = users.find((u) => u.id === rel.student_id)
+    const student = students.find((s) => s.id === rel.student_id)
+    if (!user || !student) return null
 
-    // Filter timetable slots for this child section
-    const childSlots = section?.id ? allSlots.filter((s: any) => s.section_id === section.id) : []
+    const section = Array.isArray(student.sections) ? student.sections[0] : student.sections
+    const program = Array.isArray(student.programs) ? student.programs[0] : student.programs
+    const advisor = section
+      ? Array.isArray(section.advisor) ? section.advisor[0] : section.advisor
+      : null
 
-    // Build subject and faculty maps from joined slots
-    const subjectMap = new Map<string, { id: string; name: string; code: string }>()
-    const facultyMap = new Map<string, string>()
+    // Timetable for this section
+    const sectionSlots = section?.id
+      ? timetableSlots.filter((s: any) => s.section_id === section.id)
+      : []
 
-    childSlots.forEach((slot: any) => {
+    // Unique subjects
+    const subjectMap = new Map<string, { id: string; name: string; code: string; facultyName: string }>()
+    sectionSlots.forEach((slot: any) => {
       const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
-      const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
-      if (sub?.id) {
-        subjectMap.set(sub.id, { id: sub.id, name: sub.name, code: sub.code })
-      }
-      if (slot.faculty_id && fac?.name) {
-        facultyMap.set(slot.faculty_id, fac.name)
+      const fac = Array.isArray(slot.faculty) ? slot.faculty[0] : slot.faculty
+      if (sub?.id && !subjectMap.has(sub.id)) {
+        subjectMap.set(sub.id, {
+          id: sub.id,
+          name: sub.name,
+          code: sub.code,
+          facultyName: fac?.name ?? "Pending",
+        })
       }
     })
 
-    const formattedSubjects = Array.from(subjectMap.values()).map((sub) => {
-      const slotForSub = childSlots.find((s: any) => s.subject_id === sub.id)
-      return {
-        id: sub.id,
-        name: sub.name,
-        code: sub.code,
-        facultyName: (slotForSub?.faculty_id && facultyMap.get(slotForSub.faculty_id)) || "Faculty pending",
-      }
-    })
-
-    const schedule = childSlots.map((slot: any) => {
+    // Schedule
+    const schedule = sectionSlots.map((slot: any) => {
       const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
-      const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
+      const fac = Array.isArray(slot.faculty) ? slot.faculty[0] : slot.faculty
       return {
         day: slot.day,
         period: slot.period,
-        subjectName: sub?.name ?? "Subject pending",
+        subjectName: sub?.name ?? "—",
         subjectCode: sub?.code ?? "—",
-        facultyName: fac?.name ?? "Faculty pending",
+        facultyName: fac?.name ?? "Pending",
       }
     })
 
-    // Filter attendance records for this child
-    const childAttendance = allAttendance.filter((a: any) => a.student_id === rel.student_id)
-    const totalAttendance = childAttendance.length
-    const presentCount = childAttendance.filter((r: any) => r.status === "PRESENT").length
-    const absentCount = childAttendance.filter((r: any) => r.status === "ABSENT").length
-    const lateCount = childAttendance.filter((r: any) => r.status === "LATE").length
-    const attendanceRate = totalAttendance > 0 ? Math.round(((presentCount + lateCount) / totalAttendance) * 100) : 0
+    // Attendance stats for this student
+    const studentAttendance = attendance.filter((a: any) => a.student_id === rel.student_id)
+    const total = studentAttendance.length
+    const present = studentAttendance.filter((a: any) => a.status === "PRESENT").length
+    const absent = studentAttendance.filter((a: any) => a.status === "ABSENT").length
+    const late = studentAttendance.filter((a: any) => a.status === "LATE").length
+    const attendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0
+
+    // Per-subject attendance
+    const subjectAttendance: Record<string, { total: number; present: number; absent: number }> = {}
+    studentAttendance.forEach((a: any) => {
+      if (!a.subject_id) return
+      if (!subjectAttendance[a.subject_id]) {
+        subjectAttendance[a.subject_id] = { total: 0, present: 0, absent: 0 }
+      }
+      subjectAttendance[a.subject_id].total++
+      if (a.status === "PRESENT" || a.status === "LATE") subjectAttendance[a.subject_id].present++
+      if (a.status === "ABSENT") subjectAttendance[a.subject_id].absent++
+    })
+
+    const subjects = Array.from(subjectMap.values()).map((sub) => ({
+      ...sub,
+      attendance: subjectAttendance[sub.id] ?? { total: 0, present: 0, absent: 0 },
+    }))
 
     return {
       id: rel.student_id,
-      relationship: rel.relationship,
-      name: studentUser.name || "Student",
-      email: studentUser.email || "",
-      phone: studentUser.phone || "—",
-      registration_number: studentData.registration_number || "—",
-      semester: section?.semester || studentData.semester || null,
-      sectionName: section?.name || "—",
-      programName: program?.name || "—",
-      advisorName: advisor?.name || "No Advisor",
-      advisorEmail: advisor?.email || "",
-      advisorPhone: advisor?.phone || "",
-      subjects: formattedSubjects,
+      relationship: rel.relationship ?? "Guardian",
+      name: user.name ?? "Student",
+      email: user.email ?? "",
+      phone: user.phone ?? "",
+      registration_number: student.registration_number ?? "—",
+      semester: section?.semester ?? student.semester ?? null,
+      admission_year: student.admission_year ?? null,
+      sectionName: section?.name ?? "—",
+      programName: program?.name ?? "—",
+      advisorName: advisor?.name ?? "",
+      advisorEmail: advisor?.email ?? "",
+      advisorPhone: advisor?.phone ?? "",
+      subjects,
       schedule,
-      attendance: {
-        rate: attendanceRate,
-        total: totalAttendance,
-        present: presentCount,
-        absent: absentCount,
-        late: lateCount,
-      },
+      attendance: { rate: attendanceRate, total, present, absent, late },
     }
-  })
-
-  const validChildren = childrenData.filter(Boolean) as any[]
-  const totalMs = performance.now() - tPageStart
-
-  console.info(
-    `[DashboardParent] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} childrenCount=${validChildren.length} parentId=${profile.id}`
-  )
+  }).filter(Boolean) as any[]
 
   return (
     <ParentDashboardClient
@@ -176,7 +180,7 @@ export default async function ParentDashboardPage() {
         email: profile.email ?? "",
         institution: institution?.name ?? "Institution",
       }}
-      childrenList={validChildren}
+      childrenList={childrenList}
     />
   )
 }

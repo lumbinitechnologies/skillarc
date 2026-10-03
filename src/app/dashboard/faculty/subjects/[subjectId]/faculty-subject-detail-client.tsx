@@ -181,6 +181,14 @@ export function FacultySubjectDetailClient({
   // Local submissions & Plagiarism state
   const [localSubmissions, setLocalSubmissions] = useState<any[]>(submissions)
   const [isScanningPlagiarism, setIsScanningPlagiarism] = useState(false)
+  // Keyed by submission ID — stores the latest Gemini scan result for display
+  const [scanResults, setScanResults] = useState<Record<string, {
+    aiVerdict?: string
+    aiConfidence?: string
+    aiSummary?: string
+    aiSignals?: Record<string, boolean>
+    usedGemini?: boolean
+  }>>({})
   const [plagiarismScanResult, setPlagiarismScanResult] = useState<{
     rate: number
     risk: string
@@ -773,7 +781,20 @@ export function FacultySubjectDetailClient({
   const gradedGrading = activeGradingSubmissions.filter(s => s.status === "graded")
   const activeQueueList = activeQueueTab === "pending" ? pendingGrading : gradedGrading
   const currentSub = activeQueueList[currentEvalIdx] || null
-  const aiResult = currentSub ? detectAIContent(currentSub.code_content || currentSub.feedback || "") : null
+  const aiResultText = currentSub
+    ? [
+        currentSub.code_content,
+        currentSub.feedback,
+        Array.isArray(currentSub.quiz_answers)
+          ? currentSub.quiz_answers.map((a: any) => String(a ?? "")).join(" ")
+          : typeof currentSub.quiz_answers === "string"
+          ? currentSub.quiz_answers
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : ""
+  const aiResult = currentSub ? detectAIContent(aiResultText) : null
 
   useEffect(() => {
     if (currentSub) {
@@ -1723,58 +1744,136 @@ export function FacultySubjectDetailClient({
                                 <p className="text-[10px] text-slate-400">Evaluate peer copying and AI-generated probabilities</p>
                               </div>
                               <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full ${
-                                currentSub.plagiarism_rate != null
-                                  ? ((currentSub.plagiarism_rate >= 50 || currentSub.ai_probability >= 60)
-                                    ? "bg-rose-50 text-rose-600 border border-rose-100"
-                                    : "bg-emerald-50 text-emerald-600 border border-emerald-100")
-                                  : "bg-slate-100 text-slate-500"
+                                currentSub.plagiarism_rate == null
+                                  ? "bg-slate-100 text-slate-500"
+                                  : currentSub.plagiarism_rate === -1 || currentSub.verification_status === "NO_CONTENT"
+                                  ? "bg-amber-50 text-amber-600 border border-amber-100"
+                                  : (currentSub.plagiarism_rate >= 50 || (currentSub.ai_probability ?? 0) >= 60)
+                                  ? "bg-rose-50 text-rose-600 border border-rose-100"
+                                  : "bg-emerald-50 text-emerald-600 border border-emerald-100"
                               }`}>
-                                {currentSub.plagiarism_rate == null ? "NOT SCANNED" : (currentSub.plagiarism_rate >= 50 || currentSub.ai_probability >= 60) ? "FLAGGED" : "CLEAN"}
+                                {currentSub.plagiarism_rate == null
+                                  ? "NOT SCANNED"
+                                  : currentSub.plagiarism_rate === -1 || currentSub.verification_status === "NO_CONTENT"
+                                  ? "NO CONTENT"
+                                  : (currentSub.plagiarism_rate >= 50 || (currentSub.ai_probability ?? 0) >= 60)
+                                  ? "FLAGGED"
+                                  : "CLEAN"}
                               </span>
                             </div>
 
                             {currentSub.plagiarism_rate != null ? (
+                              currentSub.plagiarism_rate === -1 || currentSub.verification_status === "NO_CONTENT" ? (
+                                // No extractable content
+                                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">⚠️</span>
+                                    <p className="text-[11px] font-bold text-amber-800">No Analysable Text Found</p>
+                                  </div>
+                                  <p className="text-[10px] text-amber-700 leading-relaxed">
+                                    {currentSub.integrity_note ||
+                                      (currentSub.file_url
+                                        ? "The uploaded file could not be read as text. This may be a scanned image, protected PDF, or unsupported format. Please review the file manually."
+                                        : "This submission has no text answer, code, or readable file attachment. Nothing could be compared against peers.")}
+                                  </p>
+                                  {currentSub.file_url && (
+                                    <p className="text-[9px] text-amber-600 italic">
+                                      Supported formats for automatic extraction: PDF, DOCX, TXT, MD, CSV, most code files (.py, .js, .ts, .java, etc.)
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
                               <div className="space-y-4">
                                 {/* Stats Row */}
                                 <div className="grid grid-cols-2 gap-3">
                                   {/* Plagiarism Overlap Card */}
-                                  <div className="p-3.5 bg-slate-50/80 border border-slate-100 rounded-xl space-y-1.5">
+                                  <div className={`p-3.5 border rounded-xl space-y-1.5 ${currentSub.plagiarism_rate >= 50 ? 'bg-rose-50/60 border-rose-100' : 'bg-slate-50/80 border-slate-100'}`}>
                                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Peer Copying</div>
                                     <div className="flex items-baseline gap-1">
-                                      <span className="text-xl font-bold font-['Space_Grotesk'] text-slate-800">{currentSub.plagiarism_rate}%</span>
-                                      <span className={`text-[9px] font-extrabold ${currentSub.plagiarism_rate >= 50 ? 'text-rose-500' : 'text-slate-400'}`}>
+                                      <span className={`text-xl font-bold font-['Space_Grotesk'] ${currentSub.plagiarism_rate >= 50 ? 'text-rose-600' : 'text-slate-800'}`}>{currentSub.plagiarism_rate}%</span>
+                                      <span className={`text-[9px] font-extrabold ${currentSub.plagiarism_rate >= 50 ? 'text-rose-500' : currentSub.plagiarism_rate >= 30 ? 'text-amber-500' : 'text-emerald-500'}`}>
                                         {currentSub.plagiarism_rate >= 60 ? 'HIGH' : currentSub.plagiarism_rate >= 30 ? 'MOD' : 'LOW'}
                                       </span>
                                     </div>
+                                    <div className="w-full bg-slate-200/60 rounded-full h-1.5 mt-1">
+                                      <div
+                                        className={`h-1.5 rounded-full transition-all ${currentSub.plagiarism_rate >= 50 ? 'bg-rose-500' : currentSub.plagiarism_rate >= 30 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(currentSub.plagiarism_rate, 100)}%` }}
+                                      />
+                                    </div>
                                   </div>
 
-                                  {/* AI Detection Card */}
-                                  <div className="p-3.5 bg-slate-50/80 border border-slate-100 rounded-xl space-y-1.5">
-                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">AI Content</div>
+                                  {/* AI Detection Card — Gemini powered */}
+                                  <div className={`p-3.5 border rounded-xl space-y-2 ${(currentSub.ai_probability ?? 0) >= 60 ? 'bg-rose-50/60 border-rose-100' : 'bg-slate-50/80 border-slate-100'}`}>
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">AI Content</div>
+                                      {scanResults[currentSub.id]?.usedGemini && (
+                                        <span className="text-[8px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">Gemini</span>
+                                      )}
+                                    </div>
                                     <div className="flex items-baseline gap-1">
-                                      <span className="text-xl font-bold font-['Space_Grotesk'] text-slate-800">{currentSub.ai_probability ?? 0}%</span>
+                                      <span className={`text-xl font-bold font-['Space_Grotesk'] ${(currentSub.ai_probability ?? 0) >= 60 ? 'text-rose-600' : 'text-slate-800'}`}>{currentSub.ai_probability ?? 0}%</span>
                                       <span className={`text-[9px] font-extrabold ${
                                         (currentSub.ai_probability ?? 0) >= 75 ? 'text-rose-500' : (currentSub.ai_probability ?? 0) >= 55 ? 'text-amber-500' : 'text-emerald-500'
                                       }`}>
-                                        {aiResult.risk}
+                                        {scanResults[currentSub.id]?.aiVerdict?.replace(/_/g, ' ') ?? aiResult?.risk ?? 'LOW'}
                                       </span>
                                     </div>
+                                    <div className="w-full bg-slate-200/60 rounded-full h-1.5">
+                                      <div
+                                        className={`h-1.5 rounded-full transition-all ${(currentSub.ai_probability ?? 0) >= 60 ? 'bg-rose-500' : (currentSub.ai_probability ?? 0) >= 30 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(currentSub.ai_probability ?? 0, 100)}%` }}
+                                      />
+                                    </div>
+                                    {scanResults[currentSub.id]?.aiConfidence && (
+                                      <div className="text-[9px] text-slate-400">
+                                        Confidence: <span className="font-bold text-slate-600">{scanResults[currentSub.id].aiConfidence}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
 
-                                {/* Overlap matched student notice */}
-                                {currentSub.plagiarism_rate > 0 ? (
-                                  <div className="text-[10px] text-slate-500 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100 leading-normal">
-                                    🚨 Peer overlap score of {currentSub.plagiarism_rate}% matched solution structure with classmates.
-                                    {currentSub.matched_student ? ` Likely peer: ${currentSub.matched_student}.` : ""}
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] text-slate-500 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100 leading-normal">
-                                    ℹ️ No strong peer textual overlap was detected in the current batch. File uploads may need manual review.
+                                {/* Gemini AI analysis summary + signals */}
+                                {scanResults[currentSub.id]?.aiSummary && (
+                                  <div className={`text-[10px] leading-relaxed p-2.5 rounded-lg border ${
+                                    (currentSub.ai_probability ?? 0) >= 60
+                                      ? 'bg-rose-50/50 border-rose-100 text-rose-700'
+                                      : 'bg-indigo-50/40 border-indigo-100 text-indigo-700'
+                                  }`}>
+                                    🤖 <strong>Gemini says:</strong> {scanResults[currentSub.id].aiSummary}
                                   </div>
                                 )}
 
-                                {/* Stylometric Accordion */}
+                                {/* Signals grid */}
+                                {scanResults[currentSub.id]?.aiSignals && (
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    {Object.entries(scanResults[currentSub.id].aiSignals!).map(([key, val]) => (
+                                      <div key={key} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-[9px] font-semibold ${
+                                        val ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-slate-50 border-slate-100 text-slate-400'
+                                      }`}>
+                                        <span>{val ? '🚩' : '✅'}</span>
+                                        <span>{key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Note / matched peer */}
+                                <div className={`text-[10px] leading-relaxed p-2.5 rounded-lg border ${
+                                  currentSub.plagiarism_rate > 0
+                                    ? 'bg-rose-50/50 border-rose-100 text-rose-700'
+                                    : 'bg-slate-50/50 border-slate-100 text-slate-500'
+                                }`}>
+                                  {currentSub.plagiarism_rate > 0 ? (
+                                    <>🚨 Peer overlap of <strong>{currentSub.plagiarism_rate}%</strong> detected.
+                                    {currentSub.matched_student ? <> Likely match: <strong>{currentSub.matched_student}</strong>.</> : ""}</>
+                                  ) : (
+                                    <>ℹ️ {currentSub.integrity_note || "No significant peer overlap detected. The submission appears original within this batch."}</>
+                                  )}
+                                </div>
+
+                                {/* Stylometric Accordion — only shows if there was extractable text */}
+                                {aiResult && aiResultText.trim().length > 10 && (
                                 <div className="border border-slate-100 rounded-xl overflow-hidden bg-slate-50/30">
                                   <details className="group">
                                     <summary className="flex justify-between items-center p-3 text-[11px] font-bold text-slate-600 cursor-pointer hover:bg-slate-50 transition select-none list-none [&::-webkit-details-marker]:hidden">
@@ -1782,71 +1881,35 @@ export function FacultySubjectDetailClient({
                                       <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-open:rotate-90 transition-transform" />
                                     </summary>
                                     <div className="p-3.5 border-t border-slate-100 space-y-3 bg-white/40">
-                                      {/* Lexical Diversity */}
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px]">
-                                          <span className="text-slate-500 font-medium">Lexical Diversity (Vocabulary richness)</span>
-                                          <span className="font-bold text-slate-700">{aiResult.lexicalScore}%</span>
+                                      {[
+                                        { label: 'Lexical Diversity (Vocabulary richness)', value: aiResult.lexicalScore, color: 'bg-indigo-500' },
+                                        { label: 'Burstiness (Sentence variation)', value: aiResult.burstinessScore, color: 'bg-purple-500' },
+                                        { label: 'Linguistic Repetition (Clarity Index)', value: aiResult.repetitionScore, color: 'bg-teal-500' },
+                                        { label: 'Stylometry (Avg. word length)', value: aiResult.stylometryScore, color: 'bg-amber-500' },
+                                        { label: 'Punctuation Signature (Writing footprint)', value: aiResult.punctuationScore, color: 'bg-emerald-500' },
+                                      ].map(({ label, value, color }) => (
+                                        <div key={label} className="space-y-1">
+                                          <div className="flex justify-between text-[10px]">
+                                            <span className="text-slate-500 font-medium">{label}</span>
+                                            <span className="font-bold text-slate-700">{value}%</span>
+                                          </div>
+                                          <div className="w-full bg-slate-100/80 rounded-full h-1.5">
+                                            <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${value}%` }} />
+                                          </div>
                                         </div>
-                                        <div className="w-full bg-slate-100/80 rounded-full h-1.5">
-                                          <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${aiResult.lexicalScore}%` }} />
-                                        </div>
-                                      </div>
-
-                                      {/* Sentence Length Variation */}
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px]">
-                                          <span className="text-slate-500 font-medium">Burstiness (Sentence variation)</span>
-                                          <span className="font-bold text-slate-700">{aiResult.burstinessScore}%</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100/80 rounded-full h-1.5">
-                                          <div className="h-1.5 rounded-full bg-purple-500" style={{ width: `${aiResult.burstinessScore}%` }} />
-                                        </div>
-                                      </div>
-
-                                      {/* Repetition */}
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px]">
-                                          <span className="text-slate-500 font-medium">Linguistic Repetition (Clarity Index)</span>
-                                          <span className="font-bold text-slate-700">{aiResult.repetitionScore}%</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100/80 rounded-full h-1.5">
-                                          <div className="h-1.5 rounded-full bg-teal-500" style={{ width: `${aiResult.repetitionScore}%` }} />
-                                        </div>
-                                      </div>
-
-                                      {/* Stylometry */}
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px]">
-                                          <span className="text-slate-500 font-medium">Stylometry (Average word length match)</span>
-                                          <span className="font-bold text-slate-700">{aiResult.stylometryScore}%</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100/80 rounded-full h-1.5">
-                                          <div className="h-1.5 rounded-full bg-amber-500" style={{ width: `${aiResult.stylometryScore}%` }} />
-                                        </div>
-                                      </div>
-
-                                      {/* Punctuation */}
-                                      <div className="space-y-1">
-                                        <div className="flex justify-between text-[10px]">
-                                          <span className="text-slate-500 font-medium">Punctuation Signature (Writing footprint)</span>
-                                          <span className="font-bold text-slate-700">{aiResult.punctuationScore}%</span>
-                                        </div>
-                                        <div className="w-full bg-slate-100/80 rounded-full h-1.5">
-                                          <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${aiResult.punctuationScore}%` }} />
-                                        </div>
-                                      </div>
-
+                                      ))}
                                       <p className="text-[9px] text-slate-400 pt-1 leading-normal italic">
                                         * Scores closer to 100% indicate highly natural human-like variations. AI models generate text with extremely low burstiness, highly repetitive structure, and low punctuation variance.
                                       </p>
                                     </div>
                                   </details>
                                 </div>
+                                )}
                               </div>
+                              )
                             ) : (
                               <div className="text-center py-5 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
-                                Click below to run plagiarism matches & stylometric AI analysis
+                                Click below to run plagiarism matches &amp; stylometric AI analysis
                               </div>
                             )}
 
@@ -1856,7 +1919,28 @@ export function FacultySubjectDetailClient({
                                 try {
                                   const res = await runPlagiarismScanAction(currentSub.id)
                                   if (res.success) {
-                                    triggerToast("Integrity scan complete!", "success")
+                                    const isNoContent = (res as any).noContent === true
+                                    triggerToast(
+                                      isNoContent
+                                        ? "Scanned — no readable text found in submission"
+                                        : (res as any).usedGemini
+                                        ? "Integrity scan complete (Gemini AI)"
+                                        : "Integrity scan complete",
+                                      isNoContent ? "info" : "success"
+                                    )
+                                    // Store Gemini-specific fields in local state
+                                    if (!isNoContent) {
+                                      setScanResults(prev => ({
+                                        ...prev,
+                                        [currentSub.id]: {
+                                          aiVerdict: (res as any).aiVerdict,
+                                          aiConfidence: (res as any).aiConfidence,
+                                          aiSummary: (res as any).aiSummary,
+                                          aiSignals: (res as any).aiSignals,
+                                          usedGemini: (res as any).usedGemini,
+                                        },
+                                      }))
+                                    }
                                     setLocalSubmissions(prev =>
                                       prev.map(s =>
                                         s.id === currentSub.id
@@ -1865,31 +1949,38 @@ export function FacultySubjectDetailClient({
                                               plagiarism_rate: res.plagiarismRate ?? 0,
                                               ai_probability: res.aiProbability ?? 0,
                                               matched_student: res.matchedStudent ?? "None",
-                                              verification_status: ((res.plagiarismRate ?? 0) >= 50 || (res.aiProbability ?? 0) >= 60) ? "FLAGGED" : "CLEAN",
+                                              verification_status: isNoContent
+                                                ? "NO_CONTENT"
+                                                : ((res.plagiarismRate ?? 0) >= 50 || (res.aiProbability ?? 0) >= 60)
+                                                ? "FLAGGED"
+                                                : "CLEAN",
                                               integrity_note: res.note ?? null,
                                             }
                                           : s
                                       )
                                     )
                                   } else {
-                                    alert("Plagiarism scan failed: " + res.error)
+                                    triggerToast("Integrity scan failed: " + res.error, "warning")
                                   }
                                 } catch (err) {
                                   console.error("Scan error:", err)
+                                  triggerToast("Integrity scan failed. Please try again.", "warning")
                                 } finally {
                                   setIsScanningPlagiarism(false)
                                 }
                               }}
                               disabled={isScanningPlagiarism}
-                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-98 flex items-center justify-center gap-1.5"
+                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
                             >
                               {isScanningPlagiarism ? (
-                                  <>
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Running Integrity Scan...
-                                  </>
-                                ) : (
-                                  "Run Integrity Scan"
-                                )}
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Running Integrity Scan...
+                                </>
+                              ) : currentSub.plagiarism_rate != null ? (
+                                "Re-run Integrity Scan"
+                              ) : (
+                                "Run Integrity Scan"
+                              )}
                             </button>
                           </div>
                         )}

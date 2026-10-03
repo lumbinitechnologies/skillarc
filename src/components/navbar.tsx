@@ -26,8 +26,49 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
 
   const [notifications, setNotifications] = useState<any[]>([])
 
-  // NOTE: Notifications fetching on mount is intentionally disabled from the critical path
-  // to prevent client-side REST waterfalls and WebSocket connection contention.
+  // Fetch notifications via server API (uses admin client to bypass RLS issues)
+  useEffect(() => {
+    if (!initialProfile?.id) return
+    let cancelled = false
+
+    async function fetchNotifications() {
+      try {
+        const res = await fetch("/api/notifications", { cache: "no-store" })
+        if (res.ok) {
+          const json = await res.json()
+          if (!cancelled && json.notifications) setNotifications(json.notifications)
+        }
+      } catch {
+        // Silently ignore — notifications are non-critical
+      }
+    }
+
+    fetchNotifications()
+
+    // Subscribe to real-time inserts for this user
+    const channel = supabase
+      .channel(`notifications:${initialProfile.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${initialProfile.id}`,
+        },
+        (payload) => {
+          if (!cancelled) {
+            setNotifications((prev) => [payload.new, ...prev].slice(0, 30))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+    }
+  }, [initialProfile?.id])
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -51,11 +92,11 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
 
   async function markAsRead(id: string, link?: string) {
     try {
-      await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", id)
-      
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     } catch (err) {
       console.error("Failed to mark notification read:", err)
@@ -70,11 +111,11 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
   async function markAllAsRead() {
     if (!initialProfile?.id) return
     try {
-      await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("user_id", initialProfile.id)
-      
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      })
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     } catch (err) {
       console.error("Failed to mark all read:", err)
