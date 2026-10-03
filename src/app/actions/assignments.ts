@@ -1025,10 +1025,10 @@ Analyse the text carefully for these AI writing signals:
 9. Suspiciously comprehensive coverage of all sub-points in balanced, equal-length sections
 10. Text that reads like a textbook answer rather than a student's genuine response
 
-Respond ONLY with a valid JSON object in this exact format (no extra text, no markdown):
-{"aiProbability":<integer 0-100>,"verdict":"<HUMAN_WRITTEN|LIKELY_HUMAN|UNCERTAIN|LIKELY_AI|AI_GENERATED>","confidence":"<LOW|MEDIUM|HIGH|VERY_HIGH>","shortSummary":"<1-2 sentence plain English summary>","signals":{"uniformSentenceLength":<true|false>,"overusesTransitionWords":<true|false>,"lacksPersonalVoice":<true|false>,"overlyFormal":<true|false>,"templateStructure":<true|false>,"genericExplanations":<true|false>}}`
+Respond ONLY with compact JSON — no markdown fences, no explanation, just raw JSON:
+{"aiProbability":85,"verdict":"LIKELY_AI","confidence":"HIGH","shortSummary":"One sentence here.","signals":{"uniformSentenceLength":true,"overusesTransitionWords":true,"lacksPersonalVoice":true,"overlyFormal":true,"templateStructure":true,"genericExplanations":true}}`
 
-      const GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-pro-latest"]
+      const GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
 
       for (const model of GEMINI_MODELS) {
         try {
@@ -1040,7 +1040,7 @@ Respond ONLY with a valid JSON object in this exact format (no extra text, no ma
               contents: [{ parts: [{ text: detectionPrompt }] }],
               generationConfig: {
                 temperature: 0.1,
-                maxOutputTokens: 512,
+                maxOutputTokens: 1024,
               },
             }),
             signal: AbortSignal.timeout(20000),

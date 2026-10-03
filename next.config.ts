@@ -17,12 +17,8 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  // Turbopack config (Next.js 16 default bundler).
-  // - `root` silences the "package-lock.json outside git repo" warning
-  // - Turbopack handles bundle splitting automatically
-  turbopack: {
-    root: __dirname,
-  },
+  // Turbopack (Next.js 16 default bundler) — no custom config needed.
+  turbopack: {},
 
   // Strip console.* calls in production (errors preserved).
   compiler: {
