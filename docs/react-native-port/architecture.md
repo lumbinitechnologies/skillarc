@@ -1,18 +1,18 @@
 # Mobile architecture and environments
 
-**Audience:** Keane, Nikhil, and Sai Kiran. [Release scope](release-1.md) defines behavior; this guide defines the technical boundary. The canonical transport specification is [SkillArc's mobile OpenAPI file](../../contracts/mobile-v1.openapi.yaml).
+**Audience:** Keane and Nikhil. [Release scope](release-1.md) defines behavior; this guide defines the technical boundary. The canonical transport specification is [SkillArc's mobile OpenAPI file](../../contracts/mobile-v1.openapi.yaml).
 
 ```text
 Expo app (Android/iOS)
   ├─ Keane-owned session, config and generated API client
-  ├─ group-owned native features and typed view states
+  ├─ Keane-owned native features and typed view states
   └─ Bearer token → SkillArc /api/mobile/v1 → authorized logic → Supabase
 ```
 
 ## API and data ownership
 
 - Keep one versioned `/api/mobile/v1` contract in SkillArc. Keane syncs a pinned reviewed OpenAPI snapshot into mobile; CI regenerates the client and fails on drift. A contract change starts in SkillArc. Do not import Next.js code or copy official calculations into Expo.
-- `GET /api/mobile/v1/me` is the first implemented operation. The [web route catalog](reference/route-catalog.md) is **not** a list of mobile-ready APIs. Interns request missing operations and use approved synthetic fixtures until the contract and handler pass tests.
+- `GET /api/mobile/v1/me` is the first implemented operation. The [web route catalog](reference/route-catalog.md) is **not** a list of mobile-ready APIs. Keane uses approved synthetic fixtures until the contract and handler pass tests.
 - Each handler verifies the Supabase Bearer token, loads a trusted active profile and tenant, checks role, feature flag and object relationship, then performs scoped work. Never trust caller identity headers, `user_metadata.role`, or hidden navigation as authorization. Keep service-role, email, AI, cron and provider keys server-side.
 - Server Actions and cookie-only web handlers are not native APIs. Preserve their validation and audit behavior. Version response/error shapes for app-store clients. Direct Supabase reads or Storage access require explicit RLS and tenant tests first; Keane owns any mobile Supabase client setup.
 

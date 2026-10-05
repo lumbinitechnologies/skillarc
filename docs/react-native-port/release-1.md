@@ -17,7 +17,7 @@ Meetings, secure quizzes, code execution, payments, AI, administration, and publ
 
 ## Release decision
 
-The 10 November milestone is an **internal release candidate**, not an automatic store launch. Keane records release or defer after all of these pass:
+Set an internal release-candidate date only after staging and the first live vertical slice pass their gates. Keane records release or defer after all of these pass:
 
 1. Each exposed API rejects invalid/expired tokens, forged identity headers, inactive users, disabled features, wrong tenants, and unrelated parent-child access.
 2. Writes pass duplicate, retry, file-validation, and audit tests. Official attendance and grade results match the web app for the same synthetic users.
