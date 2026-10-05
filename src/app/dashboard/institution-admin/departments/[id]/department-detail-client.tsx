@@ -1100,10 +1100,6 @@ export function DepartmentDetailClient({
               <ParentList
                 parents={parents}
                 isLoading={isLoading}
-                onEdit={(p) => {
-                  setSelectedParent(p)
-                  setIsParentOpen(true)
-                }}
                 onDelete={(id) => triggerDelete(id, "parent")}
               />
             </Card>

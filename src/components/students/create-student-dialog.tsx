@@ -18,7 +18,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Mail,
-  Search,
   Users
 } from "lucide-react"
 import type { StudentWithSection, CreateStudentInput, UpdateStudentInput } from "@/modules/students"
@@ -441,74 +440,55 @@ export function CreateStudentDialog({
 
               {step === 3 && (
                 <>
-                  {/* Search Existing Parent */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Search Existing Parent</label>
-                    <div className="relative">
-                      <Input
-                        placeholder="Type name or email to auto-fill..."
-                        onChange={async (e) => {
-                          const term = e.target.value;
-                          if (term.length > 2) {
-                            try {
-                              const res = await fetch(`/api/parents?institution_id=${(formData as any).institution_id || student?.institution_id || ""}`);
-                              if (res.ok) {
-                                const parentList = await res.json();
-                                const matched = parentList.find((p: any) =>
-                                  p.name?.toLowerCase().includes(term.toLowerCase()) ||
-                                  p.email?.toLowerCase().includes(term.toLowerCase())
-                                );
-                                if (matched) {
-                                  set("parentName", matched.name || "");
-                                  set("parentEmail", matched.email || "");
-                                  set("parentPhone", matched.phone || "");
-                                }
-                              }
-                            } catch (err) {
-                              console.error(err);
-                            }
-                          }
-                        }}
-                        className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
-                      />
-                      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                    </div>
+                  {/* Section header */}
+                  <div className="flex items-center gap-2 pb-1">
+                    <Users size={15} className="text-slate-400" />
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">
+                      Parent / Guardian Details
+                      <span className="ml-1.5 font-medium normal-case tracking-normal text-slate-300">(optional)</span>
+                    </p>
                   </div>
 
                   {/* Parent Name & Email */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent/Guardian Name</label>
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Full Name</label>
                       <Input
-                        placeholder="Name"
+                        placeholder="e.g. Ramesh Kumar"
                         value={(formData as any).parentName || ""}
                         onChange={e => set("parentName", e.target.value)}
                         className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent/Guardian Email</label>
-                      <Input
-                        type="email"
-                        placeholder="parent@example.com"
-                        value={(formData as any).parentEmail || ""}
-                        onChange={e => set("parentEmail", e.target.value)}
-                        disabled={isEdit}
-                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed outline-none"
-                      />
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Email Address</label>
+                      <div className="relative">
+                        <Input
+                          type="email"
+                          placeholder="parent@example.com"
+                          value={(formData as any).parentEmail || ""}
+                          onChange={e => set("parentEmail", e.target.value)}
+                          className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                        />
+                        <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      </div>
                     </div>
                   </div>
 
                   {/* Parent Phone & Relationship */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Parent Phone</label>
-                      <Input
-                        placeholder="Phone"
-                        value={(formData as any).parentPhone || ""}
-                        onChange={e => set("parentPhone", e.target.value)}
-                        className="h-12 px-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
-                      />
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Phone Number</label>
+                      <div className="relative">
+                        <Input
+                          type="tel"
+                          placeholder="e.g. 9876543210"
+                          value={(formData as any).parentPhone || ""}
+                          onChange={e => set("parentPhone", e.target.value)}
+                          className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                        />
+                        <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Relationship</label>
@@ -528,21 +508,21 @@ export function CreateStudentDialog({
                     </div>
                   </div>
 
-                  {/* Account setup warning */}
-                  {!isEdit && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className="flex gap-3 items-start p-3.5 rounded-2xl bg-slate-50 border border-slate-200 mt-2"
-                    >
-                      <div className="w-7 h-7 rounded-xl flex-shrink-0 bg-white flex items-center justify-center border border-slate-200 shadow-sm text-slate-700">
-                        <KeyRound size={13} />
-                      </div>
-                      <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                        A temporary credentials password will be generated automatically and dispatched to the student's email.
-                      </p>
-                    </motion.div>
-                  )}
+                  {/* Info note */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex gap-3 items-start p-3.5 rounded-2xl bg-slate-50 border border-slate-200 mt-2"
+                  >
+                    <div className="w-7 h-7 rounded-xl flex-shrink-0 bg-white flex items-center justify-center border border-slate-200 shadow-sm text-slate-700">
+                      <KeyRound size={13} />
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                      {isEdit
+                        ? "If a parent email is provided, the parent account will be created and linked to this student automatically."
+                        : "The student will receive an invitation email. If parent details are provided, a parent account will also be created and linked automatically."}
+                    </p>
+                  </motion.div>
                 </>
               )}
             </motion.div>

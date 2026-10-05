@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
+import { revalidateTag } from "next/cache"
 
 // CREATE SUBJECT
 export async function POST(request: NextRequest) {
@@ -44,6 +45,9 @@ export async function POST(request: NextRequest) {
       `)
 
     if (error) throw error
+
+    // Bust the institution subjects cache
+    revalidateTag("subjects", "minutes")
 
     // If a single ID was requested and single row created, return single object to maintain compatibility
     const responseData = !Array.isArray(program_ids) && data && data.length > 0 ? data[0] : data

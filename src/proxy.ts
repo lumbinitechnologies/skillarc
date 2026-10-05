@@ -121,7 +121,7 @@ export async function proxy(request: NextRequest) {
         const requestHeaders = new Headers(request.headers)
         requestHeaders.set("x-user-id", claims.sub)
         if (claims.email) requestHeaders.set("x-user-email", String(claims.email))
-        const meta = claims.user_metadata as any
+        const meta = claims.user_metadata as Record<string, unknown> | undefined
         if (meta?.role) requestHeaders.set("x-user-role", String(meta.role))
         if (meta?.institution_id) requestHeaders.set("x-user-institution-id", String(meta.institution_id))
 

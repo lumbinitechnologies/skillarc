@@ -223,7 +223,8 @@ export async function POST(request: NextRequest) {
     // Create / Link parent if details provided
     if (parentEmail && parentName) {
       const adminClient = createSupabaseAdminClient()
-      
+
+      // Check if parent already exists
       const { data: existingParent } = await adminClient
         .from("users")
         .select("id")
@@ -234,51 +235,29 @@ export async function POST(request: NextRequest) {
       let parentUserId = existingParent?.id
 
       if (!parentUserId) {
-        let authData: { user?: { id: string } | null } | null = null
-        let authError: { message?: string; status?: number } | null = null
-        
+        // Use the same inviteUser flow as students/faculty so the parent
+        // receives an email with a link to set their password
         try {
-          const createRes = await adminClient.auth.admin.createUser({
+          const inviteResult = await inviteUser({
             email: parentEmail,
-            password: Math.random().toString(36).slice(-12),
-            email_confirm: true,
+            role: ROLES.PARENT,
+            institutionId: institution_id,
+            organizationId: profile.organization_id || "",
+            origin: resolveAppOrigin(request.headers),
+            name: parentName,
           })
-          authData = createRes.data
-          authError = createRes.error
-        } catch (err: unknown) {
-          authError = err instanceof Error ? { message: err.message } : { message: String(err) }
-        }
+          parentUserId = inviteResult.userId ?? undefined
 
-        if (authError) {
-          if (authError.message?.toLowerCase().includes("already") || authError.status === 422) {
-            const { data: userList } = await adminClient.auth.admin.listUsers()
-            const existingAuthUser = userList?.users.find((u) => u.email?.toLowerCase() === parentEmail.toLowerCase())
-            if (existingAuthUser) {
-              parentUserId = existingAuthUser.id
-            }
-          }
-        } else if (authData?.user) {
-          parentUserId = authData.user.id
-        }
-
-        if (parentUserId) {
-          const { data: profileCheck } = await adminClient
-            .from("users")
-            .select("id")
-            .eq("id", parentUserId)
-            .maybeSingle()
-
-          if (!profileCheck) {
-            await adminClient.from("users").insert({
-              id: parentUserId,
+          // Patch the profile with full details (inviteUser sets name from email prefix)
+          if (parentUserId) {
+            await adminClient.from("users").update({
               name: parentName,
-              email: parentEmail,
-              role: ROLES.PARENT,
-              institution_id,
-              organization_id: profile.organization_id || null,
-              phone: parentPhone || null
-            })
+              phone: parentPhone || null,
+            }).eq("id", parentUserId)
           }
+        } catch (inviteErr) {
+          console.error("Parent invite failed:", inviteErr)
+          // Non-fatal — student was created successfully; parent can be linked later
         }
       }
 
@@ -294,7 +273,7 @@ export async function POST(request: NextRequest) {
           await adminClient.from("parent_student_relations").insert({
             parent_id: parentUserId,
             student_id: invitedUser.id,
-            relationship: parentRelationship || "Guardian"
+            relationship: parentRelationship || "Guardian",
           })
         }
       }

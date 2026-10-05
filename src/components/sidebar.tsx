@@ -33,6 +33,7 @@ import {
   CreditCard,
   AlertTriangle,
   FileSignature,
+  SlidersHorizontal,
 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
@@ -85,12 +86,19 @@ const roleMenus: Record<Role, MenuItem[]> = {
 
   [ROLES.HOD]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod" },
+    { name: "Students", icon: Users, path: "/dashboard/hod/students" },
+    { name: "Faculty", icon: GraduationCap, path: "/dashboard/hod/faculty" },
+    { name: "Sections", icon: Layers, path: "/dashboard/hod/sections" },
+    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/hod/attendance" },
     { name: "Events", icon: Calendar, path: "/dashboard/hod/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/hod/placements" },
   ],
 
   [ROLES.PROGRAM_HEAD]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head" },
+    { name: "Students", icon: Users, path: "/dashboard/program-head/students" },
+    { name: "Courses", icon: BookOpen, path: "/dashboard/program-head/courses" },
+    { name: "Sections", icon: Layers, path: "/dashboard/program-head/sections" },
     { name: "Events", icon: Calendar, path: "/dashboard/program-head/events" },
     { name: "Placements", icon: Briefcase, path: "/dashboard/program-head/placements" },
   ],
@@ -119,6 +127,11 @@ const roleMenus: Record<Role, MenuItem[]> = {
 
   [ROLES.PARENT]: [
     { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent" },
+    { name: "Attendance", icon: UserCheck, path: "/dashboard/parent/attendance" },
+    { name: "Timetable", icon: Calendar, path: "/dashboard/parent/timetable" },
+    { name: "Assignments", icon: ClipboardList, path: "/dashboard/parent/assignments" },
+    { name: "Grades", icon: Award, path: "/dashboard/parent/grades" },
+    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/parent/billing" },
     { name: "Events", icon: Calendar, path: "/dashboard/parent/events" },
   ],
 }

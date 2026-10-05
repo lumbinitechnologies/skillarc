@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
+import { revalidateTag } from "next/cache"
 
 // POST - Create section
 export async function POST(request: NextRequest) {
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // Bust the institution sections cache so the next page load gets fresh data
+    revalidateTag("sections", "minutes")
 
     return NextResponse.json(section)
   } catch (error) {

@@ -2,10 +2,10 @@
 import { NextResponse } from "next/server";
 
 const MODELS_TO_TRY = [
-  "gemini-1.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-pro",
-  "gemini-pro",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+  "gemini-pro-latest",
+  "gemini-flash-lite-latest",
 ];
 
 interface InterviewQuestionFallback {

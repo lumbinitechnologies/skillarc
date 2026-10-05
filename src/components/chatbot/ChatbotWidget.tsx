@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DefaultChatTransport, type UIMessage } from "ai"
 import { useChat } from "@ai-sdk/react"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, FileText, History, Maximize2, MessageSquarePlus, Minimize2, Send, Sparkles, Square, Terminal, User, X } from "lucide-react"
+import { ArrowLeft, FileText, History, Maximize2, MessageSquarePlus, Minimize2, Send, Square, Terminal, User, X } from "lucide-react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import rehypeSanitize from "rehype-sanitize"
 import remarkGfm from "remark-gfm"
@@ -12,7 +12,6 @@ import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
 import { Message, MessageAvatar, MessageContent } from "@/components/ui/message"
 import { MessageScroller } from "@/components/ui/message-scroller"
-import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import type { AssistantUIMessage, SourceCitation, WorkflowDefinition } from "@/lib/assistant/types"
@@ -323,11 +322,13 @@ export function ChatbotWidget() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 30, scale: 0.95 }}
               transition={{ type: "spring", stiffness: 250, damping: 25 }}
-              className={`pointer-events-auto relative flex h-[min(680px,calc(100dvh-96px))] max-h-[680px] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-2xl backdrop-blur-xl transition-[width] duration-200 ${expanded ? "sm:w-[min(92vw,700px)]" : "sm:w-[min(92vw,460px)]"}`}
+              className={`pointer-events-auto relative flex h-[min(680px,calc(100dvh-96px))] max-h-[680px] w-full max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[28px] bg-white/95 shadow-2xl backdrop-blur-xl transition-[width] duration-200 ${expanded ? "sm:w-[min(92vw,700px)]" : "sm:w-[min(92vw,460px)]"}`}
             >
               <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/60 bg-slate-50 shadow-sm"><Sparkles size={18} className="text-slate-800" /></div>
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-slate-950 shadow-sm">
+                    <img src="/animations/energy-orb.gif" alt="Arca" className="h-full w-full object-cover scale-110" draggable={false} />
+                  </div>
                   <div>
                     <h3 className="font-['Plus_Jakarta_Sans'] text-sm font-extrabold leading-none tracking-tight text-slate-900">Arca AI</h3>
                   </div>
@@ -395,13 +396,24 @@ export function ChatbotWidget() {
                   )
                 })}
                 {loading && (
-                  <Message className="animate-pulse justify-start">
-                    <MessageAvatar className="border border-slate-200 bg-slate-100 text-slate-400 shadow-sm"><Terminal size={12} /></MessageAvatar>
-                    <MessageContent className="w-48 rounded-tl-none border border-slate-200/50 bg-slate-50/70 shadow-sm"><div className="space-y-2"><div className="h-2 w-5/6 rounded bg-slate-200" /><div className="h-2 w-4/6 rounded bg-slate-200" /><div className="h-2 w-2/6 rounded bg-slate-200" /></div></MessageContent>
+                  <Message className="justify-start">
+                    <MessageAvatar className="border-0 bg-transparent shadow-none overflow-hidden p-0 flex items-center justify-center">
+                      <img src="/animations/thinking.gif" alt="Arca is thinking…" className="h-full w-full object-contain" draggable={false} />
+                    </MessageAvatar>
+                    <MessageContent className="rounded-tl-none border border-slate-200/50 bg-white/80 shadow-sm px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-semibold text-slate-500">Arca is thinking</span>
+                        <span className="flex gap-0.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                      </div>
+                    </MessageContent>
                   </Message>
                 )}
                 {error && <p className="rounded-xl border border-rose-100 bg-rose-50 p-3 text-xs text-rose-700">{error.message || "The assistant could not complete that response."}</p>}
-                {profileStatus === "loading" && <div className="flex justify-center p-2"><Spinner className="h-4 w-4 text-slate-400" /></div>}
+                {profileStatus === "loading" && <div className="flex justify-center p-2"><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" /></div>}
               </MessageScroller>}
 
               <div className="flex items-center gap-2 rounded-b-[28px] border-t border-slate-100 bg-slate-50/50 p-3.5">
@@ -412,9 +424,27 @@ export function ChatbotWidget() {
           )}
         </AnimatePresence>
 
-        <motion.button onClick={() => setOpen((value) => !value)} aria-label="Open AI assistant" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="pointer-events-auto group flex h-12 w-12 items-center justify-center rounded-full border border-[#31547A] bg-[#14234B] text-[#ECDFCB] shadow-lg shadow-slate-950/15 transition-all">
+        <motion.button 
+          onClick={() => setOpen((value) => !value)} 
+          aria-label="Open AI assistant" 
+          whileHover={{ scale: 1.08 }} 
+          whileTap={{ scale: 0.92 }} 
+          className="pointer-events-auto group relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-slate-950 shadow-2xl shadow-slate-950/30 transition-all"
+        >
           <AnimatePresence mode="wait">
-            {open ? <motion.div key="close" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }}><X size={20} /></motion.div> : <motion.div key="open" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }}><Sparkles size={20} className="animate-pulse text-[#EAAD62]" /></motion.div>}
+            {open
+              ? <motion.div key="close" initial={{ rotate: -90, opacity: 0, scale: 0.7 }} animate={{ rotate: 0, opacity: 1, scale: 1 }} exit={{ rotate: 90, opacity: 0, scale: 0.7 }} className="flex items-center justify-center">
+                  <X size={22} className="text-[#ECDFCB]" />
+                </motion.div>
+              : <motion.div key="orb" initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.7 }} className="h-full w-full">
+                  <img
+                    src="/animations/energy-orb.gif"
+                    alt="Open Arca AI"
+                    className="h-full w-full object-cover scale-110"
+                    draggable={false}
+                  />
+                </motion.div>
+            }
           </AnimatePresence>
         </motion.button>
       </div>
