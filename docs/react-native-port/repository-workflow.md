@@ -10,10 +10,10 @@ Start each issue branch from `main`, for example `keane-SCRUM-47-staging-builds`
 
 The PR template requires the Jira key, linked issue, AI-use declaration, tests and Android/iOS evidence. The trusted-base review policy rejects human authors other than Keane, rejects missing Jira/issue links, and requires `@lumbinitechnologies` approval for Keane PRs. Dependabot has a narrow exception and requires Keane's review. CI checks formatting, lint, strict TypeScript, behavior and policy tests, API generation, import boundaries, Expo health, and Android/iOS Metro exports. Device tests remain a separate acceptance gate.
 
-## Main protection rollout
+## Main protection status
 
-1. Get independent owner review and merge [setup PR #18](https://github.com/lumbinitechnologies/skillarc-mobile/pull/18) after CI passes.
-2. Test `governance/review-policy` on a fresh PR against `main`, including a missing owner approval. Verify a missing check or unresolved conversation blocks merge.
-3. Enable `protect-main`: PRs, squash merges, required `checks` and `governance/review-policy`, CODEOWNER approval, resolved conversations, linear history, and no force pushes or deletion. Enable available security alerts.
+[Setup PR #18](https://github.com/lumbinitechnologies/skillarc-mobile/pull/18) passed CI and merged after independent owner review. [Hotfix PR #36](https://github.com/lumbinitechnologies/skillarc-mobile/pull/36) showed `governance/review-policy` fail without owner approval, pass after approval, and allow a squash merge. [Disposable PR #37](https://github.com/lumbinitechnologies/skillarc-mobile/pull/37) stayed blocked when checks were pending and after CI passed without approval; it was closed without merging.
 
-This order matters because the review-policy workflow is introduced by PR #18. The private SkillArc repository cannot use GitHub Free rulesets on its current plan; its server work still needs lead-controlled review.
+`protect-main` is active with required `checks` and `governance/review-policy`, CODEOWNER approval, stale-review dismissal, resolved conversations, linear history, squash-only merging, no force pushes or deletion, and no bypass actors. The unresolved-conversation setting was verified from the ruleset configuration; no review thread was created solely for a probe. Dependency alerts, Dependabot security updates, secret scanning and push protection are enabled.
+
+The private SkillArc repository cannot use GitHub Free rulesets on its current plan; its server work still needs lead-controlled review.
