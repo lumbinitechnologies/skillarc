@@ -2,16 +2,16 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, Search, LogOut, User, Settings, ChevronDown, KeyRound, Menu } from "lucide-react"
+import { Bell, LogOut, User, Settings, ChevronDown, KeyRound, Menu } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
 import type { UserContext } from "@/lib/user-context"
+import CommandPalette from "@/components/command-palette"
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
 export default function Navbar({ profile: initialProfile }: { profile: UserContext | null }) {
   const router = useRouter()
-  const [query, setQuery] = useState("")
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -173,16 +173,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         </div>
 
         <div className="flex flex-1 items-center justify-end gap-3">
-          <div className="hidden sm:flex min-w-0 flex-1 items-center justify-center gap-3 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 transition focus-within:border-gray-300 focus-within:bg-white">
-            <Search size={14} className="text-gray-600" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search anything…"
-              className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
-            />
-          </div>
+          <CommandPalette role={initialProfile?.role ?? "STUDENT"} />
 
           <div className="relative" ref={notifRef}>
             <button
