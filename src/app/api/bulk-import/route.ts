@@ -107,7 +107,66 @@ export async function POST(request: NextRequest) {
             semester: Number.isFinite(semester) ? semester : null,
             registration_number: row.registration_number || null,
             admission_year: row.admission_year ? Number(row.admission_year) : null,
+            dob: row.dob || null,
+            gender: row.gender || null,
           }, { onConflict: "id" })
+
+          // Create / Link parent if parent details provided in CSV
+          const parentEmail = String(row.parent_email || "").trim()
+          const parentName = String(row.parent_name || "").trim()
+          const parentPhone = String(row.parent_phone || "").trim()
+          const parentRelationship = String(row.parent_relationship || "").trim() || "Guardian"
+
+          if (parentEmail && parentName) {
+            const { data: existingParent } = await admin
+              .from("users")
+              .select("id")
+              .eq("email", parentEmail)
+              .eq("role", ROLES.PARENT)
+              .maybeSingle()
+
+            let parentUserId = existingParent?.id
+
+            if (!parentUserId) {
+              try {
+                const inviteResult = await inviteUser({
+                  email: parentEmail,
+                  role: ROLES.PARENT,
+                  institutionId: institution_id,
+                  organizationId: profile.organization_id || "",
+                  origin,
+                  name: toTitleCase(parentName),
+                })
+                parentUserId = inviteResult?.userId ?? undefined
+
+                if (parentUserId) {
+                  await admin.from("users").update({
+                    name: toTitleCase(parentName),
+                    phone: parentPhone || null,
+                  }).eq("id", parentUserId)
+                }
+              } catch (parentInviteError) {
+                console.error(`[bulk-import] Parent invite failed (${parentEmail}):`, parentInviteError)
+              }
+            }
+
+            if (parentUserId) {
+              const { data: existingRelation } = await admin
+                .from("parent_student_relations")
+                .select("id")
+                .eq("parent_id", parentUserId)
+                .eq("student_id", studentUserId)
+                .maybeSingle()
+
+              if (!existingRelation) {
+                await admin.from("parent_student_relations").insert({
+                  parent_id: parentUserId,
+                  student_id: studentUserId,
+                  relationship: parentRelationship,
+                })
+              }
+            }
+          }
 
           createdCount += 1
         } catch (rowError) {
@@ -145,12 +204,47 @@ export async function POST(request: NextRequest) {
             departmentId = department?.id ?? null
           }
 
-          await admin.from("users").update({
+          const rawRole = String(row.role || "").trim().toUpperCase()
+          const assignedRole = (rawRole === "HOD" || rawRole === "PROGRAM_HEAD") ? rawRole : ROLES.FACULTY
+
+          const { data: facultyUser } = await admin.from("users").update({
             name: toTitleCase(name),
-            role: ROLES.FACULTY,
+            role: assignedRole,
             institution_id: institution_id,
             department_id: departmentId,
-          }).eq("email", email)
+            phone: row.phone || null,
+          }).eq("email", email).select("id").maybeSingle()
+
+          const employeeId = String(row.employee_id || "").trim()
+          if (employeeId && facultyUser?.id) {
+            await admin.from("staff").upsert({
+              id: facultyUser.id,
+              institution_id: institution_id,
+              employee_id: employeeId,
+            }, { onConflict: "id" })
+          }
+
+          const isTt = String(row.is_timetable_builder || "").trim().toLowerCase()
+          if ((isTt === "true" || isTt === "1" || isTt === "yes") && facultyUser?.id) {
+            let { data: perm } = await admin
+              .from("permissions")
+              .select("id")
+              .eq("name", "timetable_builder")
+              .maybeSingle()
+            if (!perm) {
+              const { data: newPerm } = await admin
+                .from("permissions")
+                .insert({ name: "timetable_builder" })
+                .select("id")
+                .single()
+              perm = newPerm
+            }
+            if (perm?.id) {
+              await admin
+                .from("user_permissions")
+                .upsert({ user_id: facultyUser.id, permission_id: perm.id }, { onConflict: "user_id,permission_id" as any })
+            }
+          }
 
           createdCount += 1
         } catch (rowError) {
@@ -278,6 +372,21 @@ export async function POST(request: NextRequest) {
           }
 
           if (facultyId && subjectId) {
+            let sectionId: string | null = null
+            const sectionName = String(row.section_name || "").trim()
+            if (sectionName) {
+              const { data: section } = await admin
+                .from("sections")
+                .select("id")
+                .eq("institution_id", institution_id)
+                .ilike("name", `%${sectionName}%`)
+                .maybeSingle()
+              sectionId = section?.id ?? null
+            }
+
+            const semester = row.semester ? Number(row.semester) : null
+            const academicYear = row.academic_year ? String(row.academic_year).trim() : null
+
             const { data: existingMap } = await admin
               .from("faculty_subjects")
               .select("id")
@@ -291,7 +400,16 @@ export async function POST(request: NextRequest) {
                 institution_id: institution_id,
                 faculty_id: facultyId,
                 subject_id: subjectId,
+                section_id: sectionId,
+                semester: semester,
+                academic_year: academicYear,
               })
+            } else if (sectionId || semester || academicYear) {
+              await admin.from("faculty_subjects").update({
+                section_id: sectionId ?? undefined,
+                semester: semester ?? undefined,
+                academic_year: academicYear ?? undefined,
+              }).eq("id", existingMap.id)
             }
             createdCount += 1
           }
@@ -340,6 +458,48 @@ export async function POST(request: NextRequest) {
               organization_id: profile.organization_id,
               phone: row.phone || null,
             }, { onConflict: "id" })
+
+            // Link parent to student if student identifier is provided
+            const studentEmail = String(row.student_email || "").trim()
+            const studentRegNo = String(row.student_registration_number || "").trim()
+            const relationship = String(row.relationship || "").trim() || "Guardian"
+
+            if (studentEmail || studentRegNo) {
+              let studentId: string | null = null
+              if (studentEmail) {
+                const { data: stUser } = await admin
+                  .from("users")
+                  .select("id")
+                  .eq("email", studentEmail)
+                  .eq("role", ROLES.STUDENT)
+                  .maybeSingle()
+                studentId = stUser?.id ?? null
+              }
+              if (!studentId && studentRegNo) {
+                const { data: stRec } = await admin
+                  .from("students")
+                  .select("id")
+                  .eq("institution_id", institution_id)
+                  .ilike("registration_number", studentRegNo)
+                  .maybeSingle()
+                studentId = stRec?.id ?? null
+              }
+              if (studentId) {
+                const { data: existingRelation } = await admin
+                  .from("parent_student_relations")
+                  .select("id")
+                  .eq("parent_id", parentUserId)
+                  .eq("student_id", studentId)
+                  .maybeSingle()
+                if (!existingRelation) {
+                  await admin.from("parent_student_relations").insert({
+                    parent_id: parentUserId,
+                    student_id: studentId,
+                    relationship,
+                  })
+                }
+              }
+            }
 
             createdCount += 1
           }

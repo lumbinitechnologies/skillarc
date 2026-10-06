@@ -76,7 +76,13 @@ export function normalizeImportRows(rows: BulkImportRow[]): BulkImportRow[] {
     const normalized: BulkImportRow = {}
 
     Object.entries(row).forEach(([key, value]) => {
-      const normalizedKey = key.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_")
+      const normalizedKey = key
+        .trim()
+        .toLowerCase()
+        .replace(/\*/g, "")
+        .replace(/\(.*?\)/g, "")
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
       normalized[normalizedKey] = value?.trim()
     })
 

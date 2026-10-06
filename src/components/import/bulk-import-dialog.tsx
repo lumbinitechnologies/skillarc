@@ -18,52 +18,78 @@ interface BulkImportDialogProps {
 const ENTITY_META: Record<BulkImportDialogProps["entity"], { title: string; description: string; hints: string[]; sampleCsv: string }> = {
   students: {
     title: "Import Students",
-    description: "Upload a CSV with student details and section assignments.",
-    hints: ["Required: name, email", "Optional: section_name, program_name, semester, registration_number, phone, admission_year"],
-    sampleCsv: `name,email,section_name,semester,registration_number,phone,admission_year
-John Doe,john.doe@example.com,Section A,1,REG1001,+1234567890,2024
-Jane Smith,jane.smith@example.com,Section B,2,REG1002,+1234567891,2024`,
+    description: "Upload a CSV with student details, section assignments, and optional parent/guardian details.",
+    hints: [
+      "Mandatory (*): name, email",
+      "Optional Student: section_name, semester, program_name, registration_number, phone, admission_year, dob, gender",
+      "Optional Guardian: parent_name, parent_email, parent_phone, parent_relationship (Father, Mother, Guardian, Other)",
+    ],
+    sampleCsv: `name,email,section_name,semester,program_name,registration_number,phone,admission_year,dob,gender,parent_name,parent_email,parent_phone,parent_relationship
+Aarav Sharma,aarav.sharma@example.com,Section A,1,Computer Science,REG2024001,+919876543210,2024,2006-03-15,Male,Rajesh Sharma,rajesh.sharma@example.com,+919876543220,Father
+Diya Patel,diya.patel@example.com,Section A,1,Computer Science,REG2024002,+919876543211,2024,2006-07-22,Female,Anita Patel,anita.patel@example.com,+919876543221,Mother
+Vihaan Verma,vihaan.verma@example.com,Section B,2,Information Technology,REG2024003,+919876543212,2024,2005-11-09,Male,Suresh Verma,suresh.verma@example.com,+919876543222,Guardian`,
   },
   faculty: {
     title: "Import Faculty",
-    description: "Upload a CSV with faculty details and department assignments.",
-    hints: ["Required: name, email", "Optional: department_name"],
-    sampleCsv: `name,email,department_name
-Dr. Robert Smith,robert.smith@example.com,Computer Science
-Prof. Sarah Connor,sarah.connor@example.com,Information Technology
-Dr. James Wilson,james.wilson@example.com,Mechanical Engineering`,
+    description: "Upload a CSV with faculty details, department assignments, roles, and builder permissions.",
+    hints: [
+      "Mandatory (*): name, email",
+      "Optional: department_name, phone, employee_id, role (FACULTY, HOD, PROGRAM_HEAD), is_timetable_builder (true/false)",
+    ],
+    sampleCsv: `name,email,department_name,phone,employee_id,role,is_timetable_builder
+Dr. Alan Turing,alan.turing@example.com,Computer Science,+919876543201,FAC101,FACULTY,true
+Prof. Ada Lovelace,ada.lovelace@example.com,Computer Science,+919876543202,FAC102,HOD,false
+Dr. Claude Shannon,claude.shannon@example.com,Information Technology,+919876543203,FAC103,FACULTY,false`,
   },
   subjects: {
     title: "Import Subjects",
-    description: "Upload a CSV with subjects and optional program mapping.",
-    hints: ["Required: name, code", "Optional: semester, program_name, credits, subject_type (THEORY, LAB, ELECTIVE)"],
+    description: "Upload a CSV with subjects and curriculum mapping.",
+    hints: [
+      "Mandatory (*): name, code",
+      "Optional: semester, program_name, credits, subject_type (THEORY, LAB, ELECTIVE)",
+    ],
     sampleCsv: `name,code,semester,program_name,credits,subject_type
-Data Structures,CS201,3,Computer Science,4,THEORY
-Operating Systems,CS301,5,Computer Science,4,LAB`,
+Database Management Systems,CS202,3,Computer Science,4,THEORY
+Computer Networks,CS203,3,Computer Science,4,THEORY
+Data Structures Lab,CS204,3,Computer Science,2,LAB
+Cloud Computing,CS305,5,Computer Science,3,ELECTIVE`,
   },
   "faculty-subjects": {
     title: "Import Faculty Subject Mapping",
-    description: "Upload a CSV where each row assigns a faculty member to a subject.",
-    hints: ["Required: faculty_email or faculty_name", "Required: subject_code or subject_name"],
-    sampleCsv: `faculty_email,subject_code
-robert.smith@example.com,CS201
-sarah.connor@example.com,CS301`,
+    description: "Upload a CSV mapping faculty members to subjects, sections, and academic year.",
+    hints: [
+      "Mandatory (*): faculty_email (or faculty_name), subject_code (or subject_name)",
+      "Optional: section_name, semester, academic_year",
+    ],
+    sampleCsv: `faculty_email,subject_code,section_name,semester,academic_year
+ada.lovelace@example.com,CS202,Section A,3,2024-2025
+grace.hopper@example.com,CS203,Section A,3,2024-2025
+alan.turing@example.com,CS204,Section A,3,2024-2025`,
   },
   parents: {
     title: "Import Parents",
-    description: "Upload a CSV with parent account details.",
-    hints: ["Required: name, email", "Optional: phone"],
-    sampleCsv: `name,email,phone
-Michael Doe,michael.doe@example.com,+1234567890
-Mary Smith,mary.smith@example.com,+1234567891`,
+    description: "Upload a CSV with parent details and optional student linking.",
+    hints: [
+      "Mandatory (*): name, email",
+      "Optional: phone, student_email, student_registration_number, relationship (Father, Mother, Guardian, Other)",
+    ],
+    sampleCsv: `name,email,phone,student_email,student_registration_number,relationship
+Rajesh Sharma,rajesh.sharma@example.com,+919876543220,aarav.sharma@example.com,REG2024001,Father
+Anita Patel,anita.patel@example.com,+919876543221,diya.patel@example.com,REG2024002,Mother`,
   },
   timetable: {
     title: "Import Timetable",
     description: "Upload a CSV with timetable slots for sections.",
-    hints: ["Required: day, period, section_name, subject_code", "Optional: semester, faculty_email"],
-    sampleCsv: `day,period,section_name,subject_code,faculty_email
-Monday,1,Section A,CS201,robert.smith@example.com
-Monday,2,Section A,CS301,sarah.connor@example.com`,
+    hints: [
+      "Mandatory (*): day, period, section_name, subject_code",
+      "Optional: faculty_email, semester",
+    ],
+    sampleCsv: `day,period,section_name,subject_code,faculty_email,semester
+Monday,1,Section A,CS202,ada.lovelace@example.com,3
+Monday,2,Section A,CS203,grace.hopper@example.com,3
+Monday,3,Section A,CS204,alan.turing@example.com,3
+Tuesday,1,Section A,CS202,ada.lovelace@example.com,3
+Tuesday,2,Section B,CS203,grace.hopper@example.com,3`,
   },
 }
 
