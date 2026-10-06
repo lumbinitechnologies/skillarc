@@ -1,3 +1,4 @@
-faculty_email,subject_code
-ada.lovelace.test@example.com,t101
-grace.hopper.test@example.com,t101
+faculty_email,subject_code,section_name,semester,academic_year,faculty_name,subject_name
+ada.lovelace@example.com,CS202,Section A,3,2024-2025,Prof. Ada Lovelace,Database Management Systems
+grace.hopper@example.com,CS203,Section A,3,2024-2025,Prof. Grace Hopper,Computer Networks
+alan.turing@example.com,CS204,Section A,3,2024-2025,Dr. Alan Turing,Data Structures Lab

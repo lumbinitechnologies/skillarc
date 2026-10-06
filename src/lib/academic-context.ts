@@ -3,9 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AssistantPrincipal, AssistantReadScope } from "@/lib/assistant/types";
 
 export const ACADEMIC_CONTEXT_LIMITS = {
-  maxQueries: 12,
+  maxQueries: 20,
   maxRows: 50,
-  maxContextChars: 2500,
+  maxContextChars: 5000,
   academicWindowDays: 180,
   queryTimeoutMs: 2000,
   maxSubjects: 12,
@@ -532,6 +532,210 @@ async function facultyContext(
   return lines;
 }
 
+async function adminContext(
+  supabase: SupabaseClient,
+  profile: AcademicContextProfile,
+  state: { queries: number; rows: number },
+  scope: AssistantReadScope,
+): Promise<string[]> {
+  if (!profile.institution_id) return [];
+  const lines: string[] = [];
+
+  // Fetch institution info + entity lists + recent data in parallel
+  const [
+    institutionRes,
+    departments,
+    programs,
+    sections,
+    recentFaculty,
+    recentStudents,
+    subjects,
+    slots,
+    recentAnnouncements,
+    attendanceToday,
+    facultyList,
+    studentList,
+    parentList,
+  ] = await Promise.all([
+    safeQuery("institution", () =>
+      supabase.from("institutions").select("name, domain").eq("id", profile.institution_id).maybeSingle(), state),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("departments list", () =>
+          supabase.from("departments").select("name")
+            .eq("institution_id", profile.institution_id)
+            .order("name").limit(30), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("programs list", () =>
+          supabase.from("programs").select("name, department:department_id(name)")
+            .eq("institution_id", profile.institution_id)
+            .order("name").limit(30), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("sections list", () =>
+          supabase.from("sections").select("name, semester, program:program_id(name)")
+            .eq("institution_id", profile.institution_id)
+            .order("name").limit(30), state)
+      : Promise.resolve(null),
+    includesScope(scope, "faculty_sections")
+      ? safeQuery("recent faculty", () =>
+          supabase.from("users").select("name, email, role, department:department_id(name)")
+            .eq("institution_id", profile.institution_id)
+            .in("role", ["FACULTY", "HOD", "PROGRAM_HEAD"])
+            .order("created_at", { ascending: false }).limit(15), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("recent students", () =>
+          supabase.from("users").select("name, email")
+            .eq("institution_id", profile.institution_id)
+            .eq("role", "STUDENT")
+            .order("created_at", { ascending: false }).limit(15), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("subjects list", () =>
+          supabase.from("subjects").select("name, code, semester, credits, subject_type, program:program_id(name)")
+            .eq("institution_id", profile.institution_id)
+            .order("code").limit(30), state)
+      : Promise.resolve(null),
+    includesScope(scope, "timetable")
+      ? safeQuery("admin timetable sample", () =>
+          supabase.from("timetable_slots")
+            .select("day, period, subjects(name, code), section:section_id(name), faculty:faculty_id(name)")
+            .eq("institution_id", profile.institution_id)
+            .order("day").order("period")
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxTimetableSlots), state)
+      : Promise.resolve(null),
+    includesScope(scope, "announcements_events")
+      ? safeQuery("admin announcements", () =>
+          supabase.from("subject_announcements")
+            .select("title, description, created_at, subjects!inner(name, institution_id)")
+            .eq("subjects.institution_id", profile.institution_id)
+            .order("created_at", { ascending: false })
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxAnnouncements), state)
+      : Promise.resolve(null),
+    includesScope(scope, "attendance")
+      ? safeQuery("attendance today", () => {
+          const todayStr = new Date().toISOString().split("T")[0];
+          return supabase.from("attendance_records")
+            .select("status, attendance_sessions!inner(attendance_date, section:section_id!inner(institution_id))")
+            .eq("attendance_sessions.section.institution_id", profile.institution_id)
+            .eq("attendance_sessions.attendance_date", todayStr)
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxRows);
+        }, state)
+      : Promise.resolve(null),
+    // Fetch id-only lists for accurate counts
+    includesScope(scope, "program_subjects", "faculty_sections")
+      ? safeQuery("faculty ids", () =>
+          supabase.from("users").select("id")
+            .eq("institution_id", profile.institution_id)
+            .in("role", ["FACULTY", "HOD", "PROGRAM_HEAD"])
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxRows), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("student ids", () =>
+          supabase.from("users").select("id")
+            .eq("institution_id", profile.institution_id)
+            .eq("role", "STUDENT")
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxRows), state)
+      : Promise.resolve(null),
+    includesScope(scope, "program_subjects")
+      ? safeQuery("parent ids", () =>
+          supabase.from("users").select("id")
+            .eq("institution_id", profile.institution_id)
+            .eq("role", "PARENT")
+            .limit(ACADEMIC_CONTEXT_LIMITS.maxRows), state)
+      : Promise.resolve(null),
+  ]);
+
+  // Institution name
+  if (institutionRes && !Array.isArray(institutionRes) && institutionRes.name) {
+    lines.push(`\nInstitution: ${clip(institutionRes.name, 80)}`);
+  }
+
+  // Entity counts from real data
+  if (includesScope(scope, "program_subjects")) {
+    const countLines: string[] = [];
+    if (Array.isArray(departments)) countLines.push(`- Departments: ${departments.length}${departments.length >= 30 ? "+" : ""}`);
+    if (Array.isArray(programs)) countLines.push(`- Programs: ${programs.length}${programs.length >= 30 ? "+" : ""}`);
+    if (Array.isArray(sections)) countLines.push(`- Sections: ${sections.length}${sections.length >= 30 ? "+" : ""}`);
+    if (Array.isArray(subjects)) countLines.push(`- Subjects: ${subjects.length}${subjects.length >= 30 ? "+" : ""}`);
+    if (Array.isArray(facultyList)) countLines.push(`- Faculty: ${facultyList.length}${facultyList.length >= ACADEMIC_CONTEXT_LIMITS.maxRows ? "+" : ""}`);
+    if (Array.isArray(studentList)) countLines.push(`- Students: ${studentList.length}${studentList.length >= ACADEMIC_CONTEXT_LIMITS.maxRows ? "+" : ""}`);
+    if (Array.isArray(parentList)) countLines.push(`- Parents: ${parentList.length}${parentList.length >= ACADEMIC_CONTEXT_LIMITS.maxRows ? "+" : ""}`);
+    if (countLines.length) {
+      lines.push("\nInstitution Overview:", ...countLines);
+    }
+  }
+
+  // Departments list
+  if (includesScope(scope, "program_subjects") && Array.isArray(departments) && departments.length) {
+    lines.push("\nDepartments:", ...departments.map((d: any) => `- ${clip(d.name, 80)}`));
+  }
+
+  // Programs list
+  if (includesScope(scope, "program_subjects") && Array.isArray(programs) && programs.length) {
+    lines.push("\nPrograms:", ...programs.map((p: any) => {
+      const dept = p.department && typeof p.department === "object" ? p.department : {};
+      return `- ${clip(p.name, 70)}${dept.name ? ` (Dept: ${clip(dept.name, 40)})` : ""}`;
+    }));
+  }
+
+  // Sections list
+  if (includesScope(scope, "program_subjects") && Array.isArray(sections) && sections.length) {
+    lines.push("\nSections:", ...sections.map((s: any) => {
+      const prog = s.program && typeof s.program === "object" ? s.program : {};
+      return `- ${clip(s.name, 50)} — Sem ${s.semester ?? "N/A"}${prog.name ? ` (${clip(prog.name, 40)})` : ""}`;
+    }));
+  }
+
+  // Subjects list
+  if (includesScope(scope, "program_subjects") && Array.isArray(subjects) && subjects.length) {
+    lines.push("\nSubjects:", ...subjects.map((s: any) => {
+      const prog = s.program && typeof s.program === "object" ? s.program : {};
+      return `- ${clip(s.name, 60)} (${clip(s.code || "No code", 15)}) [Credits: ${s.credits ?? "N/A"}, Type: ${s.subject_type ?? "N/A"}]${prog.name ? ` — ${clip(prog.name, 30)}` : ""}`;
+    }));
+  }
+
+  // Faculty list
+  if (includesScope(scope, "faculty_sections") && Array.isArray(recentFaculty) && recentFaculty.length) {
+    lines.push("\nFaculty Members:", ...recentFaculty.map((f: any) => {
+      const dept = f.department && typeof f.department === "object" ? f.department : {};
+      return `- ${clip(f.name, 60)} (${clip(f.email, 50)}) — Role: ${f.role}${dept.name ? `, Dept: ${clip(dept.name, 30)}` : ""}`;
+    }));
+  }
+
+  // Recent students
+  if (includesScope(scope, "program_subjects") && Array.isArray(recentStudents) && recentStudents.length) {
+    lines.push("\nRecent Students:", ...recentStudents.map((s: any) =>
+      `- ${clip(s.name, 60)} (${clip(s.email, 50)})`
+    ));
+  }
+
+  // Timetable sample
+  if (includesScope(scope, "timetable") && Array.isArray(slots) && slots.length) {
+    lines.push("\nTimetable (sample):", ...slots.map((s: any) =>
+      `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Free", 60)}${s.section?.name ? ` [${clip(s.section.name, 30)}]` : ""}${s.faculty?.name ? ` — ${clip(s.faculty.name, 40)}` : ""}`
+    ));
+  }
+
+  // Attendance rate today
+  if (includesScope(scope, "attendance") && Array.isArray(attendanceToday) && attendanceToday.length) {
+    const present = attendanceToday.filter((r: any) => r.status === "PRESENT" || r.status === "LATE").length;
+    const total = attendanceToday.length;
+    const rate = total > 0 ? ((present / total) * 100).toFixed(1) : "0";
+    lines.push(`\nToday's Attendance: ${rate}% (${present}/${total} records)`);
+  }
+
+  // Announcements
+  if (includesScope(scope, "announcements_events") && Array.isArray(recentAnnouncements) && recentAnnouncements.length) {
+    lines.push("\nRecent Announcements:", ...recentAnnouncements.map((a: any) =>
+      `- ${clip(a.title, 80)}: ${clip(a.description, 150)}${a.subjects?.name ? ` [${clip(a.subjects.name, 50)}]` : ""}`
+    ));
+  }
+
+  return lines;
+}
+
 function parentScopeIncludes(scope: AssistantReadScope, requested: AssistantReadScope): boolean {
   return scope === "all" || scope === requested;
 }
@@ -753,18 +957,29 @@ async function parentContext(
   state: { queries: number; rows: number },
   scope: AssistantReadScope,
 ): Promise<string[]> {
-  const children = await safeQuery(
-    "parent academic context",
-    () =>
-      supabase.rpc(scope === "all" ? "get_parent_academic_context" : "get_parent_academic_context_scoped", {
-        p_parent_id: profile.id,
-        p_since: cutoffDate(),
-        p_limit: ACADEMIC_CONTEXT_LIMITS.maxChildren,
-        ...(scope === "all" ? {} : { p_scope: scope }),
-      }),
-    state,
-  );
-  if (!Array.isArray(children)) return [];
+  // Try the RPC path first; fall back to the direct-query approach if the
+  // function does not exist or fails.
+  let children: any[] | null = null;
+  try {
+    children = await safeQuery(
+      "parent academic context",
+      () =>
+        supabase.rpc(scope === "all" ? "get_parent_academic_context" : "get_parent_academic_context_scoped", {
+          p_parent_id: profile.id,
+          p_since: cutoffDate(),
+          p_limit: ACADEMIC_CONTEXT_LIMITS.maxChildren,
+          ...(scope === "all" ? {} : { p_scope: scope }),
+        }),
+      state,
+    ) as any[] | null;
+  } catch {
+    children = null;
+  }
+
+  // If the RPC returned nothing, fall back to the impersonated direct-query path
+  if (!Array.isArray(children) || !children.length) {
+    return impersonatedParentContext(supabase, profile, state, scope);
+  }
   const lines: string[] = [];
   for (const child of children) {
     if (includesScope(scope, "program_subjects")) lines.push(
@@ -873,7 +1088,9 @@ export async function fetchAcademicContext(
               ? impersonatedParentContext(supabase, profile, state, scope)
               : parentContext(supabase, profile, state, scope)
             : Promise.resolve([])
-          : Promise.resolve([]);
+          : ["INSTITUTION_ADMIN", "ORG_ADMIN", "SUPER_ADMIN"].includes(profile.role)
+            ? adminContext(supabase, profile, state, scope)
+            : Promise.resolve([]);
   const [academic, noticeLines] = await Promise.all([
     roleLines,
     includesScope(scope, "announcements_events") ? announcements(supabase, profile, state) : Promise.resolve([]),
