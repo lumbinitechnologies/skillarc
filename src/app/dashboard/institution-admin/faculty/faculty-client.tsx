@@ -1,40 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { motion } from "framer-motion"
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.05,
-    },
-  },
-}
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      type: "spring" as const,
-      stiffness: 100,
-      damping: 15,
-    },
-  },
-}
-
-import { Users, Plus, Upload } from "lucide-react"
+import { GraduationCap, Plus, Upload } from "lucide-react"
 import { FacultyList } from "@/components/faculty/faculty-list"
 import { CreateFacultyDialog } from "@/components/faculty/create-faculty-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { PageShell, PageHeader, SearchBar, itemVariants, actionButtonClass } from "@/components/ui/page-shell"
 import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
 
 interface FacultyClientPageProps {
@@ -49,6 +23,7 @@ export function FacultyClientPage({
   institutionId,
 }: FacultyClientPageProps) {
   const [faculty, setFaculty] = useState<FacultyWithStats[]>(initialFaculty)
+  const [search, setSearch] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyWithStats | null>(null)
@@ -86,25 +61,16 @@ export function FacultyClientPage({
         {
           method: isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            isEdit
-              ? data
-              : {
-                  ...data,
-                  institution_id: institutionId,
-                }
-          ),
+          body: JSON.stringify(isEdit ? data : { ...data, institution_id: institutionId }),
         }
       )
-
       if (!response.ok) throw new Error(isEdit ? "Failed to update faculty" : "Failed to create faculty")
-
       await loadFaculty()
       setIsOpen(false)
       setSelectedFaculty(null)
       toast({
         title: "Success",
-        description: isEdit ? "Faculty updated successfully" : "Faculty created successfully",
+        description: isEdit ? "Faculty updated" : "Faculty member added",
       })
     } catch (error) {
       toast({
@@ -117,26 +83,19 @@ export function FacultyClientPage({
     }
   }
 
-  const triggerDelete = (id: string) => {
-    setDeleteId(id)
-    setDeleteOpen(true)
-  }
+  const triggerDelete = (id: string) => { setDeleteId(id); setDeleteOpen(true) }
 
   const confirmDelete = async () => {
     if (!deleteId) return
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/faculty/${deleteId}`, {
-        method: "DELETE",
-      })
-      if (!response.ok) throw new Error("Failed to delete faculty")
+      const response = await fetch(`/api/faculty/${deleteId}`, { method: "DELETE" })
+      const resData = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(resData.error || "Failed to delete faculty")
       await loadFaculty()
       setDeleteOpen(false)
       setDeleteId(null)
-      toast({
-        title: "Success",
-        description: "Faculty removed successfully",
-      })
+      toast({ title: "Removed", description: "Faculty member removed" })
     } catch (error) {
       toast({
         title: "Error",
@@ -148,64 +107,75 @@ export function FacultyClientPage({
     }
   }
 
+  const handleResendInvite = async (targetFaculty: FacultyWithStats) => {
+    try {
+      toast({ title: "Sending…", description: `Sending invite to ${targetFaculty.email}` })
+      const response = await fetch("/api/invite-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: targetFaculty.email,
+          role: targetFaculty.role || "FACULTY",
+          institutionId,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok || data.error) throw new Error(data.error || "Failed to resend invite")
+      toast({ title: "Invitation Sent", description: `Email sent to ${targetFaculty.email}` })
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Failed to resend", variant: "destructive" })
+    }
+  }
+
+  const filtered = faculty.filter(
+    (f) =>
+      !search ||
+      f.name?.toLowerCase().includes(search.toLowerCase()) ||
+      f.email?.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8"
-    >
-      <motion.div
-        variants={itemVariants}
-        className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between"
-      >
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF]">
-            <Users className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#6C63FF]">Faculty Management</p>
-            <div className="mt-1 flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-slate-900">Faculty</h1>
-              <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-[#6C63FF]">
-                {faculty.length} Listed
-              </span>
-            </div>
-            <p className="mt-2 text-sm text-slate-500">Track faculty members, departments, and teaching assignments.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => setIsImportOpen(true)} className="rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <Upload className="mr-2 h-4 w-4" />
-            Import CSV
-          </Button>
-          <Button onClick={() => setIsOpen(true)} className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:shadow-md">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Faculty
-          </Button>
-        </div>
-      </motion.div>
+    <PageShell>
+      <PageHeader
+        icon={<GraduationCap className="h-5 w-5" />}
+        eyebrow="Faculty Management"
+        title="Faculty"
+        count={faculty.length}
+        countLabel="Members"
+        subtitle="Track faculty members, departments, and teaching assignments."
+        actions={
+          <>
+            <button onClick={() => setIsImportOpen(true)} className={actionButtonClass.secondary}>
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </button>
+            <button onClick={() => setIsOpen(true)} className={actionButtonClass.primary}>
+              <Plus className="h-4 w-4" />
+              Add Faculty
+            </button>
+          </>
+        }
+      />
+
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search by name or email…"
+      />
 
       <motion.div variants={itemVariants}>
-        <Card className="p-6 shadow-sm">
         <FacultyList
-          faculty={faculty}
+          faculty={filtered}
           isLoading={isLoading}
-          onEdit={(faculty) => {
-            setSelectedFaculty(faculty)
-            setIsOpen(true)
-          }}
+          onEdit={(f) => { setSelectedFaculty(f); setIsOpen(true) }}
           onDelete={triggerDelete}
+          onResendInvite={handleResendInvite}
         />
-      </Card>
       </motion.div>
 
       <CreateFacultyDialog
         open={isOpen}
-        onOpenChange={(open) => {
-          setIsOpen(open)
-          if (!open) setSelectedFaculty(null)
-        }}
+        onOpenChange={(open) => { setIsOpen(open); if (!open) setSelectedFaculty(null) }}
         onSubmit={handleCreateOrUpdate}
         faculty={selectedFaculty}
         departments={departments}
@@ -224,10 +194,10 @@ export function FacultyClientPage({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={confirmDelete}
-        title="Delete Faculty Member"
-        description="Are you sure you want to remove this faculty member? Their timetable slots and subject assignments will be unassigned."
+        title="Remove Faculty Member"
+        description="This will remove the faculty member and unassign their timetable slots and subject assignments."
         loading={isLoading}
       />
-    </motion.div>
+    </PageShell>
   )
 }

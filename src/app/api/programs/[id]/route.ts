@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -57,8 +58,6 @@ export async function PUT(
   try {
     const { id } = await params
 
-    const supabase = await createSupabaseServerClient()
-
     const profile = await getCurrentUserContext()
     if (!profile) {
       return NextResponse.json(
@@ -74,16 +73,26 @@ export async function PUT(
       )
     }
 
+    const supabase = createSupabaseAdminClient()
+
     const body = await request.json()
 
     const { name, department_id } = body
 
+    if (name !== undefined && !name.trim()) {
+      return NextResponse.json(
+        { error: "Program name cannot be empty" },
+        { status: 400 }
+      )
+    }
+
+    const updates: Record<string, any> = {}
+    if (name !== undefined) updates.name = name.trim()
+    if (department_id !== undefined) updates.department_id = department_id || null
+
     const { data, error } = await supabase
       .from("programs")
-      .update({
-        name,
-        department_id,
-      })
+      .update(updates)
       .eq("id", id)
       .select(`
         *,
@@ -94,14 +103,20 @@ export async function PUT(
       `)
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error("Program update error:", error)
+      return NextResponse.json(
+        { error: error.message || "Failed to update program" },
+        { status: 400 }
+      )
+    }
 
     return NextResponse.json(data)
   } catch (error) {
-    console.error("Program update error:", error)
+    console.error("Program update unexpected error:", error)
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }
@@ -115,7 +130,7 @@ export async function DELETE(
   try {
     const { id } = await params
 
-    const supabase = await createSupabaseServerClient()
+    const supabase = createSupabaseAdminClient()
 
     const profile = await getCurrentUserContext()
     if (!profile) {
@@ -137,16 +152,22 @@ export async function DELETE(
       .delete()
       .eq("id", id)
 
-    if (error) throw error
+    if (error) {
+      console.error("Program delete error:", error)
+      return NextResponse.json(
+        { error: error.message || "Failed to delete program" },
+        { status: 400 }
+      )
+    }
 
     return NextResponse.json({
       success: true,
     })
   } catch (error) {
-    console.error("Program delete error:", error)
+    console.error("Program delete unexpected error:", error)
 
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
   }

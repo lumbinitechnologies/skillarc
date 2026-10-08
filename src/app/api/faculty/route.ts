@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { inviteUser, resolveAppOrigin } from "@/lib/invite-user"
@@ -28,8 +29,10 @@ export async function POST(request: NextRequest) {
 
     // Steps 1 & 2: createUser() block removed.
     const origin = resolveAppOrigin(request.headers)
+    const adminSupabase = createSupabaseAdminClient()
     await inviteUser({
       email,
+      name,
       role: ROLES.FACULTY,
       institutionId: institution_id,
       organizationId: profile.organization_id || "",
@@ -37,7 +40,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Patch in the extra faculty fields (name, department) that invite-user doesn't set
-    const { data: faculty, error } = await supabase
+    const { data: faculty, error } = await adminSupabase
       .from("users")
       .update({
         name,

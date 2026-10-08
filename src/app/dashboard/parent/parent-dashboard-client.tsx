@@ -1,14 +1,20 @@
 "use client"
 
 import { useState } from "react"
-import { motion } from "framer-motion"
-import { BookOpen, Award, UserCheck, Mail, Calendar, ChevronRight, Phone, Users } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  GraduationCap, BookOpen, UserCheck, Mail, Phone, Calendar,
+  TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
+  ChevronDown, Users, Clock, BarChart3, Building2,
+} from "lucide-react"
 
-interface Subject {
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface SubjectWithAttendance {
   id: string
   name: string
   code: string
   facultyName: string
+  attendance: { total: number; present: number; absent: number }
 }
 
 interface Child {
@@ -19,28 +25,55 @@ interface Child {
   phone: string
   registration_number: string
   semester: number | null
+  admission_year: number | null
   sectionName: string
   programName: string
   advisorName: string
   advisorEmail: string
   advisorPhone: string
-  subjects: Subject[]
-  schedule: Array<{
-    day: string
-    period: number
-    subjectName: string
-    subjectCode: string
-    facultyName: string
-  }>
-  attendance: {
-    rate: number
-    total: number
-    present: number
-    absent: number
-    late: number
-  }
+  subjects: SubjectWithAttendance[]
+  schedule: Array<{ day: string; period: number; subjectName: string; subjectCode: string; facultyName: string }>
+  attendance: { rate: number; total: number; present: number; absent: number; late: number }
 }
 
+// ── Animation variants ────────────────────────────────────────────────────────
+const container = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+}
+const item = {
+  hidden: { opacity: 0, y: 14 },
+  show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 120, damping: 18 } },
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function greeting(name: string) {
+  const h = new Date().getHours()
+  const time = h < 12 ? "Good Morning" : h < 17 ? "Good Afternoon" : "Good Evening"
+  return `${time}, ${name.split(" ")[0]} 👋`
+}
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
+function attendanceColor(rate: number) {
+  if (rate >= 75) return "text-emerald-600"
+  if (rate >= 60) return "text-amber-500"
+  return "text-red-500"
+}
+
+function attendanceBg(rate: number) {
+  if (rate >= 75) return "bg-emerald-50 border-emerald-100"
+  if (rate >= 60) return "bg-amber-50 border-amber-100"
+  return "bg-red-50 border-red-100"
+}
+
+function attendanceBarColor(rate: number) {
+  if (rate >= 75) return "bg-emerald-500"
+  if (rate >= 60) return "bg-amber-400"
+  return "bg-red-500"
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function ParentDashboardClient({
   parent,
   childrenList = [],
@@ -48,265 +81,493 @@ export default function ParentDashboardClient({
   parent: { name: string; email: string; institution: string }
   childrenList: Child[]
 }) {
-  const [selectedChildIndex, setSelectedChildIndex] = useState(0)
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const [timetableDay, setTimetableDay] = useState(
+    new Date().toLocaleDateString("en-US", { weekday: "long" })
+  )
+  const [subjectExpanded, setSubjectExpanded] = useState<string | null>(null)
 
-  const child = childrenList[selectedChildIndex] ?? null
-  const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" })
-  const todaySchedule = child?.schedule ? child.schedule.filter(s => s.day === todayName) : []
-  const weeklySchedule = child?.schedule ? child.schedule.filter(s => s.day !== todayName).slice(0, 5) : []
+  const child = childrenList[selectedIdx] ?? null
+  const daySchedule = child?.schedule?.filter((s) => s.day === timetableDay) ?? []
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="min-h-screen bg-[#F8FAFC] pb-12 pt-6 font-sans antialiased"
-    >
-      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none opacity-40">
-        <div className="absolute left-[5%] top-[10%] h-[400px] w-[400px] rounded-full bg-indigo-200/50 blur-[120px]" />
-        <div className="absolute right-[10%] top-[40%] h-[350px] w-[350px] rounded-full bg-violet-200/50 blur-[100px]" />
-        <div className="absolute bottom-[10%] left-[20%] h-[500px] w-[500px] rounded-full bg-teal-100/50 blur-[130px]" />
+    <div className="min-h-screen bg-[#F8FAFC] pb-16 antialiased">
+      {/* Ambient gradient blobs */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-[5%] top-[5%] h-[500px] w-[500px] rounded-full bg-[#1690C7]/6 blur-[140px]" />
+        <div className="absolute right-[8%] top-[35%] h-[400px] w-[400px] rounded-full bg-[#FC8402]/5 blur-[120px]" />
+        <div className="absolute bottom-[5%] left-[25%] h-[450px] w-[450px] rounded-full bg-emerald-100/30 blur-[140px]" />
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-8 px-4 sm:px-6 lg:px-8">
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-[28px] border border-slate-200/60 bg-white/90 p-6 shadow-[0_20px_50px_rgba(15,23,42,0.04)] backdrop-blur-xl transition duration-300"
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6 lg:px-8"
+      >
+        {/* ── Hero Header ── */}
+        <motion.div
+          variants={item}
+          className="flex flex-col gap-5 rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm backdrop-blur-sm md:flex-row md:items-center md:justify-between"
         >
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-5">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-200/30">
-                <span className="text-2xl">👨‍👩‍👧</span>
-              </div>
-              <div>
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.24em] text-gray-600">Parent Console</p>
-                <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-slate-900 font-display">
-                  Good Evening, {parent.name} 👋
-                </h1>
-                <p className="mt-1 text-sm text-slate-500">{parent.institution} · {parent.email}</p>
-              </div>
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#1690C7]/10 border border-[#1690C7]/15 text-[#1690C7]">
+              <Users className="h-5 w-5" />
             </div>
-
-            {childrenList.length > 1 && (
-              <div className="flex shrink-0 flex-col gap-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Switch Student View</label>
-                <select
-                  value={selectedChildIndex}
-                  onChange={e => setSelectedChildIndex(Number(e.target.value))}
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:border-indigo-400 focus:border-indigo-500"
-                >
-                  {childrenList.map((c, idx) => (
-                    <option key={c.id} value={idx}>
-                      {c.name} ({c.registration_number})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#1690C7]">
+                Parent Console · {parent.institution}
+              </p>
+              <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">
+                {greeting(parent.name)}
+              </h1>
+              <p className="mt-0.5 text-sm text-slate-500">{parent.email}</p>
+            </div>
           </div>
-        </motion.section>
 
-        {childrenList.length === 0 ? (
-          <section className="rounded-[28px] border border-dashed border-slate-300 bg-white/80 p-12 text-center shadow-sm">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 text-gray-600">
-              <Users size={28} />
+          {/* Student switcher (multi-child) */}
+          {childrenList.length > 1 && (
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                Viewing Student
+              </label>
+              <select
+                value={selectedIdx}
+                onChange={(e) => setSelectedIdx(Number(e.target.value))}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[#1690C7] focus:ring-2 focus:ring-[#1690C7]/10 transition"
+              >
+                {childrenList.map((c, idx) => (
+                  <option key={c.id} value={idx}>
+                    {c.name} · {c.registration_number}
+                  </option>
+                ))}
+              </select>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">No student records linked</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-              Your parent profile is not linked to any student registration numbers yet. Please reach out to the college administration or faculty advisor with your child&apos;s details to activate link.
-            </p>
-          </section>
-        ) : child ? (
+          )}
+        </motion.div>
+
+        {/* ── No students linked ── */}
+        {childrenList.length === 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-            className="space-y-8"
+            variants={item}
+            className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white/80 py-24 text-center px-6"
           >
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[22px] border border-slate-200/40 bg-slate-100/60 p-4">
-              <div className="flex items-center gap-3">
-                <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold uppercase tracking-wider text-indigo-700">
-                  {child.relationship}
-                </span>
-                <h2 className="text-lg font-bold text-slate-900 font-display">Currently Viewing: {child.name}</h2>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
-                <span className="rounded-xl border bg-white px-3 py-1.5 shadow-sm">USN: {child.registration_number}</span>
-                <span className="rounded-xl border bg-white px-3 py-1.5 shadow-sm">Prog: {child.programName}</span>
-                <span className="rounded-xl border bg-white px-3 py-1.5 shadow-sm">Section: {child.sectionName} (Sem {child.semester ?? "—"})</span>
-              </div>
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1690C7]/8 text-[#1690C7]">
+              <GraduationCap className="h-7 w-7" />
             </div>
+            <h3 className="text-lg font-bold text-slate-900">No student linked yet</h3>
+            <p className="mt-2 max-w-md text-sm text-slate-500 leading-relaxed">
+              Your parent account is not linked to any student record. Please contact the institution administrator to complete the setup.
+            </p>
+          </motion.div>
+        )}
 
-            <div className="grid gap-4 md:grid-cols-3">
+        {child && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={child.id}
+              variants={container}
+              initial="hidden"
+              animate="show"
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-6"
+            >
+              {/* ── Student Identity Bar ── */}
               <motion.div
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -6 }}
-                className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-sm transition duration-200"
+                variants={item}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white/80 px-5 py-3.5 shadow-sm"
               >
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-600">
-                    <UserCheck size={20} />
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1690C7]/10 text-[#1690C7] text-sm font-black">
+                    {child.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="rounded-md bg-teal-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-600">Real-time</span>
-                </div>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950 font-mono">{child.attendance.rate}%</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">Attendance Rate</p>
-                <p className="mt-2 text-xs text-slate-400">
-                  Attended {child.attendance.present + child.attendance.late} of {child.attendance.total} total sessions
-                </p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -6 }}
-                className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-sm transition duration-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-100 text-violet-700">
-                    <Award size={20} />
-                  </div>
-                  <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-600">Standing</span>
-                </div>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950 font-mono">Active</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">Academic Standing</p>
-                <p className="mt-2 text-xs text-slate-400">Admitted in Year {child.semester ? `Sem ${child.semester}` : "—"}</p>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -6 }}
-                className="rounded-[24px] border border-slate-200/80 bg-white/95 p-5 shadow-sm transition duration-200"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
-                    <BookOpen size={20} />
-                  </div>
-                  <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-600">Courses</span>
-                </div>
-                <p className="mt-4 text-3xl font-bold tracking-tight text-slate-950 font-mono">{child.subjects.length}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">Enrolled Subjects</p>
-                <p className="mt-2 text-xs text-slate-400">Assigned course units for current term</p>
-              </motion.div>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.32, ease: [0.22, 1, 0.36, 1] }}
-                className="space-y-5 rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm"
-              >
-                <div className="flex items-center justify-between border-b pb-4">
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900 font-display">Daily Class Timetable</h2>
-                    <p className="text-xs text-slate-400">Hourly lecture calendar for the section</p>
+                    <p className="text-sm font-bold text-slate-900">{child.name}</p>
+                    <p className="text-[11px] text-slate-400">{child.relationship}</p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
-                    Today is {todayName}
-                  </span>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    child.registration_number !== "—" && `USN: ${child.registration_number}`,
+                    child.programName,
+                    child.sectionName !== "—" && `Section ${child.sectionName}`,
+                    child.semester && `Semester ${child.semester}`,
+                  ]
+                    .filter(Boolean)
+                    .map((label, i) => (
+                      <span
+                        key={i}
+                        className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                </div>
+              </motion.div>
 
-                <div className="space-y-4">
-                  {todaySchedule.length > 0 ? (
-                    <div className="space-y-3">
-                      <p className="text-xs font-bold uppercase tracking-wider text-gray-600">Today&apos;s Schedule</p>
-                      {todaySchedule.map((session, idx) => (
-                        <div key={idx} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition duration-200 hover:border-indigo-200">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                              <p className="text-sm font-bold text-slate-900">{session.subjectCode} · {session.subjectName}</p>
-                              <p className="mt-1 text-xs text-slate-500">Faculty: {session.facultyName}</p>
-                            </div>
-                            <div className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
-                              <Calendar size={13} className="text-slate-400" /> Period {session.period}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+              {/* ── Stat Cards ── */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                {/* Attendance rate */}
+                <motion.div
+                  variants={item}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  className={`rounded-3xl border p-5 shadow-sm transition-all duration-200 ${attendanceBg(child.attendance.rate)}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${attendanceBg(child.attendance.rate)}`}>
+                      {child.attendance.rate >= 75 ? (
+                        <TrendingUp className={`h-5 w-5 ${attendanceColor(child.attendance.rate)}`} />
+                      ) : child.attendance.rate >= 60 ? (
+                        <AlertTriangle className={`h-5 w-5 ${attendanceColor(child.attendance.rate)}`} />
+                      ) : (
+                        <TrendingDown className={`h-5 w-5 ${attendanceColor(child.attendance.rate)}`} />
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-black uppercase tracking-wider ${attendanceColor(child.attendance.rate)}`}>
+                      {child.attendance.rate >= 75 ? "Good" : child.attendance.rate >= 60 ? "Warning" : "Low"}
+                    </span>
+                  </div>
+                  <p className={`mt-4 text-4xl font-black tracking-tight font-['Space_Grotesk'] ${attendanceColor(child.attendance.rate)}`}>
+                    {child.attendance.rate}%
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">Overall Attendance</p>
+                  <div className="mt-3 flex gap-3 text-[11px] text-slate-500">
+                    <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> {child.attendance.present} Present</span>
+                    <span className="flex items-center gap-1"><AlertTriangle className="h-3 w-3 text-red-400" /> {child.attendance.absent} Absent</span>
+                  </div>
+                  {/* Mini bar */}
+                  <div className="mt-3 h-1.5 rounded-full bg-white/60">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-700 ${attendanceBarColor(child.attendance.rate)}`}
+                      style={{ width: `${child.attendance.rate}%` }}
+                    />
+                  </div>
+                </motion.div>
+
+                {/* Enrolled courses */}
+                <motion.div
+                  variants={item}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  className="rounded-3xl border border-[#1690C7]/12 bg-[#1690C7]/5 p-5 shadow-sm transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1690C7]/10 text-[#1690C7]">
+                      <BookOpen className="h-5 w-5" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#1690C7]">This Semester</span>
+                  </div>
+                  <p className="mt-4 text-4xl font-black tracking-tight text-slate-900 font-['Space_Grotesk']">
+                    {child.subjects.length}
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">Enrolled Courses</p>
+                  <p className="mt-2 text-[11px] text-slate-500">
+                    {child.subjects.map((s) => s.code).slice(0, 3).join(", ")}
+                    {child.subjects.length > 3 ? ` +${child.subjects.length - 3} more` : ""}
+                  </p>
+                </motion.div>
+
+                {/* Academic info */}
+                <motion.div
+                  variants={item}
+                  whileHover={{ y: -4, scale: 1.01 }}
+                  className="rounded-3xl border border-[#FC8402]/12 bg-[#FC8402]/5 p-5 shadow-sm transition-all duration-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FC8402]/10 text-[#FC8402]">
+                      <GraduationCap className="h-5 w-5" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[#FC8402]">Academic</span>
+                  </div>
+                  <p className="mt-4 text-4xl font-black tracking-tight text-slate-900 font-['Space_Grotesk']">
+                    Sem {child.semester ?? "—"}
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">Current Semester</p>
+                  {child.admission_year && (
+                    <p className="mt-2 text-[11px] text-slate-500">Admitted {child.admission_year}</p>
+                  )}
+                </motion.div>
+              </div>
+
+              {/* ── Main grid: Timetable + Right panel ── */}
+              <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+
+                {/* Timetable */}
+                <motion.section
+                  variants={item}
+                  className="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-50 pb-4 mb-5">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1690C7]">Schedule</p>
+                      <h2 className="mt-0.5 text-base font-bold text-slate-900">Class Timetable</h2>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="text-[11px] font-semibold text-slate-500">{timetableDay}</span>
+                    </div>
+                  </div>
+
+                  {/* Day selector */}
+                  <div className="flex gap-1 flex-wrap mb-5">
+                    {DAYS.map((day) => {
+                      const hasClass = child.schedule.some((s) => s.day === day)
+                      const isToday = day === new Date().toLocaleDateString("en-US", { weekday: "long" })
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => setTimetableDay(day)}
+                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all duration-150 ${
+                            timetableDay === day
+                              ? "bg-[#1690C7] text-white shadow-sm"
+                              : hasClass
+                              ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              : "bg-slate-50 text-slate-400"
+                          } ${isToday && timetableDay !== day ? "ring-1 ring-[#1690C7]/30" : ""}`}
+                        >
+                          {day.slice(0, 3)}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {daySchedule.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center">
+                      <Calendar className="h-7 w-7 text-slate-300 mb-2" />
+                      <p className="text-sm font-semibold text-slate-400">No classes on {timetableDay}</p>
                     </div>
                   ) : (
-                    <div className="rounded-2xl border border-dashed bg-slate-50/30 p-6 text-center text-xs text-slate-400">
-                      No active sessions listed on the schedule for today.
-                    </div>
-                  )}
-
-                  {weeklySchedule.length > 0 && (
-                    <div className="space-y-3 pt-2">
-                      <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Weekly Calendar Overview</p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {weeklySchedule.map((session, idx) => (
-                          <div key={idx} className="rounded-xl border border-slate-100 bg-white p-3 text-xs">
-                            <span className="font-bold text-gray-600">{session.day} (P{session.period})</span>
-                            <p className="mt-1 truncate font-semibold text-slate-800">{session.subjectName}</p>
-                            <p className="mt-0.5 text-[10px] text-slate-400">{session.facultyName}</p>
+                    <div className="space-y-2.5">
+                      {daySchedule
+                        .sort((a, b) => a.period - b.period)
+                        .map((session, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5 hover:border-[#1690C7]/20 hover:bg-[#1690C7]/3 transition-all duration-150"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-xl bg-white border border-slate-100 text-[#1690C7] font-['Space_Grotesk']">
+                              <span className="text-[9px] font-bold uppercase opacity-60">P</span>
+                              <span className="text-sm font-black leading-none">{session.period}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-bold text-slate-900 truncate">{session.subjectName}</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{session.subjectCode} · {session.facultyName}</p>
+                            </div>
                           </div>
                         ))}
-                      </div>
                     </div>
                   )}
-                </div>
-              </motion.section>
+                </motion.section>
 
-              <div className="space-y-6">
-                <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm">
-                  <h3 className="text-md font-bold text-slate-900 font-display">Faculty Section Advisor</h3>
-                  <div className="flex items-start gap-4 rounded-2xl border border-gray-200 bg-gray-100/50 p-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 font-bold text-gray-600">
-                      {child.advisorName.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h4 className="truncate text-sm font-bold text-slate-900">{child.advisorName}</h4>
-                      <p className="text-xs text-slate-500">Mentor & Counselor</p>
-
-                      <div className="mt-3 space-y-1.5 text-xs text-slate-600">
-                        {child.advisorEmail && (
-                          <a href={`mailto:${child.advisorEmail}`} className="flex items-center gap-1.5 transition hover:text-gray-600">
-                            <Mail size={12} className="text-slate-400" /> {child.advisorEmail}
-                          </a>
-                        )}
-                        {child.advisorPhone && (
-                          <a href={`tel:${child.advisorPhone}`} className="flex items-center gap-1.5 transition hover:text-gray-600">
-                            <Phone size={12} className="text-slate-400" /> {child.advisorPhone}
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="space-y-4 rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm">
-                  <h3 className="text-md font-bold text-slate-900 font-display">Course Overview</h3>
-                  <div className="grid gap-3">
-                    {child.subjects.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed bg-slate-50/30 p-6 text-center text-xs text-slate-400">
-                        No subject configurations found for this semester.
+                {/* Right panel: Advisor + Contact */}
+                <div className="space-y-5">
+                  {/* Advisor */}
+                  <motion.section
+                    variants={item}
+                    className="rounded-3xl border border-slate-100 bg-white/90 p-5 shadow-sm"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1690C7] mb-3">Section Advisor</p>
+                    {child.advisorName ? (
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FC8402]/10 text-[#FC8402] text-sm font-black">
+                          {child.advisorName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 text-sm">{child.advisorName}</p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">Section Faculty Advisor</p>
+                          <div className="mt-3 space-y-1.5">
+                            {child.advisorEmail && (
+                              <a
+                                href={`mailto:${child.advisorEmail}`}
+                                className="flex items-center gap-2 text-[12px] text-slate-600 hover:text-[#1690C7] transition-colors"
+                              >
+                                <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                <span className="truncate">{child.advisorEmail}</span>
+                              </a>
+                            )}
+                            {child.advisorPhone && (
+                              <a
+                                href={`tel:${child.advisorPhone}`}
+                                className="flex items-center gap-2 text-[12px] text-slate-600 hover:text-[#1690C7] transition-colors"
+                              >
+                                <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                {child.advisorPhone}
+                              </a>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      child.subjects.map(subject => (
-                        <div key={subject.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition duration-200 hover:border-gray-200">
-                          <div>
-                            <p className="text-xs font-bold text-slate-900">{subject.name}</p>
-                            <p className="mt-1 text-[10px] text-slate-400">{subject.code} · Faculty: {subject.facultyName}</p>
-                          </div>
-                          <ChevronRight size={14} className="shrink-0 text-slate-400" />
-                        </div>
-                      ))
+                      <p className="text-sm text-slate-400 italic">No advisor assigned</p>
                     )}
-                  </div>
-                </section>
+                  </motion.section>
+
+                  {/* Student contact */}
+                  <motion.section
+                    variants={item}
+                    className="rounded-3xl border border-slate-100 bg-white/90 p-5 shadow-sm"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1690C7] mb-3">Student Contact</p>
+                    <div className="space-y-2.5">
+                      {child.email && (
+                        <a
+                          href={`mailto:${child.email}`}
+                          className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 hover:border-[#1690C7]/20 transition-all"
+                        >
+                          <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+                          <span className="truncate">{child.email}</span>
+                        </a>
+                      )}
+                      {child.phone && child.phone !== "—" && (
+                        <a
+                          href={`tel:${child.phone}`}
+                          className="flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 hover:border-[#1690C7]/20 transition-all"
+                        >
+                          <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+                          {child.phone}
+                        </a>
+                      )}
+                    </div>
+                  </motion.section>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ) : null}
-      </div>
-    </motion.div>
+
+              {/* ── Subject-wise Attendance ── */}
+              <motion.section variants={item} className="rounded-3xl border border-slate-100 bg-white/90 p-6 shadow-sm">
+                <div className="flex items-center gap-3 border-b border-slate-50 pb-4 mb-5">
+                  <BarChart3 className="h-4 w-4 text-[#1690C7]" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#1690C7]">Academics</p>
+                    <h2 className="mt-0.5 text-base font-bold text-slate-900">Subject-wise Attendance</h2>
+                  </div>
+                </div>
+
+                {child.subjects.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center">
+                    <BookOpen className="h-7 w-7 text-slate-300 mb-2" />
+                    <p className="text-sm font-semibold text-slate-400">No courses assigned yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {child.subjects.map((subject) => {
+                      const rate = subject.attendance.total > 0
+                        ? Math.round((subject.attendance.present / subject.attendance.total) * 100)
+                        : 0
+                      const isExpanded = subjectExpanded === subject.id
+
+                      return (
+                        <div key={subject.id} className="rounded-2xl border border-slate-100 overflow-hidden">
+                          <button
+                            onClick={() => setSubjectExpanded(isExpanded ? null : subject.id)}
+                            className="w-full flex items-center gap-4 p-4 hover:bg-slate-50/60 transition-colors text-left"
+                          >
+                            {/* Subject color bar */}
+                            <div className="h-8 w-1 rounded-full flex-shrink-0" style={{
+                              background: rate >= 75 ? "#10B981" : rate >= 60 ? "#EAAD62" : "#F04438"
+                            }} />
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-slate-900 truncate">{subject.name}</p>
+                                  <p className="text-[11px] text-slate-400 mt-0.5">{subject.code} · {subject.facultyName}</p>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <span className={`text-base font-black font-['Space_Grotesk'] ${attendanceColor(rate)}`}>
+                                    {subject.attendance.total > 0 ? `${rate}%` : "—"}
+                                  </span>
+                                  <ChevronDown
+                                    className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                  />
+                                </div>
+                              </div>
+                              {/* Progress bar */}
+                              {subject.attendance.total > 0 && (
+                                <div className="mt-2.5 h-1.5 rounded-full bg-slate-100">
+                                  <div
+                                    className={`h-1.5 rounded-full transition-all duration-700 ${attendanceBarColor(rate)}`}
+                                    style={{ width: `${rate}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </button>
+
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden border-t border-slate-50"
+                              >
+                                <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50/60">
+                                  <div className="rounded-xl bg-white border border-slate-100 px-3 py-2.5 text-center">
+                                    <p className="text-base font-black text-slate-900 font-['Space_Grotesk']">
+                                      {subject.attendance.total}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5 font-semibold uppercase tracking-wider">Total</p>
+                                  </div>
+                                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2.5 text-center">
+                                    <p className="text-base font-black text-emerald-600 font-['Space_Grotesk']">
+                                      {subject.attendance.present}
+                                    </p>
+                                    <p className="text-[10px] text-emerald-500 mt-0.5 font-semibold uppercase tracking-wider">Present</p>
+                                  </div>
+                                  <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-center">
+                                    <p className="text-base font-black text-red-500 font-['Space_Grotesk']">
+                                      {subject.attendance.absent}
+                                    </p>
+                                    <p className="text-[10px] text-red-400 mt-0.5 font-semibold uppercase tracking-wider">Absent</p>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </motion.section>
+
+              {/* ── Academic Info footer ── */}
+              <motion.div
+                variants={item}
+                className="flex flex-wrap gap-3 rounded-2xl border border-slate-100 bg-white/80 px-5 py-4 shadow-sm"
+              >
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Building2 className="h-4 w-4 text-slate-400" />
+                  <span className="font-semibold text-slate-700">{parent.institution}</span>
+                </div>
+                <span className="text-slate-200">|</span>
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <BookOpen className="h-4 w-4 text-slate-400" />
+                  <span>{child.programName}</span>
+                </div>
+                {child.sectionName !== "—" && (
+                  <>
+                    <span className="text-slate-200">|</span>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <UserCheck className="h-4 w-4 text-slate-400" />
+                      <span>Section {child.sectionName}</span>
+                    </div>
+                  </>
+                )}
+                {child.admission_year && (
+                  <>
+                    <span className="text-slate-200">|</span>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Calendar className="h-4 w-4 text-slate-400" />
+                      <span>Batch of {child.admission_year}</span>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </motion.div>
+    </div>
   )
 }

@@ -1,0 +1,6 @@
+day,period,section_name,subject_code,faculty_email,semester
+Monday,1,Section A,CS202,ada.lovelace@example.com,3
+Monday,2,Section A,CS203,grace.hopper@example.com,3
+Monday,3,Section A,CS204,alan.turing@example.com,3
+Tuesday,1,Section A,CS202,ada.lovelace@example.com,3
+Tuesday,2,Section B,CS203,grace.hopper@example.com,3

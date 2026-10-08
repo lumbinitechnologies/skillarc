@@ -1,0 +1,4 @@
+name,email,section_name,semester,program_name,registration_number,phone,admission_year,dob,gender,parent_name,parent_email,parent_phone,parent_relationship
+Aarav Sharma,aarav.sharma@example.com,Section A,1,Computer Science,REG2024001,+919876543210,2024,2006-03-15,Male,Rajesh Sharma,rajesh.sharma@example.com,+919876543220,Father
+Diya Patel,diya.patel@example.com,Section A,1,Computer Science,REG2024002,+919876543211,2024,2006-07-22,Female,Anita Patel,anita.patel@example.com,+919876543221,Mother
+Vihaan Verma,vihaan.verma@example.com,Section B,2,Information Technology,REG2024003,+919876543212,2024,2005-11-09,Male,Suresh Verma,suresh.verma@example.com,+919876543222,Guardian

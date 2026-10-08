@@ -8,7 +8,8 @@ export async function GET(request: Request) {
   const code = searchParams.get("code")
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type")
-  const next = searchParams.get("next") || "/auth/set-password"
+  const defaultNext = type === "recovery" ? "/auth/reset-password" : "/auth/set-password"
+  const next = searchParams.get("next") || defaultNext
   const inviteEmail = searchParams.get("inviteEmail")
 
   // Build query parameter for the final destination
@@ -92,6 +93,7 @@ export async function GET(request: Request) {
 
   const finishUrl = new URL("/auth/callback-finish", origin)
   if (next) finishUrl.searchParams.set("next", next)
+  if (type) finishUrl.searchParams.set("type", type)
   if (inviteEmail) finishUrl.searchParams.set("inviteEmail", inviteEmail)
   return NextResponse.redirect(finishUrl.toString())
 }

@@ -94,16 +94,27 @@ export async function createAssignmentAction(data: {
 
   await syncAssignmentKnowledge(createSupabaseAdminClient(), assignment.id)
 
-  // Insert notifications for all students in the selected sections
+  // Revalidate paths immediately so dashboards show the new assignment right away
+  revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)
+  revalidatePath(`/dashboard/student/subjects/${data.subject_id}`)
+  revalidatePath(`/dashboard/parent/assignments`)
+
+  // Dispatch in-app + email notifications for all students in the selected sections
+  // NOTE: Must use admin client here — the user (faculty) session cannot read other users' data
   if (data.section_ids && data.section_ids.length > 0) {
     try {
-      const { data: studentsList } = await supabase
+      const notifAdmin = createSupabaseAdminClient()
+
+      // Fetch all students in the target sections (students.id === users.id)
+      const { data: studentsList } = await notifAdmin
         .from("students")
         .select("id")
         .in("section_id", data.section_ids)
 
       if (studentsList && studentsList.length > 0) {
         const studentIds = studentsList.map(st => st.id)
+
+        // Notify students
         await dispatchBatchNotifications(
           studentIds,
           "due_date",
@@ -111,14 +122,33 @@ export async function createAssignmentAction(data: {
           `A new assignment "${data.title}" has been assigned for your class.`,
           `/dashboard/student/subjects/${data.subject_id}`
         )
+
+        // Notify parents of affected students
+        try {
+          const { data: parentRelations } = await notifAdmin
+            .from("parent_student_relations")
+            .select("parent_id")
+            .in("student_id", studentIds)
+
+          if (parentRelations && parentRelations.length > 0) {
+            const parentIds = [...new Set(parentRelations.map(r => r.parent_id))]
+            await dispatchBatchNotifications(
+              parentIds,
+              "due_date",
+              "📚 New Assignment for Your Child",
+              `A new assignment "${data.title}" has been assigned. Check the Parent Portal for details.`,
+              `/dashboard/parent/assignments`
+            )
+          }
+        } catch (parentNotifErr) {
+          console.warn("Failed to dispatch parent notifications:", parentNotifErr)
+        }
       }
     } catch (notifErr) {
-      console.error("Failed to dispatch assignment notifications for students:", notifErr)
+      console.error("Failed to dispatch assignment notifications:", notifErr)
     }
   }
 
-  revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)
-  revalidatePath(`/dashboard/student/subjects/${data.subject_id}`)
   return { success: true }
 }
 
@@ -773,16 +803,57 @@ function calculateSimilarityScore(str1: string, str2: string): number {
   return Math.round(Math.max(weighted, strongestSignal * 0.9))
 }
 
+/**
+ * Extracts readable text from a remote file reference.
+ * Supports: plain text, PDF (via unpdf), DOCX (via mammoth), and most code files.
+ * For formats we cannot parse, returns an empty string gracefully.
+ */
 async function extractTextFromFileReference(fileUrl: string): Promise<string> {
   if (!fileUrl || !/^https?:\/\//i.test(fileUrl)) return ""
 
   try {
     const response = await fetch(fileUrl)
-    const contentType = response.headers.get("content-type") || ""
-    const urlLower = fileUrl.toLowerCase()
+    if (!response.ok) return ""
 
-    if (contentType.includes("text/") || /\.(txt|md|csv|json|js|ts|py|java|xml|html|htm)$/i.test(urlLower)) {
+    const contentType = response.headers.get("content-type") || ""
+    const urlLower = fileUrl.toLowerCase().split("?")[0] // strip query params before checking ext
+
+    // --- Plain text & code files ---
+    if (
+      contentType.includes("text/") ||
+      /\.(txt|md|csv|json|js|ts|jsx|tsx|py|java|c|cpp|cs|xml|html|htm|yaml|yml)$/i.test(urlLower)
+    ) {
       return (await response.text()).trim()
+    }
+
+    // --- PDF ---
+    if (contentType.includes("application/pdf") || urlLower.endsWith(".pdf")) {
+      try {
+        const { extractText } = await import("unpdf")
+        const arrayBuffer = await response.arrayBuffer()
+        const uint8 = new Uint8Array(arrayBuffer)
+        const extracted = await extractText(uint8, { mergePages: true })
+        return (extracted?.text || "").trim()
+      } catch (pdfErr) {
+        console.warn("[extractText] PDF extraction failed:", pdfErr)
+        return ""
+      }
+    }
+
+    // --- DOCX ---
+    if (
+      contentType.includes("application/vnd.openxmlformats-officedocument.wordprocessingml.document") ||
+      urlLower.endsWith(".docx")
+    ) {
+      try {
+        const mammoth = await import("mammoth")
+        const arrayBuffer = await response.arrayBuffer()
+        const result = await mammoth.extractRawText({ arrayBuffer })
+        return (result?.value || "").trim()
+      } catch (docxErr) {
+        console.warn("[extractText] DOCX extraction failed:", docxErr)
+        return ""
+      }
     }
 
     return ""
@@ -796,17 +867,24 @@ async function extractSubmissionContent(payload: {
   feedback?: string | null
   quiz_answers?: any
   file_url?: string | null
-}) {
+}): Promise<string> {
   const candidates: string[] = []
 
   if (payload.code_content?.trim()) candidates.push(payload.code_content)
   if (payload.feedback?.trim()) candidates.push(payload.feedback)
-  if (typeof payload.quiz_answers === "string" && payload.quiz_answers.trim()) {
+
+  if (Array.isArray(payload.quiz_answers)) {
+    const flatAnswers = payload.quiz_answers
+      .map((a: any) => (typeof a === "string" ? a : String(a ?? "")))
+      .filter(Boolean)
+      .join(" ")
+    if (flatAnswers.trim()) candidates.push(flatAnswers)
+  } else if (typeof payload.quiz_answers === "string" && payload.quiz_answers.trim()) {
     candidates.push(payload.quiz_answers)
   }
 
+  // For file_url: extract actual text — do NOT push the raw URL as content
   if (payload.file_url?.trim()) {
-    candidates.push(payload.file_url)
     const extractedFileText = await extractTextFromFileReference(payload.file_url)
     if (extractedFileText.trim()) candidates.push(extractedFileText)
   }
@@ -815,7 +893,7 @@ async function extractSubmissionContent(payload: {
 
   return candidates
     .map(candidate => String(candidate).trim())
-    .join(" \n ")
+    .join("\n")
 }
 
 export async function runPlagiarismScanAction(submissionId: string) {
@@ -835,34 +913,58 @@ export async function runPlagiarismScanAction(submissionId: string) {
 
     const contentToCheck = await extractSubmissionContent(currentSub)
     if (!contentToCheck.trim()) {
+      // Persist the "scanned but no content" result so it doesn't show as NOT SCANNED
+      const hasFile = !!currentSub.file_url?.trim()
+      const noteMsg = hasFile
+        ? "This submission contains a file attachment but no readable text could be extracted. The file may be an image, scanned document, or unsupported format — manual review is required."
+        : "This submission has no text answer, code, or file attachment to compare against."
+
+      // Write to DB so the badge updates from "NOT SCANNED"
+      const { data: existingV } = await supabase
+        .from("submission_verifications")
+        .select("id")
+        .eq("submission_id", submissionId)
+        .maybeSingle()
+
+      if (existingV) {
+        await supabase.from("submission_verifications").update({
+          plagiarism_rate: -1,
+          ai_probability: 0,
+          status: "NO_CONTENT",
+          verified_at: new Date().toISOString(),
+        }).eq("id", existingV.id)
+      } else {
+        await supabase.from("submission_verifications").insert({
+          submission_id: submissionId,
+          plagiarism_rate: -1,
+          ai_probability: 0,
+          status: "NO_CONTENT",
+        })
+      }
+
       return {
         success: true,
-        plagiarismRate: 0,
-        risk: "LOW",
-        matchedStudent: "None (No textual submission)",
+        noContent: true,
+        plagiarismRate: -1,
+        risk: "LOW" as const,
+        matchedStudent: "N/A",
         aiProbability: 0,
-        aiRisk: "LOW",
-        note: "The selected submission has no text answer or code payload to compare.",
+        aiRisk: "LOW" as const,
+        note: noteMsg,
       }
     }
 
-    // 2. Fetch all other submissions for the same assignment
-    const { data: otherSubs, error: othersErr } = await supabase
+    // 2. Fetch all other submissions for the same assignment (peer comparison — secondary signal)
+    const { data: otherSubs } = await supabase
       .from("submissions")
       .select("id, student_id, code_content, feedback, quiz_answers, file_url")
       .eq("assignment_id", currentSub.assignment_id)
       .neq("id", submissionId)
 
-    if (othersErr) {
-      return { success: false, error: "Failed to fetch peer submissions" }
-    }
-
     let highestRate = 0
-    let matchedStudentId = null
     let matchedStudentName = "None"
 
     if (otherSubs && otherSubs.length > 0) {
-      // Fetch names of other students
       const peerStudentIds = otherSubs.map(s => s.student_id)
       const { data: users } = await supabase
         .from("users")
@@ -872,29 +974,138 @@ export async function runPlagiarismScanAction(submissionId: string) {
       for (const other of otherSubs) {
         const otherContent = await extractSubmissionContent(other)
         if (!otherContent.trim()) continue
-
         const rate = calculateSimilarityScore(contentToCheck, otherContent)
         if (rate > highestRate) {
           highestRate = rate
-          matchedStudentId = other.student_id
           const userObj = users?.find(u => u.id === other.student_id)
           matchedStudentName = userObj?.name || "Peer Student"
         }
       }
     }
 
-    let risk = "LOW"
-    if (highestRate >= 60) risk = "HIGH"
-    else if (highestRate >= 30) risk = "MEDIUM"
+    const peerRisk = highestRate >= 60 ? "HIGH" : highestRate >= 30 ? "MEDIUM" : "LOW"
 
-    // Run AI Detection checking using translated stylometric engine
-    const aiResult = detectAIContent(contentToCheck)
+    // -----------------------------------------------------------------------
+    // PRIMARY AI DETECTION — Direct Gemini API call (accurate, semantic)
+    // Falls back to local heuristic if Gemini is unavailable.
+    // -----------------------------------------------------------------------
+    let aiProbability = 0
+    let aiRisk: "LOW" | "MEDIUM" | "HIGH" | "VERY HIGH" = "LOW"
+    let aiVerdict = "UNCERTAIN"
+    let aiConfidence = "LOW"
+    let aiSummary: string | null = null
+    let aiSignals: Record<string, boolean> | null = null
+    let usedGemini = false
 
-    // 3. Upsert into submission_verifications
-    // Flag if classmate copying is high OR AI generation is high
-    const status = (highestRate >= 50 || aiResult.aiProbability >= 60) ? "FLAGGED" : "CLEAN"
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GEMINI_API_KEY
 
-    // Check if verification already exists
+    console.log(`[AI Detect] Key present: ${!!geminiKey}, length: ${geminiKey?.trim().length ?? 0}`)
+
+    if (geminiKey && !geminiKey.includes("placeholder") && geminiKey.trim().length > 10) {
+      const detectionPrompt = `You are an expert AI content detector with deep knowledge of how LLMs (ChatGPT, Gemini, Claude, etc.) write.
+Your job is to analyse the following student submission and determine how much of it was written by an AI.
+
+STUDENT SUBMISSION:
+"""
+${contentToCheck.slice(0, 6000)}
+"""
+
+Analyse the text carefully for these AI writing signals:
+1. Unnaturally perfect sentence structure with very uniform length
+2. Overuse of transition words (however, furthermore, moreover, in conclusion, etc.)
+3. Generic, surface-level explanations without concrete examples or personal voice
+4. Overly formal academic tone even for simple topics
+5. Repetitive sentence openers and structural patterns
+6. Absence of grammatical quirks, colloquialisms, or personal experience
+7. Perfect logical flow that feels templated
+8. Vocabulary that is rich but lacks domain-specific depth or personal perspective
+9. Suspiciously comprehensive coverage of all sub-points in balanced, equal-length sections
+10. Text that reads like a textbook answer rather than a student's genuine response
+
+Respond ONLY with compact JSON — no markdown fences, no explanation, just raw JSON:
+{"aiProbability":85,"verdict":"LIKELY_AI","confidence":"HIGH","shortSummary":"One sentence here.","signals":{"uniformSentenceLength":true,"overusesTransitionWords":true,"lacksPersonalVoice":true,"overlyFormal":true,"templateStructure":true,"genericExplanations":true}}`
+
+      const GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
+
+      for (const model of GEMINI_MODELS) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey.trim()}`
+          const gRes = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: detectionPrompt }] }],
+              generationConfig: {
+                temperature: 0.1,
+                maxOutputTokens: 1024,
+              },
+            }),
+            signal: AbortSignal.timeout(20000),
+          })
+
+          console.log(`[AI Detect] Trying model: ${model}`)
+          if (!gRes.ok) {
+            const errBody = await gRes.text().catch(() => "")
+            console.warn(`[AI Detect] ${model} returned ${gRes.status}: ${errBody.slice(0, 200)}`)
+            continue
+          }
+
+          const gJson = await gRes.json()
+          const rawText: string = gJson.candidates?.[0]?.content?.parts?.[0]?.text || ""
+          console.log(`[AI Detect] ${model} raw text: ${rawText.slice(0, 150)}`)
+          if (!rawText) continue
+
+          // Strip markdown fences if present
+          const cleaned = rawText
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```$/i, "")
+            .trim()
+
+          // Extract JSON object even if there's surrounding text
+          const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+          if (!jsonMatch) continue
+
+          const parsed = JSON.parse(jsonMatch[0])
+          if (typeof parsed.aiProbability !== "number") continue
+
+          aiProbability = Math.max(0, Math.min(100, Math.round(parsed.aiProbability)))
+          aiVerdict = parsed.verdict || "UNCERTAIN"
+          aiConfidence = parsed.confidence || "MEDIUM"
+          aiSummary = parsed.shortSummary || null
+          aiSignals = parsed.signals || null
+          console.log(`[AI Detect] SUCCESS — model: ${model}, aiProbability: ${aiProbability}, verdict: ${aiVerdict}`)
+          usedGemini = true
+
+          if (aiProbability >= 80) aiRisk = "VERY HIGH"
+          else if (aiProbability >= 60) aiRisk = "HIGH"
+          else if (aiProbability >= 35) aiRisk = "MEDIUM"
+          else aiRisk = "LOW"
+
+          break // success — stop trying more models
+        } catch (modelErr) {
+          console.warn(`[AI Detect] Gemini model ${model} failed:`, modelErr)
+        }
+      }
+    }
+
+    // Fallback to local heuristic if Gemini was not available or all models failed
+    if (!usedGemini) {
+      const heuristic = detectAIContent(contentToCheck)
+      aiProbability = Math.round(heuristic.aiProbability)
+      aiRisk = heuristic.risk
+      aiVerdict = aiProbability >= 60 ? "LIKELY_AI" : aiProbability >= 35 ? "UNCERTAIN" : "LIKELY_HUMAN"
+      aiConfidence = "LOW"
+      aiSummary = "Analysed using local heuristics (Gemini unavailable). Results may be less accurate."
+    }
+
+    // -----------------------------------------------------------------------
+    // Persist results
+    // -----------------------------------------------------------------------
+    const status = (highestRate >= 50 || aiProbability >= 60) ? "FLAGGED" : "CLEAN"
+
     const { data: existingVerification } = await supabase
       .from("submission_verifications")
       .select("id")
@@ -906,7 +1117,7 @@ export async function runPlagiarismScanAction(submissionId: string) {
         .from("submission_verifications")
         .update({
           plagiarism_rate: highestRate,
-          ai_probability: aiResult.aiProbability,
+          ai_probability: aiProbability,
           status,
           verified_at: new Date().toISOString(),
         })
@@ -917,7 +1128,7 @@ export async function runPlagiarismScanAction(submissionId: string) {
         .insert({
           submission_id: submissionId,
           plagiarism_rate: highestRate,
-          ai_probability: aiResult.aiProbability,
+          ai_probability: aiProbability,
           status,
         })
     }
@@ -925,10 +1136,15 @@ export async function runPlagiarismScanAction(submissionId: string) {
     return {
       success: true,
       plagiarismRate: highestRate,
-      risk,
+      risk: peerRisk,
       matchedStudent: highestRate > 0 ? matchedStudentName : "None",
-      aiProbability: aiResult.aiProbability,
-      aiRisk: aiResult.risk,
+      aiProbability,
+      aiRisk,
+      aiVerdict,
+      aiConfidence,
+      aiSummary,
+      aiSignals,
+      usedGemini,
       note:
         highestRate > 0
           ? `Most similar peer text matched ${matchedStudentName}.`

@@ -49,7 +49,7 @@ export async function readAuthorizedDashboard(
   const domain = await readAuthorizedDomainData(supabase, principal, scope)
 
   return {
-    context: [context, domain.context].filter(Boolean).join("\n").slice(0, 6000) || null,
+    context: [context, domain.context].filter(Boolean).join("\n").slice(0, 10000) || null,
     sources: [...(context
       ? [
           {

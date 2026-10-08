@@ -74,7 +74,7 @@ export default async function InstitutionAdminPage() {
 
     // Unassigned faculty metrics
     supabase.from("users").select("id, name, email").eq("institution_id", profile.institution_id).in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
-    supabase.from("faculty_subjects").select("faculty_id"),
+    supabase.from("faculty_subjects").select("faculty_id").eq("institution_id", profile.institution_id),
 
     // Programs without sections metrics
     supabase.from("programs").select("id, name").eq("institution_id", profile.institution_id),
@@ -84,13 +84,13 @@ export default async function InstitutionAdminPage() {
     supabase.from("users").select("id, email, role, created_at").eq("institution_id", profile.institution_id).eq("is_active", false),
 
     // Events
-    supabase.from("events").select("id, title, description, start_time, location").eq("institution_id", profile.institution_id).order("start_time", { ascending: true }).limit(5),
+    supabase.from("events").select("id, title, description, event_date, venue").eq("institution_id", profile.institution_id).order("event_date", { ascending: true }).limit(5),
 
     // Direct Audit Logs by institution
-    supabase.from("audit_logs").select("id, action, entity_type, created_at, user_id, user_name, user_email").eq("institution_id", profile.institution_id).order("created_at", { ascending: false }).limit(6),
+    supabase.from("audit_logs").select("id, action, entity_type, created_at, user:user_id(name, email, institution_id)").order("created_at", { ascending: false }).limit(30),
 
     // Today's Attendance Records
-    supabase.from("attendance_records").select("status, attendance_sessions!inner(institution_id, attendance_date)").eq("attendance_sessions.institution_id", profile.institution_id).eq("attendance_sessions.attendance_date", todayStr),
+    supabase.from("attendance_records").select("status, attendance_sessions!inner(attendance_date, section:section_id!inner(institution_id))").eq("attendance_sessions.section.institution_id", profile.institution_id).eq("attendance_sessions.attendance_date", todayStr),
   ])
   const batchMs = performance.now() - tBatchStart
   const totalMs = performance.now() - tPageStart
@@ -100,7 +100,37 @@ export default async function InstitutionAdminPage() {
   )
 
   const institution = institutionRes.data
-  const auditLogs = auditLogsRes.data ?? []
+
+  // Filter audit logs by institution (audit_logs has no institution_id, so filter via joined user)
+  const rawAuditLogs = (auditLogsRes.data ?? []) as any[]
+  const auditLogs = rawAuditLogs
+    .filter(log => {
+      const user = Array.isArray(log.user) ? log.user[0] : log.user
+      return user?.institution_id === profile.institution_id
+    })
+    .slice(0, 6)
+    .map(log => {
+      const user = Array.isArray(log.user) ? log.user[0] : log.user
+      return {
+        id: log.id,
+        action: log.action,
+        entity_type: log.entity_type,
+        created_at: log.created_at,
+        user_name: user?.name ?? "Unknown",
+        user_email: user?.email ?? "",
+      }
+    })
+
+  // Map events to expected shape (event_date → start_time, venue → location)
+  const rawEvents = (eventsRes.data ?? []) as any[]
+  const mappedEvents = rawEvents.map(e => ({
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    start_time: e.event_date,
+    location: e.venue,
+  }))
+
   const attendanceRecords = attendanceRecordsRes.data ?? []
 
   const presentCount = attendanceRecords.filter(r => r.status === "PRESENT" || r.status === "LATE").length
@@ -164,7 +194,7 @@ export default async function InstitutionAdminPage() {
       }}
       recentActivity={auditLogs}
       recentInvites={pendingInvites.slice(0, 5)}
-      upcomingEvents={eventsRes.data ?? []}
+      upcomingEvents={mappedEvents}
     />
   )
 }

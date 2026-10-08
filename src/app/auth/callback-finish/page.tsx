@@ -8,17 +8,27 @@ import { AuthCard, AuthLink, AuthShell } from '@/components/auth/auth-ui'
 export default function AuthCallbackFinishPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [status, setStatus] = useState('Loading…')
+  const [status, setStatus] = useState('Verifying access…')
 
   useEffect(() => {
     let redirected = false
     let retryAttempted = false
+
     const inviteEmail = searchParams.get('inviteEmail')
     const retry = searchParams.get('retry')
-    const nextPath = searchParams.get('next') || '/auth/set-password'
+    const queryType = searchParams.get('type')
+
+    // Parse hash fragment if present
+    const hash = typeof window !== 'undefined' ? window.location.hash || '' : ''
+    const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
+    const hashType = hashParams.get('type')
+    const authType = hashType || queryType
+
+    const defaultNext = authType === 'recovery' ? '/auth/reset-password' : '/auth/set-password'
+    const nextPath = searchParams.get('next') || defaultNext
     const callbackQuery = inviteEmail ? `?inviteEmail=${encodeURIComponent(inviteEmail)}` : ''
 
-    const redirectToSetPassword = () => {
+    const redirectTarget = () => {
       if (redirected) return
       redirected = true
       setStatus('Redirecting…')
@@ -26,7 +36,7 @@ export default function AuthCallbackFinishPage() {
     }
 
     async function waitForSessionPersistence() {
-      for (let i = 0; i < 10; i += 1) {
+      for (let i = 0; i < 15; i += 1) {
         const { data: { session } } = await supabase.auth.getSession()
         if (session) return true
         await new Promise((resolve) => window.setTimeout(resolve, 100))
@@ -36,12 +46,12 @@ export default function AuthCallbackFinishPage() {
 
     function parseHashSession() {
       try {
-        const hash = window.location.hash || ''
         if (!hash) return null
-        const query = new URLSearchParams(hash.replace(/^#/, ''))
-        const accessToken = query.get('access_token')
-        const refreshToken = query.get('refresh_token')
-        if (accessToken) return { access_token: accessToken, refresh_token: refreshToken ?? '' }
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+        if (accessToken) {
+          return { access_token: accessToken, refresh_token: refreshToken ?? '' }
+        }
       } catch (error) {
         console.debug('Failed to parse hash for session', error)
       }
@@ -49,10 +59,8 @@ export default function AuthCallbackFinishPage() {
     }
 
     async function verifySession() {
-      setStatus('Verifying invitation…')
+      setStatus('Verifying your credentials…')
 
-      const hash = window.location.hash || ''
-      const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
       const errorParam = searchParams.get('error') || hashParams.get('error')
       const errorDescription = searchParams.get('error_description') || hashParams.get('error_description')
 
@@ -63,54 +71,48 @@ export default function AuthCallbackFinishPage() {
         return
       }
 
-      const code = searchParams.get('code')
-      const { data: { session: initialSession }, error: initialError } = await supabase.auth.getSession()
-      if (initialError) console.warn('Callback session initialization error:', initialError)
-
-      const initialSessionEmail = initialSession?.user?.email
-      const isMismatched = inviteEmail && initialSessionEmail && initialSessionEmail.toLowerCase() !== inviteEmail.toLowerCase()
-
-      if (initialSession && !isMismatched && !code) {
-        redirectToSetPassword()
-        return
+      // Priority 1: Tokens in URL hash (implicit flow for invite / recovery)
+      const hashTokens = parseHashSession()
+      if (hashTokens) {
+        setStatus('Setting up session from link…')
+        const { error: setError } = await supabase.auth.setSession(hashTokens)
+        if (setError) {
+          console.error('Failed to set session from hash:', setError)
+          setStatus(`Session initialization error: ${setError.message}`)
+        } else {
+          await waitForSessionPersistence()
+          redirectTarget()
+          return
+        }
       }
 
+      // Priority 2: Authorization code in query string (PKCE flow)
+      const code = searchParams.get('code')
       if (code) {
+        setStatus('Exchanging authentication code…')
         const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
         if (exchangeError) {
           console.error('Error exchanging code for session:', exchangeError)
-          setStatus(`Invite link verification failed: ${exchangeError.message}`)
+          setStatus(`Verification failed: ${exchangeError.message}`)
           redirected = true
           return
         }
 
         if (exchangeData?.session) {
-          setStatus('Establishing your invitation…')
           await waitForSessionPersistence()
-          redirectToSetPassword()
+          redirectTarget()
           return
         }
       }
 
-      const hashTokens = parseHashSession()
-      if (hashTokens) {
-        const { error: setError } = await supabase.auth.setSession(hashTokens)
-        if (setError) {
-          console.error('Failed to set session from hash:', setError)
-        } else {
-          await waitForSessionPersistence()
-          redirectToSetPassword()
-          return
-        }
-      }
-
-      const { data: { session }, error } = await supabase.auth.getSession()
-      if (error) console.warn('Callback session error:', error)
+      // Priority 3: Check existing session in storage
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) console.warn('Callback getSession error:', sessionError)
 
       const sessionEmail = session?.user?.email
       if (inviteEmail && sessionEmail && sessionEmail.toLowerCase() !== inviteEmail.toLowerCase()) {
         if (retry !== '1') {
-          setStatus('Clearing the previous session…')
+          setStatus('Clearing mismatched session…')
           await supabase.auth.signOut()
           const currentUrl = new URL(window.location.href)
           currentUrl.searchParams.set('retry', '1')
@@ -124,23 +126,23 @@ export default function AuthCallbackFinishPage() {
       }
 
       if (session) {
-        redirectToSetPassword()
+        redirectTarget()
         return
       }
 
-      setStatus('Waiting for your invitation session…')
+      setStatus('Waiting for authentication session…')
     }
 
     void verifySession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) redirectToSetPassword()
+      if (session?.user) redirectTarget()
     })
 
     const fallbackTimer = window.setTimeout(async () => {
       if (redirected) return
       if (retry || retryAttempted) {
-        setStatus('Invite session not found. Open the invite link again in a fresh browser or private window.')
+        setStatus('Session not detected. Please open the link again or request a new one.')
         return
       }
 
@@ -150,7 +152,7 @@ export default function AuthCallbackFinishPage() {
         reloadUrl.searchParams.set('retry', '1')
         window.location.replace(reloadUrl.toString())
       }
-    }, 5000)
+    }, 4000)
 
     return () => {
       subscription?.unsubscribe()
@@ -158,12 +160,12 @@ export default function AuthCallbackFinishPage() {
     }
   }, [router, searchParams])
 
-  const hasFailed = /failed|mismatch|not found/i.test(status)
+  const hasFailed = /failed|mismatch|not detected|error/i.test(status)
 
   return (
     <AuthShell
       title="Verifying your access"
-      description="We’re checking your invitation and preparing your SkillArc university workspace."
+      description="We're checking your credentials and preparing your SkillArc workspace."
       utilityLabel="Verifying access"
     >
       <AuthCard className="text-center" aria-live="polite">
@@ -181,7 +183,7 @@ export default function AuthCallbackFinishPage() {
         </div>
         <p className="mt-5 text-sm font-semibold text-[#31547A]">{status}</p>
         <p className="mt-2 text-sm leading-6 text-[#70849A]">
-          {hasFailed ? 'Return to sign in and open the invitation link again when you are ready.' : 'Keep this window open while we finish setting up your access.'}
+          {hasFailed ? 'Please return to sign in and open the link again.' : 'Keep this window open while we finish setting up your access.'}
         </p>
         {hasFailed ? (
           <AuthLink href="/auth/login" className="mt-5 inline-flex">

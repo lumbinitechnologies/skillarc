@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { getCurrentUserContext } from "@/lib/user-context"
+import { inviteUser, resolveAppOrigin } from "@/lib/invite-user"
 
 const adminRoles = new Set<string>([ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN, ROLES.INSTITUTION_ADMIN])
 
@@ -25,10 +26,21 @@ export async function PUT(
     const { id } = await params
     const auth = await authorizeStudent(id)
     if ("response" in auth) return auth.response
-    const { admin, student } = auth
+    const { actor, admin, student } = auth
 
     const body = await request.json()
-    const { name, section_id, semester, program_id, registration_number, admission_year } = body
+    const {
+      name,
+      section_id,
+      semester,
+      program_id,
+      registration_number,
+      admission_year,
+      parentName,
+      parentEmail,
+      parentPhone,
+      parentRelationship,
+    } = body
 
     if (name) {
       const { error: userError } = await admin
@@ -56,6 +68,63 @@ export async function PUT(
         .eq("institution_id", student.institution_id)
 
       if (studentError) throw studentError
+    }
+
+    // Create / Link parent if details provided
+    if (parentEmail && parentName) {
+      // Check if parent already exists
+      const { data: existingParent } = await admin
+        .from("users")
+        .select("id")
+        .eq("email", parentEmail)
+        .eq("role", ROLES.PARENT)
+        .maybeSingle()
+
+      let parentUserId = existingParent?.id
+
+      if (!parentUserId) {
+        // Use the same inviteUser flow so the parent receives an email
+        // with a link to set their password and access their account
+        try {
+          const inviteResult = await inviteUser({
+            email: parentEmail,
+            role: ROLES.PARENT,
+            institutionId: student.institution_id,
+            organizationId: actor.organization_id || "",
+            origin: resolveAppOrigin(request.headers),
+            name: parentName,
+          })
+          parentUserId = inviteResult.userId ?? undefined
+
+          // Patch phone (inviteUser doesn't handle it)
+          if (parentUserId) {
+            await admin.from("users").update({
+              name: parentName,
+              phone: parentPhone || null,
+            }).eq("id", parentUserId)
+          }
+        } catch (inviteErr) {
+          console.error("Parent invite failed:", inviteErr)
+          // Non-fatal — student record updated; parent can be linked later
+        }
+      }
+
+      if (parentUserId) {
+        const { data: existingRelation } = await admin
+          .from("parent_student_relations")
+          .select("id")
+          .eq("parent_id", parentUserId)
+          .eq("student_id", id)
+          .maybeSingle()
+
+        if (!existingRelation) {
+          await admin.from("parent_student_relations").insert({
+            parent_id: parentUserId,
+            student_id: id,
+            relationship: parentRelationship || "Guardian",
+          })
+        }
+      }
     }
 
     const { data: updatedStudent } = await admin

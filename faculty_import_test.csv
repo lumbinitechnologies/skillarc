@@ -1,0 +1,5 @@
+name,email,department_name,phone,employee_id,role,is_timetable_builder
+Dr. Alan Turing,alan.turing@example.com,Computer Science,+919876543201,FAC101,FACULTY,true
+Prof. Ada Lovelace,ada.lovelace@example.com,Computer Science,+919876543202,FAC102,HOD,false
+Dr. Claude Shannon,claude.shannon@example.com,Information Technology,+919876543203,FAC103,FACULTY,false
+Prof. Grace Hopper,grace.hopper@example.com,Electronics Engineering,+919876543204,FAC104,PROGRAM_HEAD,false

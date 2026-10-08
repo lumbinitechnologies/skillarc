@@ -1,5 +1,6 @@
 import { headers } from "next/headers"
 import { createSupabaseAdminClient } from "./supabase-admin"
+import { sendInviteEmail } from "./auth-email"
 
 export function resolveAppOrigin(headersValue?: Headers | { get(name: string): string | null } | null): string {
   // If the request explicitly comes from localhost / 127.0.0.1, prioritize it for local testing
@@ -76,8 +77,9 @@ export async function inviteUser(params: {
   institutionId: string
   organizationId: string
   origin?: string
+  name?: string
 }) {
-  const { email, role, institutionId, organizationId, origin: passedOrigin } = params
+  const { email, role, institutionId, organizationId, origin: passedOrigin, name } = params
   const supabase = createSupabaseAdminClient()
   
   let origin = passedOrigin
@@ -88,30 +90,110 @@ export async function inviteUser(params: {
       origin = resolveAppOrigin()
     }
   }
-  const redirectToUrl = new URL("/auth/callback-finish", origin)
-  redirectToUrl.searchParams.set("next", "/auth/set-password")
-  redirectToUrl.searchParams.set("inviteEmail", email)
-  const redirectTo = redirectToUrl.toString()
 
-  console.log(`📧 Inviting/re-inviting user ${email} with role: ${role}`)
-  const { data, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, { redirectTo })
-  if (inviteError) {
-    console.error("🔴 Invite error:", inviteError)
-    throw new Error(inviteError.message)
+  // CRITICAL: redirectTo must be exact whitelisted URL without arbitrary query params,
+  // otherwise Supabase rejects it and falls back to the production site root URL.
+  const redirectTo = `${origin}/auth/callback`
+
+  console.log(`📧 Inviting user ${email} with role: ${role}, redirect: ${redirectTo}`)
+  let userId: string | null = null
+  let actionLink: string | null = null
+
+  // Fetch institution name if available for email branding
+  let institutionName: string | undefined
+  if (institutionId) {
+    try {
+      const { data: inst } = await supabase
+        .from("institutions")
+        .select("name")
+        .eq("id", institutionId)
+        .maybeSingle()
+      if (inst?.name) institutionName = inst.name
+    } catch {
+      // Ignore
+    }
   }
 
-  if (!data?.user?.id) {
+  // 1. Try generateLink with type: "invite"
+  const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: { redirectTo },
+  })
+
+  if (!linkError && linkData?.user?.id) {
+    userId = linkData.user.id
+    actionLink = linkData.properties?.action_link || null
+    console.log(`✅ User link generated via invite: ${userId}`)
+  } else {
+    console.log(`ℹ️ generateLink(invite) returned: ${linkError?.message}. Attempting recovery/re-invite for existing user...`)
+
+    // Fallback 1: If user already exists in auth (e.g. email_exists), generate a recovery link so they can set password
+    const { data: recData, error: recError } = await supabase.auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo },
+    })
+
+    if (!recError && recData?.user?.id) {
+      userId = recData.user.id
+      actionLink = recData.properties?.action_link || null
+      console.log(`✅ Recovery link generated for existing auth user: ${userId}`)
+    } else {
+      // Fallback 2: createUser directly with confirmed email
+      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+        email,
+        email_confirm: true,
+        password: Math.random().toString(36).slice(-12) + "A1!",
+      })
+
+      if (!createError && createData?.user?.id) {
+        userId = createData.user.id
+        console.log(`✅ User created via createUser: ${userId}`)
+
+        const { data: postCreateRec } = await supabase.auth.admin.generateLink({
+          type: "recovery",
+          email,
+          options: { redirectTo },
+        })
+        actionLink = postCreateRec?.properties?.action_link || null
+      } else {
+        // Fallback 3: check if user already exists in users table
+        const { data: existingUser } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle()
+
+        if (existingUser?.id) {
+          userId = existingUser.id
+          console.log(`✅ Existing user found in users table: ${userId}`)
+          const { data: fallbackRec } = await supabase.auth.admin.generateLink({
+            type: "recovery",
+            email,
+            options: { redirectTo },
+          })
+          actionLink = fallbackRec?.properties?.action_link || null
+        } else {
+          console.error("🔴 Failed all user invite/creation methods:", { linkError, recError, createError })
+          throw new Error(linkError?.message || recError?.message || createError?.message || "Failed to invite user")
+        }
+      }
+    }
+  }
+
+  if (!userId) {
     throw new Error("Failed to invite user")
   }
 
-  console.log(`✅ User invited, upserting to users table with id: ${data.user.id}, role: ${role}`)
+  console.log(`✅ User invited/created, upserting to users table with id: ${userId}, role: ${role}`)
   const { error: upsertError } = await supabase.from("users").upsert({
-    id: data.user.id,
+    id: userId,
     email,
     role,
     institution_id: institutionId,
     organization_id: organizationId,
-    name: email.split("@")[0], // Use email prefix as default name
+    name: name || email.split("@")[0], // Use custom name or email prefix
   }, { onConflict: "id" })
 
   if (upsertError) {
@@ -121,9 +203,9 @@ export async function inviteUser(params: {
 
   // If role is STUDENT, also create a record in the students table
   if (role === "STUDENT" || role === "student") {
-    console.log(`📚 Creating student record for user ${data.user.id}`)
+    console.log(`📚 Creating student record for user ${userId}`)
     const { error: studentError } = await supabase.from("students").upsert({
-      id: data.user.id,
+      id: userId,
       institution_id: institutionId,
       program_id: null,
       section_id: null,
@@ -134,11 +216,34 @@ export async function inviteUser(params: {
 
     if (studentError) {
       console.error("⚠️  Warning: Student record creation failed:", studentError)
-      // Don't throw - the user record was created successfully, this is just metadata
     } else {
       console.log(`✅ Student record created`)
     }
   }
 
-  return { success: true, message: "Invitation sent successfully", userId: data.user.id }
+  // Send invitation email via Resend
+  if (actionLink) {
+    try {
+      const emailResult = await sendInviteEmail({
+        to: email,
+        role,
+        institutionName,
+        actionLink,
+      })
+      if (!emailResult.success) {
+        console.warn(`⚠️ Failed to deliver invite email via Resend to ${email}:`, emailResult.error)
+      }
+    } catch (e) {
+      console.error(`⚠️ Exception dispatching invite email to ${email}:`, e)
+    }
+  } else {
+    // If no actionLink, fallback to Supabase built-in invite
+    try {
+      await supabase.auth.admin.inviteUserByEmail(email, { redirectTo })
+    } catch (e) {
+      console.warn("⚠️ Fallback inviteUserByEmail failed:", e)
+    }
+  }
+
+  return { success: true, message: "Invitation sent successfully", userId, actionLink }
 }

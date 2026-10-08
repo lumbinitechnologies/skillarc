@@ -53,17 +53,21 @@ export function CreateProgramDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.name || !formData.department_id) {
+    if (!formData.name?.trim()) {
       toast({
         title: "Error",
-        description: "Please fill all required fields",
+        description: "Please enter a program name",
         variant: "destructive",
       })
       return
     }
 
     try {
-      await onSubmit(formData)
+      await onSubmit({
+        ...formData,
+        name: formData.name.trim(),
+        department_id: formData.department_id || null,
+      })
 
       onOpenChange(false)
 
@@ -73,22 +77,8 @@ export function CreateProgramDialog({
         institution_id: "",
         organization_id: "",
       })
-
-      toast({
-        title: "Success",
-        description: `Program ${
-          program ? "updated" : "created"
-        } successfully`,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Something went wrong",
-        variant: "destructive",
-      })
+    } catch {
+      // Caller handles error toast
     }
   }
 
@@ -113,7 +103,7 @@ export function CreateProgramDialog({
 
             <Input
               id="name"
-              placeholder="e.g. B.Tech CSE"
+              placeholder="e.g. B.Tech Computer Science"
               value={formData.name}
               onChange={(e) =>
                 setFormData({
@@ -122,13 +112,14 @@ export function CreateProgramDialog({
                 })
               }
               required
+              autoFocus
             />
           </div>
 
-          {departments.length > 1 && (
+          {departments.length > 0 ? (
             <div className="space-y-2">
               <Label htmlFor="department">
-                Department *
+                Department (Optional)
               </Label>
 
               <select
@@ -141,10 +132,9 @@ export function CreateProgramDialog({
                   })
                 }
                 className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300 font-medium"
-                required
               >
                 <option value="">
-                  Select Department
+                  No Department (General)
                 </option>
 
                 {departments.map((dept) => (
@@ -156,6 +146,10 @@ export function CreateProgramDialog({
                   </option>
                 ))}
               </select>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-500">
+              💡 No departments configured yet. You can create this program now and assign it to a department later.
             </div>
           )}
 

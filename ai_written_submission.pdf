@@ -1,0 +1,157 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 3645 >>
+stream
+BT
+/F1 11 Tf
+72 750 Td
+(OOP Assignment  Student A \(Roll No: 21CS047\)) Tj
+-72 -750 Td
+72 734 Td
+() Tj
+-72 -734 Td
+72 718 Td
+(Subject: Object-Oriented Programming | Faculty: Dr. Sharma) Tj
+-72 -718 Td
+72 702 Td
+() Tj
+-72 -702 Td
+72 686 Td
+(Object-Oriented Programming \(OOP\) is a fundamental programming paradigm that organizes) Tj
+-72 -686 Td
+72 670 Td
+(software design around data, or objects, rather than functions and logic. It is widely) Tj
+-72 -670 Td
+72 654 Td
+(adopted in modern software development due to its ability to model real-world entities) Tj
+-72 -654 Td
+72 638 Td
+(effectively and efficiently.) Tj
+-72 -638 Td
+72 622 Td
+() Tj
+-72 -622 Td
+72 606 Td
+(There are four primary pillars of Object-Oriented Programming. These pillars form the) Tj
+-72 -606 Td
+72 590 Td
+(foundation upon which robust, scalable, and maintainable software systems are constructed.) Tj
+-72 -590 Td
+72 574 Td
+() Tj
+-72 -574 Td
+72 558 Td
+(Firstly, Encapsulation refers to the bundling of data and methods that operate on that) Tj
+-72 -558 Td
+72 542 Td
+(data within a single unit, known as a class. This principle ensures that the internal) Tj
+-72 -542 Td
+72 526 Td
+(representation of an object is hidden from the outside world, thereby promoting data) Tj
+-72 -526 Td
+72 510 Td
+(security and integrity. Furthermore, encapsulation allows for modularity and ease of) Tj
+-72 -510 Td
+72 494 Td
+(maintenance in large-scale software projects.) Tj
+-72 -494 Td
+72 478 Td
+() Tj
+-72 -478 Td
+72 462 Td
+(Secondly, Abstraction is the process of hiding complex implementation details while) Tj
+-72 -462 Td
+72 446 Td
+(exposing only the essential features of an object. This allows developers to work with) Tj
+-72 -446 Td
+72 430 Td
+(high-level interfaces without needing to understand the underlying complexities.) Tj
+-72 -430 Td
+72 414 Td
+(Consequently, abstraction simplifies the development process and enhances code readability) Tj
+-72 -414 Td
+72 398 Td
+(across diverse teams.) Tj
+-72 -398 Td
+72 382 Td
+() Tj
+-72 -382 Td
+72 366 Td
+(Thirdly, Inheritance enables a new class, referred to as a subclass or derived class, to) Tj
+-72 -366 Td
+72 350 Td
+(inherit the attributes and methods of an existing class, known as the superclass or base) Tj
+-72 -350 Td
+72 334 Td
+(class. This promotes code reusability and establishes a hierarchical relationship between) Tj
+-72 -334 Td
+72 318 Td
+(classes. Moreover, inheritance facilitates the creation of specialized classes that extend) Tj
+-72 -318 Td
+72 302 Td
+(the functionality of their parent classes without redundant code duplication.) Tj
+-72 -302 Td
+72 286 Td
+() Tj
+-72 -286 Td
+72 270 Td
+(Fourthly, Polymorphism allows objects of different classes to be treated as objects of a) Tj
+-72 -270 Td
+72 254 Td
+(common superclass. It enables a single interface to represent different underlying forms) Tj
+-72 -254 Td
+72 238 Td
+(or data types. This is particularly useful in scenarios where a unified interface is) Tj
+-72 -238 Td
+72 222 Td
+(required to interact with multiple types of objects seamlessly and efficiently.) Tj
+-72 -222 Td
+72 206 Td
+() Tj
+-72 -206 Td
+72 190 Td
+(In conclusion, the four pillars of Object-Oriented Programming, namely Encapsulation,) Tj
+-72 -190 Td
+72 174 Td
+(Abstraction, Inheritance, and Polymorphism, work in concert to enable developers to build) Tj
+-72 -174 Td
+72 158 Td
+(scalable, reusable, and maintainable software systems. Understanding and applying these) Tj
+-72 -158 Td
+72 142 Td
+(principles is essential for any software engineer seeking to develop high-quality) Tj
+-72 -142 Td
+72 126 Td
+(applications in today's competitive technology landscape.) Tj
+-72 -126 Td
+72 110 Td
+() Tj
+-72 -110 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000003938 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+4008
+%%EOF
