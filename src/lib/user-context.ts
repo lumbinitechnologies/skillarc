@@ -1,7 +1,7 @@
 import { cache } from "react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
-import { cookies, headers } from "next/headers"
+import { cookies } from "next/headers"
 import { ROLES } from "@/constants/roles"
 
 export type UserContext = {
@@ -33,22 +33,16 @@ export type UserContext = {
 
 export const getCurrentUserContext = cache(async (): Promise<UserContext | null> => {
   const t0 = performance.now()
-  const headerList = await headers()
-  let userId = headerList.get("x-user-id")
-  const source = userId ? "header-fastpath" : "gotrue-fallback"
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  if (!userId) {
-    const supabase = await createSupabaseServerClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user?.id) {
-      return null
-    }
-    userId = user.id
+  if (userError || !user?.id) {
+    return null
   }
+  const userId = user.id
 
   const admin = createSupabaseAdminClient()
   const [profileRes, userPermRes] = await Promise.all([
@@ -66,7 +60,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
   ])
 
   const t1 = performance.now()
-  console.info(`[UserContext] source=${source} userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
+  console.info(`[UserContext] source=gotrue-verified userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
 
   const actualProfile = profileRes.data
   if (profileRes.error || !actualProfile) {
