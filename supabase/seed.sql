@@ -12,10 +12,10 @@ INSERT INTO auth.users (
   email_change_token_new, email_change
 )
 VALUES
-  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'student@skillarc.local', crypt('LocalPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Student"}'::jsonb, now(), now(), '', '', '', ''),
-  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'faculty@skillarc.local', crypt('LocalPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Faculty"}'::jsonb, now(), now(), '', '', '', ''),
-  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'parent@skillarc.local', crypt('LocalPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Parent"}'::jsonb, now(), now(), '', '', '', ''),
-  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin@skillarc.local', crypt('LocalPass123!', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Institution Admin"}'::jsonb, now(), now(), '', '', '', '')
+  ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'student@skillarc.local', extensions.crypt('LocalPass123!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Student"}'::jsonb, now(), now(), '', '', '', ''),
+  ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'faculty@skillarc.local', extensions.crypt('LocalPass123!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Faculty"}'::jsonb, now(), now(), '', '', '', ''),
+  ('10000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'parent@skillarc.local', extensions.crypt('LocalPass123!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Parent"}'::jsonb, now(), now(), '', '', '', ''),
+  ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'admin@skillarc.local', extensions.crypt('LocalPass123!', extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Local Institution Admin"}'::jsonb, now(), now(), '', '', '', '')
 ON CONFLICT (id) DO UPDATE SET
   encrypted_password = EXCLUDED.encrypted_password,
   email_confirmed_at = EXCLUDED.email_confirmed_at,

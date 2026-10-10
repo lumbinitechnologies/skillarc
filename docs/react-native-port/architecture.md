@@ -18,11 +18,12 @@ Expo app (Android/iOS)
 
 ## Test environment
 
-- Use **one persistent Supabase Pro preview branch** with synthetic data. Mobile PRs share it. Keane may enable ephemeral branches for SkillArc PRs that change schema or authorization. [Preview branches incur usage charges](https://supabase.com/docs/guides/platform/manage-your-usage/branching).
-- Use a stable **SkillArc Vercel preview deployment** with server-side secrets scoped to that Supabase branch. Expo development builds point to its HTTPS API origin and matching Supabase Auth project; missing staging config must fail closed.
-- Expo/EAS builds and distributes the app. EAS Hosting runs Expo Router server routes but cannot deploy the existing Next.js handlers unchanged. See [Expo Hosting](https://docs.expo.dev/eas/hosting/) and [Vercel environments](https://vercel.com/docs/deployments/environments).
-- SQL exists locally under `supabase/migrations`, but only its `.gitignore` is tracked. On 28 September, `supabase migration list` showed 14 remote versions and 33 local versions with only three matching; `supabase branches list` returned no branches. Before Git-based branching, Keane and Nikhil reconcile the applied history, commit the canonical set, and prove a fresh local reset and preview build match. Do not replay unverified migrations into production.
-- `supabase/seed.sql` contains fixed **local** passwords. Disable that seed for a network-accessible preview; use branch-specific synthetic fixtures and private login credentials. Configure Auth redirects for development/preview app schemes and disable costly external side effects.
+- The initial shared synthetic environment is the existing SkillArc Supabase project `sjyotfnhdfmjkulyssps`, served by **https://www.theskillarc.com** (the canonical destination of `https://theskillarc.com`). Keane approved this existing production-designated host while it contains synthetic data only. Supabase reports no separate preview branch; another paid branch is not a prerequisite.
+- EAS project `39a579fe-c094-4804-92ce-c284dc5fae66` has matching public API origin, Supabase Auth URL and public key in its `development` and `preview` environments. The deployed web bundle and EAS use the same Auth project/key. Privileged keys stay server-side. The mobile repository documents `env:development`, `start:shared` and `staging:check` commands.
+- Before real client data arrives, separate ongoing tests from the live client environment and resolve the existing access-control findings documented in [migration reconciliation](../MIGRATION_RECONCILIATION.md). This synthetic setup does not establish production authorization readiness.
+- Canonical SQL is now tracked in `supabase/migrations`: 14 historical markers plus the verified complete hosted baseline. Original statements remain archived under `migrations/hosted-history`. A fresh local reset with synthetic seed passed; schema diff and the 12 custom Storage policies match the hosted environment; all 15 local/remote migration versions align. The old generated projection is no longer used.
+- Expo/EAS builds and distributes the app. A development client still needs Metro; EAS values can supply Metro through `env:exec`. A standalone preview build bundles its JavaScript. No new native build is needed for this configuration-only change.
+- `supabase/seed.sql` contains fixed **local-only** passwords. Disable that seed for a network-accessible branch; provision private synthetic accounts and the branch-specific Auth, Storage and server configuration separately.
 
 ## Contract test matrix
 
