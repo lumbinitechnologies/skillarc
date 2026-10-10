@@ -1,0 +1,3 @@
+-- Historical hosted migration 20260908000026_028_local_knowledge_embeddings; superseded by 20261010094633_reconciled_hosted_schema.sql.
+-- Original applied SQL: migrations/hosted-history/20260908000026_028_local_knowledge_embeddings.sql
+-- Intentionally no DDL: a fresh reset receives the complete schema in the baseline.
