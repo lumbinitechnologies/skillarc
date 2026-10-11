@@ -37,11 +37,9 @@ yarn-error.log*
 .env*
 !.env.local.example
 
-# Supabase local migration files are generated from the canonical repo migrations
+# Supabase local runtime state
 /supabase/.branches/
 /supabase/.temp/
-/supabase/migrations/*
-!/supabase/migrations/.gitignore
 
 # vercel
 .vercel
@@ -49,5 +47,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-/supabase/migrations

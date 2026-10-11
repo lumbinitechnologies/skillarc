@@ -1,0 +1,21 @@
+{
+  "version": "20261010094633",
+  "projectRef": "sjyotfnhdfmjkulyssps",
+  "files": {
+    "20260825184712_task09_student_documents.sql": "3606042940602af7ea70451a3870214ff8a7d696b47e826db8578f5926dfc3b5",
+    "20260825184740_task08_student_profile.sql": "d93fa87b92d768abee5449516a7b3d705fb1e32be096499948dfd5267f2a846b",
+    "20260825192513_task10_admissions_lifecycle.sql": "ec45f446cd6c33b059d96dcc67a3ffd47f16c05835001547e200e9bfce860222",
+    "20260825193426_task11_qualification_enrolment.sql": "cedaaec34e2ed0842db8191f883b2716b4459506ad6228696d2d19bd425fe242",
+    "20260825194341_task12_portal_activation.sql": "83ec0a38bf018d7495761743102f4b929e36801545d9ca31f614f526551f7d32",
+    "20260826160657_task_review_security.sql": "6911400055a96e52a3dc211e3868e7d86dd1875cf25c3904e40d20294cfe0985",
+    "20260826160703_student_document_linkage.sql": "b29f02b1912fc6b986036307e1131ad105d9f71c7268cdcaf768ed7adbeedb32",
+    "20260826161720_task_review_admissions_hardening.sql": "480acf2bd3d6123bee369f6b3484740154adb75f2cf7ab9db4fec4834ecbfe69",
+    "20260826162333_task_review_profile_merge_fields.sql": "3d36a51f1a05c8d01465b3f3f51015e4628e5485d599b4705fe27006abaf927a",
+    "20260826162345_task_review_trigger_permissions.sql": "f7aa5cdf64a9845095bd2f4bb178f90887de89419d9f03cf32a7a791a3ef2212",
+    "20260908000022_024_ai_copilot.sql": "871b8e1e24c4e6fc9f00fb6d89a09517163abef2fb8338b60d462d3b7dc23297",
+    "20260908000025_027_canonical_knowledge_ingestion.sql": "aed4745a00fcc23767e088c2c81f6f6558a94d152a4bbd23800888fefea71734",
+    "20260908000026_028_local_knowledge_embeddings.sql": "30a6bba2583175b9e153da8ea137b21ff5f4a92f8182fd7e0f7ba39d4369aff5",
+    "20260908152432_timetable_slots_rls_scoped_access_20260908.sql": "bd6518be2b48492a7d717f4a5be31c878d0c1648ec022fc8e911a6d6c6446a30",
+    "20261010094633_reconciled_hosted_schema.sql": "81783fba1bafa6883fa48689ed29e43840e1f95f8386c59c2095626026df7083"
+  }
+}
