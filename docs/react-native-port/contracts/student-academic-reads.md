@@ -48,6 +48,16 @@ Do not rely on RLS to rescue server-admin queries. All privileged reads require 
 
 ## Review decisions required before implementation
 
+### Confirmed timezone direction — 16 October 2026
+
+Keane approved an **institution-owned IANA timezone setting** after explaining that the two institutions are in India and Australia. The Australian city/state is unknown; do not choose an Australian zone from country alone. Use `Asia/Kolkata` for the explicitly configured Indian example. An administrator's or student's personal timezone must not become the institution's academic policy.
+
+Recommended implementation: an explicitly configured, nullable `academic_time_zone` value owned by each institution, validated as a supported IANA identifier by server-side configuration writes and reads. No global default and no silent backfill from user preferences. Its storage/migration and configuration procedure need their own reviewed change; no schema is altered by this proposal. Unknown configuration remains visible as `time_zone: null`, `today: null`, and an explicit configuration-unavailable state, not an invented Today schedule. Courses and non-time-dependent reads need not disappear merely because schedule configuration is incomplete.
+
+Use institutional local dates/times for recurring classes, academic weeks and closures. Store new absolute deadline instants as timezone-aware values and return ISO instants; a user's optional display conversion cannot change the deadline or the server's overdue decision. Existing timestamp-without-time-zone deadline rows remain subject to the legacy interpretation audit below; this direction does not authorize reinterpreting them or a bulk conversion.
+
+The clickable prototype's configured India example is synthetic. Its unknown-timezone state removes the academic Today/date claim. This does not constitute approval of handlers, canonical OpenAPI changes, database backfills, or production screens.
+
 1. **Academic timezone:** the current institution/timetable settings have no academic IANA timezone. `user_account_settings.timezone` is a user preference with an unrelated default; it is not institutional policy. Approve the institution-owned timezone source/configuration before implementing today/default-week/date-boundary behavior. No database migration is assumed.
 2. **Legacy deadlines:** assignments store `due_date` as timestamp without time zone, while current write actions convert submitted input to ISO UTC before persistence. Confirm whether legacy rows use the same UTC convention. Do not silently append `Z` to ambiguous historical values or calculate a potentially incorrect overdue state. This is a data interpretation decision, not a phone formatting choice.
 3. **Enrollment compatibility:** confirm active enrollment/unit status rules and whether validated section membership is authoritative for legacy students without formal enrollment rows. The recommended rule preserves section-based workflows while never falling back to institution/program-wide subjects.
