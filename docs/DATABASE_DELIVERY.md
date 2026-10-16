@@ -6,8 +6,9 @@ Tracker: server #66; GitHub Projects only.
 ## Status and targets — 16 October 2026
 
 Workflows are prepared for review, **not activated**. Existing validation failures
-block release. Review protection and release environments are configured; credentials,
-required CI checks after bootstrap, and the Vercel migration gate remain pending.
+block release. Review protection, release environments and the Vercel staging check
+are configured; credentials, required CI checks after bootstrap and gate rehearsal
+remain pending.
 
 | Environment | Supabase | Vercel | Data policy |
 | --- | --- | --- | --- |
@@ -90,6 +91,9 @@ No paid plan or visibility change is included; the server repository is public.
 
 6. In existing Vercel **skillarc** → Settings → Build and Deployment → Deployment
    Checks, require GitHub check **`Migrate staging`** for production deployments.
+   This is now configured via the official v2 Checks API: check
+   `chk_676a7e68-62e2-411e-98cf-a650f1a3f789`, source GitHub `Migrate staging`,
+   target `production`, blocks `deployment-alias`, no prerequisite build event.
    Keep automatic domain assignment enabled; that check must hold domains until
    migrations for the **same commit** succeed. Rehearse a failure holding a build
    and success releasing it. The flag is owner attestation, not an API check of
