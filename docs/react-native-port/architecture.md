@@ -1,6 +1,6 @@
 # Mobile architecture and environments
 
-**Audience:** Keane and Nikhil. [Release scope](release-1.md) defines behavior; this guide defines the technical boundary. The canonical transport specification is [SkillArc's mobile OpenAPI file](../../contracts/mobile-v1.openapi.yaml).
+**Audience:** Keane and independently approved server contributors. [Release scope](release-1.md) defines behavior; this guide defines the technical boundary. The canonical transport specification is [SkillArc's mobile OpenAPI file](../../contracts/mobile-v1.openapi.yaml).
 
 ```text
 Expo app (Android/iOS)
