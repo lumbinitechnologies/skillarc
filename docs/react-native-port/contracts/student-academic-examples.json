@@ -1,0 +1,183 @@
+{
+  "status": "proposed-synthetic-examples-not-implemented",
+  "time_policy": "Example institution explicitly uses Asia/Kolkata; example deadline instants are UTC. Deployment policy requires review.",
+  "courses": {
+    "data": {
+      "context": {
+        "status": "ready",
+        "program": {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "name": "Computer Science"
+        },
+        "section": {
+          "id": "30000000-0000-4000-8000-000000000001",
+          "name": "Section A"
+        }
+      },
+      "courses": [
+        {
+          "id": "40000000-0000-4000-8000-000000000001",
+          "name": "Data Structures",
+          "code": "CS201",
+          "type": "THEORY",
+          "faculty": [
+            {
+              "id": "50000000-0000-4000-8000-000000000001",
+              "name": "Dr. Mira Sen"
+            }
+          ]
+        },
+        {
+          "id": "40000000-0000-4000-8000-000000000002",
+          "name": "Computer Networks Laboratory",
+          "code": "CS204",
+          "type": "LAB",
+          "faculty": []
+        }
+      ]
+    },
+    "request_id": "90000000-0000-4000-8000-000000000001"
+  },
+  "timetable": {
+    "data": {
+      "context": {
+        "status": "ready",
+        "program": {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "name": "Computer Science"
+        },
+        "section": {
+          "id": "30000000-0000-4000-8000-000000000001",
+          "name": "Section A"
+        }
+      },
+      "date": "2026-10-16",
+      "today": "2026-10-16",
+      "time_zone": "Asia/Kolkata",
+      "multiweek_enabled": false,
+      "weeks": [],
+      "selected_week_id": null,
+      "sessions": [
+        {
+          "id": "60000000-0000-4000-8000-000000000001",
+          "period": 2,
+          "course_id": "40000000-0000-4000-8000-000000000001",
+          "course_name": "Data Structures",
+          "course_code": "CS201",
+          "faculty_name": "Dr. Mira Sen",
+          "time_label": "10:00–11:00",
+          "room": "Room 204",
+          "delivery_mode": "ON_CAMPUS",
+          "state": "scheduled"
+        },
+        {
+          "id": "60000000-0000-4000-8000-000000000002",
+          "period": 3,
+          "course_id": "40000000-0000-4000-8000-000000000002",
+          "course_name": "Computer Networks Laboratory",
+          "course_code": "CS204",
+          "faculty_name": null,
+          "time_label": null,
+          "room": "Lab 3",
+          "delivery_mode": "ON_CAMPUS",
+          "state": "timings_unavailable"
+        }
+      ],
+      "closures": [],
+      "empty_reason": null
+    },
+    "request_id": "90000000-0000-4000-8000-000000000002"
+  },
+  "tasks": {
+    "data": {
+      "context": {
+        "status": "ready",
+        "program": {
+          "id": "20000000-0000-4000-8000-000000000001",
+          "name": "Computer Science"
+        },
+        "section": {
+          "id": "30000000-0000-4000-8000-000000000001",
+          "name": "Section A"
+        }
+      },
+      "as_of": "2026-10-16T03:30:00Z",
+      "tasks": [
+        {
+          "id": "70000000-0000-4000-8000-000000000001",
+          "title": "Trees and traversal",
+          "type": "assignment",
+          "course_id": "40000000-0000-4000-8000-000000000001",
+          "course_name": "Data Structures",
+          "course_code": "CS201",
+          "due_at": "2026-10-15T18:00:00Z",
+          "status": "overdue",
+          "mobile_action": "unavailable",
+          "availability_message": "Assignment details and submission are not available in this version yet."
+        },
+        {
+          "id": "70000000-0000-4000-8000-000000000002",
+          "title": "Graph fundamentals",
+          "type": "quiz",
+          "course_id": "40000000-0000-4000-8000-000000000001",
+          "course_name": "Data Structures",
+          "course_code": "CS201",
+          "due_at": "2026-10-17T12:30:00Z",
+          "status": "pending",
+          "mobile_action": "unavailable",
+          "availability_message": "Available on the website; completing this task is not supported in mobile v1."
+        },
+        {
+          "id": "70000000-0000-4000-8000-000000000003",
+          "title": "Packet routing exercise",
+          "type": "coding",
+          "course_id": "40000000-0000-4000-8000-000000000002",
+          "course_name": "Computer Networks Laboratory",
+          "course_code": "CS204",
+          "due_at": null,
+          "status": "pending",
+          "mobile_action": "unavailable",
+          "availability_message": "Available on the website; completing this task is not supported in mobile v1."
+        }
+      ]
+    },
+    "request_id": "90000000-0000-4000-8000-000000000003"
+  },
+  "states": {
+    "no_enrollment": {
+      "context": {
+        "status": "no_enrollment",
+        "program": null,
+        "section": null
+      },
+      "courses": []
+    },
+    "no_section": {
+      "context": { "status": "no_section", "program": null, "section": null },
+      "sessions": [],
+      "empty_reason": "no_section"
+    },
+    "no_tasks": { "context": { "status": "ready" }, "tasks": [] },
+    "closure": {
+      "date": "2026-10-19",
+      "sessions": [],
+      "closures": [
+        {
+          "id": "80000000-0000-4000-8000-000000000001",
+          "title": "Academic break",
+          "start_date": "2026-10-19",
+          "end_date": "2026-10-19",
+          "affects_classes": true
+        }
+      ],
+      "empty_reason": "academic_closure"
+    },
+    "service_failure": {
+      "error": {
+        "code": "SERVICE_UNAVAILABLE",
+        "message": "Academic information is temporarily unavailable"
+      },
+      "request_id": "90000000-0000-4000-8000-000000000004"
+    }
+  }
+}
