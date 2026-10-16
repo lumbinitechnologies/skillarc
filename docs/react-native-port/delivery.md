@@ -1,31 +1,20 @@
-# Solo delivery roadmap
+# Mobile delivery sequence
 
-Keane implements the Expo app and owns mobile integration, Supabase/Expo configuration, and PR preparation. The independent `@lumbinitechnologies` account reviews Keane's mobile PRs. Nikhil may implement approved SkillArc server handlers under the separate [backend epic SCRUM-25](https://lumbinitechnologies-team.atlassian.net/browse/SCRUM-25). Sai and the former eight groups have no mobile assignments.
+[Mobile v1 scope](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/mobile-v1.md) governs product commitments. [GitHub Project SkillArc Mobile R1](https://github.com/users/lumbinitechnologies/projects/1) is the sole active tracker across the mobile and server repositories. Jira references and old W01–W06 intervals are historical; they are not active sprint commitments or a release promise. Do not update Jira as part of mobile delivery.
 
-The [solo epic SCRUM-45](https://lumbinitechnologies-team.atlassian.net/browse/SCRUM-45) is the active Jira parent. [GitHub Project SkillArc Mobile R1](https://github.com/users/lumbinitechnologies/projects/1) is the daily board. Only governance and the first integrated slice enter W01; move later work from Backlog when its contract and device dependencies are ready.
+Keane owns the current mobile and server work; @lumbinitechnologies independently reviews. Nikhil may take separately approved server work. Former groups have no mobile assignments.
 
-| Week | India dates, 2026 | Planning goal |
-| --- | --- | --- |
-| W01 | 7–13 Oct | [Governance SCRUM-44](https://github.com/lumbinitechnologies/skillarc-mobile/issues/9) and [staging/build slice SCRUM-47](https://github.com/lumbinitechnologies/skillarc-mobile/issues/20). |
-| W02 | 14–20 Oct | [Sign-in and role navigation SCRUM-46](https://github.com/lumbinitechnologies/skillarc-mobile/issues/21). |
-| W03 | 21–27 Oct | Prioritized student read flows after server authorization passes. |
-| W04 | 28 Oct–3 Nov | Faculty and parent read flows using approved contracts. |
-| W05 | 4–10 Nov | Approved writes, attachments, retries and idempotency. |
-| W06 | 11–17 Nov | Device, accessibility, privacy and network QA; decide the next candidate date from evidence. |
+## Dependency order
 
-These are unstarted sprints on the existing Apex `SCRUM` board. The separate web sprint is unchanged. A date is **not** a release promise.
+1. Review the scope, backlog reconciliation and GitHub-only governance transition through mobile #9; review these server guide changes separately.
+2. Implement and review student academic read contracts and scoped handlers with synthetic fixtures/security tests.
+3. Deliver mobile #22 from the approved generated contract: courses, timetable and all pending task summaries.
+4. Deliver faculty reads, timetable/rosters, student/faculty content and role homes using the tracked contract dependencies.
+5. Deliver student/faculty attendance, leave and regular assignment submissions with retry/conflict/file/audit coverage.
+6. Deliver student released results; collect platform-specific QA and dependency/security triage before a release decision.
 
-## Prioritized backlog
+The [reconciliation register](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/backlog-reconciliation.md) contains exact issue links and dispositions. Parent delivery, complex authoring and grading/publication stay in later-release backlog. Do not put feature items in Ready until their approved contract or synthetic fixture and preceding scope/governance gates exist. Server contract work can become Ready after the scope is reviewed.
 
-| Area | Jira | GitHub issue |
-| --- | --- | --- |
-| Student academics | SCRUM-48 | [Courses, timetable, to-do](https://github.com/lumbinitechnologies/skillarc-mobile/issues/22) |
-| Assignments | SCRUM-50 | [Assignments and submissions](https://github.com/lumbinitechnologies/skillarc-mobile/issues/23) |
-| Faculty content | SCRUM-51 | [Courses, resources, announcements](https://github.com/lumbinitechnologies/skillarc-mobile/issues/24) |
-| Attendance | SCRUM-49 | [Attendance and leave](https://github.com/lumbinitechnologies/skillarc-mobile/issues/25) |
-| Results | SCRUM-53 | [Grades and reports](https://github.com/lumbinitechnologies/skillarc-mobile/issues/26) |
-| Parent | SCRUM-54 | [Linked-child views](https://github.com/lumbinitechnologies/skillarc-mobile/issues/27) |
-| Faculty writes | SCRUM-55 | [Grading and publication](https://github.com/lumbinitechnologies/skillarc-mobile/issues/28) |
-| Quality | SCRUM-52 | [Device and release QA](https://github.com/lumbinitechnologies/skillarc-mobile/issues/29) |
+## Review and evidence
 
-At each Tuesday review, Keane updates Jira from GitHub, chooses only the next feasible slice, and checks API dependencies with Nikhil. The old G1–G8 issues link to successors and remain closed; their Jira tasks and epics are On Hold and labelled `mobile-plan-superseded`.
+Use one GitHub work item per PR and link cross-repository dependencies. Keane records tests, AI assistance and manual verification; the reviewer independently approves. No calendar-based automatic advancement. Check Android/iOS separately and retain the explicit mobile #39 deferral. Before real-data use, enforce the private environment/security gates in [architecture](architecture.md).
