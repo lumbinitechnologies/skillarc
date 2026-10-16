@@ -18,6 +18,7 @@ jobs:
   verify:
     name: Verify production candidate
     if: github.ref == 'refs/heads/main'
+    environment: skillarc-policy
     runs-on: ubuntu-latest
     permissions:
       contents: read

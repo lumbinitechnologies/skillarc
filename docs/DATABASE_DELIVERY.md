@@ -68,16 +68,18 @@ No paid plan or visibility change is included; the server repository is public.
    workflow exists on main, which would deadlock separate remediation PRs. Production
    preflight refuses release until both requirements are armed and tests pass.
    It also verifies @lumbinitechnologies approved the exact merged PR head.
-3. Create the environments below with **main-only deployment branch policies**.
+3. The environments below have **main-only deployment branch policies**.
    For production select **only @lumbinitechnologies** as required reviewer,
    **Prevent self-review**, and disable administrator bypass. Keane dispatches;
    the owner approves after tests. Existing unprotected `Production` environments
    do not meet this requirement.
-4. Add repository secret `GH_POLICY_READ_TOKEN`: expiring fine-grained token for
+4. Add `GH_POLICY_READ_TOKEN` to **skillarc-policy** and **skillarc-staging**:
+   an expiring fine-grained token for
    this repository only, **Administration: read**, **Actions: read**, and
    required metadata. It reads protection settings only in trusted-main steps.
    `GITHUB_TOKEN` cannot request Administration permission; do not substitute it
-   for this policy metadata check or grant write access. Never pass it to PR jobs.
+   for this policy metadata check or grant write access. Never store it as a
+   repository secret: main-only environments keep it out of same-repository PR jobs.
 5. Enter secrets directly in protected environment settings, never chat/issues/
    committed files/logs. Use separate Supabase tokens with the narrowest available
    scope per job and expiring team-scoped Vercel credentials. Branch creation may
@@ -85,7 +87,8 @@ No paid plan or visibility change is included; the server repository is public.
 
 | Environment | Secrets | Variables |
 | --- | --- | --- |
-| `skillarc-staging` | Staging `SUPABASE_ACCESS_TOKEN` | `SUPABASE_PROJECT_ID=sjyotfnhdfmjkulyssps`; `STAGING_RELEASE_ENABLED=true` and `VERCEL_MIGRATION_GATE_CONFIGURED=true` only after step 6 |
+| `skillarc-policy` | Read-only `GH_POLICY_READ_TOKEN` | No deployment credentials; production preflight uses this main-only environment before requesting release approval |
+| `skillarc-staging` | Staging `SUPABASE_ACCESS_TOKEN`, read-only `GH_POLICY_READ_TOKEN` | `SUPABASE_PROJECT_ID=sjyotfnhdfmjkulyssps`; `STAGING_RELEASE_ENABLED=true` and `VERCEL_MIGRATION_GATE_CONFIGURED=true` only after step 6 |
 | `skillarc-previews` | `SUPABASE_ACCESS_TOKEN` allowed to create/delete staging branches | No production credentials |
 | `skillarc-production` | Production `SUPABASE_ACCESS_TOKEN`, `VERCEL_TOKEN`, `VERCEL_AUTOMATION_BYPASS_SECRET` when protection requires it | `SUPABASE_PROJECT_ID=fvkvfcsqetdxtoosmizq`, `VERCEL_ORG_ID=team_Aaz7lak1klst5hnFKJxCcG6G`, `VERCEL_PROJECT_ID=prj_YeaRlzqqi27AlwiCs87G6wD28bqf`; `PRODUCTION_RELEASE_ENABLED=true` only after configuration |
 
@@ -108,6 +111,22 @@ No paid plan or visibility change is included; the server repository is public.
 8. Set repository variable **`PREVIEWS_ENABLED=true`** after preview credentials and
    cleanup are configured. Repository scope prevents disabled scheduled-job noise.
    Keep scheduled Actions enabled and monitor cleanup failures and actual usage.
+
+Token creation must use [GitHub fine-grained token settings](https://github.com/settings/personal-access-tokens/new),
+[Supabase access-token settings](https://supabase.com/dashboard/account/tokens), and
+[Vercel token settings](https://vercel.com/account/settings/tokens) when the connected
+app cannot mint a token. Choose an expiry (90 days is a reasonable starting point)
+and record renewal ownership. `gh secret set --env <environment>` accepts a token
+through stdin and encrypts it before upload; never use a token in a command argument.
+Do not repurpose broad personal CLI login credentials as CI secrets.
+
+Staging and production Supabase tokens each need Database and Migrations read/write
+for their own project only. Preview operations additionally need Development Branches
+read/write and Action Runs read for staging and newly created owned branches. Verify
+that the chosen scope covers those fresh branches **and denies production SQL** before
+enabling previews. If that cannot be expressed with the available scoped-token grants,
+keep previews disabled and review a separate preview access boundary; do not silently
+grant organization-wide database writes that include production.
 
 Owner settings: [environments](https://github.com/lumbinitechnologies/skillarc/settings/environments),
 [branches](https://github.com/lumbinitechnologies/skillarc/settings/branches),
@@ -199,6 +218,12 @@ Rehearsal at base `59763dbac84885610876cbcffbca597e6d507723`:
   one organization, two institutions, zero Auth accounts. Deleted after rehearsal.
 - Policy tests, focused script lint, workflow syntax and typecheck are distinct
   from failing full validation. No protected Actions release has run yet.
+- Hosted Actions PR validation reproduced the same two server test failures and
+  two database lint errors. Replay/guards/typecheck passed before those failures.
+  The Supabase plugin can manage the provisioned project but exposes no personal
+  access token creation tool. Vercel's plugin returns a team-scope 403, while CLI
+  project/check management works but token creation returns `Cannot create tokens
+  for this app` (403). No broad cached login token was copied into CI.
 
 Server #67 tracks validation/security remediation. Do not mark production Ready until it, remaining setup
 and controlled workflow rehearsal pass. PR #65 remains a separate reviewed
