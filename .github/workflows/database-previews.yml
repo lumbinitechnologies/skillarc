@@ -1,0 +1,60 @@
+name: Isolated database previews
+on:
+  workflow_run:
+    workflows: ['Database CI and staging']
+    types: [completed]
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [create, cleanup]
+        default: create
+      pr_number:
+        type: string
+        description: Open Keane PR number to recreate (create only)
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: skillarc-hosted-preview-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Manage isolated previews
+    if: >-
+      vars.PREVIEWS_ENABLED == 'true' &&
+      (github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: skillarc-previews
+    steps:
+      # Even pull_request_target/closed runs only trusted main code, never a PR checkout.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+        with:
+          version: 2.117.0
+      - name: Manage only owned previews from trusted workflow code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PREVIEWS_ENABLED: ${{ vars.PREVIEWS_ENABLED }}
+          PREVIEW_PR_NUMBER: ${{ inputs.pr_number }}
+          PREVIEW_ACTION: ${{ (github.event_name == 'schedule' || github.event_name == 'pull_request_target') && 'cleanup' || inputs.action || 'create' }}
+        run: node scripts/ci/previews.mjs

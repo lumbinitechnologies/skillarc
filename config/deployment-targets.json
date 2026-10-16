@@ -1,0 +1,24 @@
+{
+  "organizationId": "ssuwihnqhpwltrscmsmf",
+  "region": "ap-southeast-1",
+  "staging": {
+    "projectRef": "sjyotfnhdfmjkulyssps",
+    "vercelProjectId": "prj_qF0sUZ0vnVS0pTLpnPELUusGnNaE",
+    "requireBaseline": true
+  },
+  "production": {
+    "projectRef": "fvkvfcsqetdxtoosmizq",
+    "vercelProjectId": "prj_YeaRlzqqi27AlwiCs87G6wD28bqf",
+    "requireBaseline": false,
+    "approvalLogin": "lumbinitechnologies"
+  },
+  "preview": {
+    "parentProjectRef": "sjyotfnhdfmjkulyssps",
+    "ttlHours": 2,
+    "costPerHour": 0.01344,
+    "costApproved": true,
+    "namePrefix": "skillarc-ci-pr-",
+    "maxConcurrent": 2
+  },
+  "vercelTeamId": "team_Aaz7lak1klst5hnFKJxCcG6G"
+}
