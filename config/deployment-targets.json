@@ -1,0 +1,39 @@
+{
+  "organizationId": "ssuwihnqhpwltrscmsmf",
+  "region": "ap-southeast-1",
+  "staging": {
+    "projectRef": null,
+    "branchName": "staging",
+    "persistent": true,
+    "gitBranch": "staging",
+    "vercelProjectId": "prj_qF0sUZ0vnVS0pTLpnPELUusGnNaE",
+    "hostname": "staging.theskillarc.com",
+    "requireBaseline": false
+  },
+  "production": {
+    "projectRef": "fvkvfcsqetdxtoosmizq",
+    "vercelProjectId": "prj_qF0sUZ0vnVS0pTLpnPELUusGnNaE",
+    "requireBaseline": false,
+    "approvalLogin": "lumbinitechnologies",
+    "gitBranch": "main"
+  },
+  "preview": {
+    "parentProjectRef": "fvkvfcsqetdxtoosmizq",
+    "ttlHours": 2,
+    "costPerHour": 0.01344,
+    "costApproved": true,
+    "namePrefix": "skillarc-ci-pr-",
+    "maxConcurrent": 2,
+    "gitBaseBranch": "staging"
+  },
+  "vercelTeamId": "team_Aaz7lak1klst5hnFKJxCcG6G",
+  "activeParentProjectRef": "fvkvfcsqetdxtoosmizq",
+  "excludedProjectRefs": [
+    "sjyotfnhdfmjkulyssps"
+  ],
+  "activation": {
+    "staging": false,
+    "previews": false,
+    "production": false
+  }
+}
