@@ -2,8 +2,16 @@ name: Approved production release
 on:
   workflow_dispatch:
     inputs:
+      mobile_sha:
+        description: Exact private mobile main SHA for the signed APK candidate
+        required: true
+        type: string
+      mobile_run_id:
+        description: Successful private Android candidate workflow run ID
+        required: true
+        type: string
       release_sha:
-        description: Full reviewed main commit SHA that passed staging
+        description: Full reviewed main promotion SHA (tree must match tested staging)
         required: true
         type: string
 
@@ -25,6 +33,9 @@ jobs:
       pull-requests: read
       actions: read
       deployments: read
+    outputs:
+      mobile_digest: ${{ steps.mobile.outputs.digest }}
+      staging_evidence: ${{ steps.server.outputs.staging_evidence }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -35,12 +46,20 @@ jobs:
         with:
           node-version: '24'
       - name: Verify revision, staging success and owner approval configuration
+        id: server
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
           GH_TOKEN: ${{ github.token }}
           GH_POLICY_READ_TOKEN: ${{ secrets.GH_POLICY_READ_TOKEN }}
           DEPLOYMENT_ENVIRONMENT: production
         run: node scripts/ci/verify-release.mjs
+      - name: Verify exact private Android candidate
+        id: mobile
+        env:
+          MOBILE_SHA: ${{ inputs.mobile_sha }}
+          MOBILE_RUN_ID: ${{ inputs.mobile_run_id }}
+          GH_MOBILE_READ_TOKEN: ${{ secrets.GH_MOBILE_READ_TOKEN }}
+        run: node scripts/ci/mobile-candidate.mjs
 
   quality:
     name: All production checks
@@ -52,6 +71,7 @@ jobs:
         with:
           ref: ${{ inputs.release_sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -68,19 +88,21 @@ jobs:
       - name: Complete database replay, tests, lint and strict security advisors
         run: node scripts/ci/database.mjs --production-readiness
 
-  release:
-    name: Approve and release ${{ inputs.release_sha }}
+  candidate:
+    name: Build exact website candidate without releasing
     needs: [verify, quality]
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    # Must be created by owner with main-only policy, required owner reviewer,
-    # prevent-self-review and separate production secrets. Preflight verifies it.
-    environment: skillarc-production
+    environment: skillarc-candidates
+    outputs:
+      url: ${{ steps.deployment.outputs.url }}
+      release_digest: ${{ steps.binding.outputs.digest }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ inputs.release_sha }}
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
@@ -92,7 +114,7 @@ jobs:
         run: |
           npm ci
           npm install --global vercel@63.1.2
-      - name: Require explicit release activation and target
+      - name: Require explicit launch activation and target
         env:
           PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
@@ -100,6 +122,7 @@ jobs:
           SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
         run: |
           test "$PRODUCTION_RELEASE_ENABLED" = true
+          node scripts/ci/launch-readiness.mjs
           node --input-type=module -e '
             import { readConfig, targetFor } from "./scripts/ci/deployment-policy.mjs";
             const c = readConfig(process.cwd());
@@ -112,6 +135,13 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: vercel pull --yes --environment=production
+      - name: Verify production configuration before executing build
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: node scripts/ci/vercel-release.mjs validate
       - name: Build the approved application version
         run: vercel build --prod
       - name: Stage build without production domains
@@ -122,20 +152,94 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: node scripts/ci/vercel-release.mjs stage
+      - name: Bind exact website, migrations and private Android candidate
+        id: binding
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          MOBILE_SHA: ${{ inputs.mobile_sha }}
+          MOBILE_RUN_ID: ${{ inputs.mobile_run_id }}
+          GH_MOBILE_READ_TOKEN: ${{ secrets.GH_MOBILE_READ_TOKEN }}
+          EXPECTED_MOBILE_DIGEST: ${{ needs.verify.outputs.mobile_digest }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.url }}
+          STAGING_EVIDENCE: ${{ needs.verify.outputs.staging_evidence }}
+        run: |
+          node scripts/ci/mobile-candidate.mjs
+          node scripts/ci/bind-release.mjs
+      - name: Remove pulled secret configuration
+        if: always()
+        run: rm -rf .vercel
+
+  release:
+    name: Approve exact release ${{ needs.candidate.outputs.release_digest }}
+    needs: [verify, quality, candidate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Must be created by owner with main-only policy, required owner reviewer,
+    # prevent-self-review and separate production secrets. Preflight verifies it.
+    environment: skillarc-production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+        with:
+          version: 2.117.0
+      - name: Install pinned application and deployment tooling
+        run: |
+          npm ci
+          npm install --global vercel@63.1.2
+      - name: Require owner-approved activation
+        env:
+          PRODUCTION_RELEASE_ENABLED: ${{ vars.PRODUCTION_RELEASE_ENABLED }}
+        run: |
+          test "$PRODUCTION_RELEASE_ENABLED" = true
+          node scripts/ci/launch-readiness.mjs
+      - name: Recheck server, mobile and approval binding after owner review
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          DEPLOYMENT_ENVIRONMENT: production
+          GH_TOKEN: ${{ github.token }}
+          GH_POLICY_READ_TOKEN: ${{ secrets.GH_POLICY_READ_TOKEN }}
+          GH_MOBILE_READ_TOKEN: ${{ secrets.GH_MOBILE_READ_TOKEN }}
+          MOBILE_SHA: ${{ inputs.mobile_sha }}
+          MOBILE_RUN_ID: ${{ inputs.mobile_run_id }}
+          EXPECTED_MOBILE_DIGEST: ${{ needs.verify.outputs.mobile_digest }}
+          EXPECTED_RELEASE_DIGEST: ${{ needs.candidate.outputs.release_digest }}
+          DEPLOYMENT_URL: ${{ needs.candidate.outputs.url }}
+          STAGING_EVIDENCE: ${{ needs.verify.outputs.staging_evidence }}
+        run: |
+          git fetch origin main staging
+          node scripts/ci/verify-release.mjs
+          node scripts/ci/mobile-candidate.mjs
+          node scripts/ci/bind-release.mjs
       - name: Apply reviewed production migrations only after tests and owner approval
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
-        run: node scripts/ci/migrate.mjs production
+        run: |
+          node scripts/ci/migrate.mjs production
+          node scripts/ci/production-clean.mjs
       - name: Verify staged application and promote the matching version
         env:
           RELEASE_SHA: ${{ inputs.release_sha }}
-          DEPLOYMENT_URL: ${{ steps.deployment.outputs.url }}
+          DEPLOYMENT_URL: ${{ needs.candidate.outputs.url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
         run: node scripts/ci/vercel-release.mjs promote
+      - name: Record authorization for exact private APK and website
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-authorization
+          path: release-record.json
+          if-no-files-found: error
       - name: Remove pulled secret configuration from ephemeral runner
         if: always()
-        run: rm -rf .vercel
+        run: rm -rf .vercel mobile-candidate.json release-record.json

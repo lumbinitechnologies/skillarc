@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, cpSync, writeFileSync, readdirSync, rmSync } fr
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fixtureSql, accountDefinitions } from '../fixtures/academic.mjs';
 import { migrationVersions } from './deployment-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -49,6 +50,22 @@ try {
     }
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
+  }
+  // Disposable local SQL fixture replay; Auth creation/login is tested separately
+  // through Auth administration in allowlisted hosted non-production branches.
+  const identities = Object.fromEntries(accountDefinitions.map((a,i) => [a.name, `92000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`]));
+  const fixtureTest = path.join(directory, 'fixture-test.sql');
+  const fixtureQueries = [
+    'DO $$ BEGIN ' + accountDefinitions.map(a => `INSERT INTO auth.users (id,email) VALUES ('${identities[a.name]}','${a.email}');`).join('\n') + ' END $$;',
+    fixtureSql(identities), fixtureSql(identities),
+    `DO $$ BEGIN
+      IF (SELECT count(*) FROM public.students WHERE id::text LIKE '92000000-%') <> 4 THEN RAISE EXCEPTION 'Fixture student graph mismatch'; END IF;
+      IF (SELECT count(*) FROM public.assignments WHERE id::text LIKE '91000000-%') <> 10 THEN RAISE EXCEPTION 'Fixture task graph mismatch'; END IF;
+    END $$;`,
+  ];
+  for (const query of fixtureQueries) {
+    writeFileSync(fixtureTest, query);
+    run(['db', 'query', '--local', '--file', fixtureTest]);
   }
   run(['db', 'lint', '--local', '--level', 'error', '--fail-on', 'error']);
   if (process.argv.includes('--production-readiness')) run(['db', 'advisors', '--local', '--type', 'security', '--fail-on', 'error']);

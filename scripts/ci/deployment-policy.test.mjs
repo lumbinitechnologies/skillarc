@@ -16,7 +16,7 @@ test('unknown, missing, duplicate and malformed remote histories cannot deploy',
   }
 });
 test('environment typo, swapped targets and shared staging/production fail closed', () => {
-  const config = { staging: { projectRef: 'test' }, production: { projectRef: 'live' } };
+  const config = { activeParentProjectRef:'live', excludedProjectRefs:['legacy'], preview:{parentProjectRef:'live'}, staging: { projectRef: 'test',vercelProjectId:'web' }, production: { projectRef: 'live',vercelProjectId:'web' } };
   assert.equal(targetFor(config, 'staging', 'test').projectRef, 'test');
   for (const [env, ref] of [['production', 'test'], ['preview', 'test'], ['staging', 'unknown']]) assert.throws(() => targetFor(config, env, ref));
   assert.throws(() => targetFor({ staging: { projectRef: 'test' }, production: { projectRef: 'test' } }, 'production', 'test'));
@@ -42,9 +42,22 @@ test('production needs the owner reviewer, self-review prevention and branch res
   assert.equal(productionEnvironmentReady({ ...env, protection_rules: [{ ...env.protection_rules[0], reviewers: [...env.protection_rules[0].reviewers, { type: 'User', reviewer: { login: 'someone-else' } }] }] }), false);
 });
 test('TTL cleanup cannot select production, default, persistent or unrelated branches', () => {
-  const config = { staging: { projectRef: 'test' }, preview: { ttlHours: 2, namePrefix: 'skillarc-ci-pr-' } };
-  const b = { name: 'skillarc-ci-pr-66-abc', parent_project_ref: 'test', created_at: '2026-10-16T00:00:00Z', persistent: false, is_default: false };
+  const config = { activeParentProjectRef:'parent', excludedProjectRefs:['legacy'], staging: { projectRef: 'test' }, preview: { ttlHours: 2, namePrefix: 'skillarc-ci-pr-' } };
+  const b = { name: 'skillarc-ci-pr-66-abcdef012345', project_ref:'preview', parent_project_ref: 'parent', created_at: '2026-10-16T00:00:00Z', persistent: false, is_default: false };
   assert.equal(previewExpired(b, Date.parse('2026-10-16T02:00:00Z'), config), true);
   assert.equal(previewExpired(b, Date.parse('2026-10-16T01:59:59Z'), config), false);
   for (const patch of [{ parent_project_ref: 'live' }, { is_default: true }, { persistent: true }, { name: 'other' }, { created_at: 'bad' }]) assert.equal(previewExpired({ ...b, ...patch }, Date.parse('2026-10-17'), config), false);
+});
+
+test('persistent staging must be a direct isolated child of the clean parent', async () => {
+  const { verifyDatabaseBranch, ownedPreview } = await import('./deployment-policy.mjs');
+  const config={activeParentProjectRef:'parent',excludedProjectRefs:['legacy'],production:{projectRef:'parent',vercelProjectId:'web'},staging:{projectRef:'stage',branchName:'staging',vercelProjectId:'web'},preview:{parentProjectRef:'parent',namePrefix:'skillarc-ci-pr-'}};
+  const branch={project_ref:'stage',name:'staging',persistent:true,is_default:false,parent_project_ref:'parent'};
+  assert.doesNotThrow(()=>verifyDatabaseBranch(config,'staging','stage',[branch]));
+  assert.doesNotThrow(()=>verifyDatabaseBranch(config,'production','parent',[]));
+  for(const patch of [{persistent:false},{is_default:true},{parent_project_ref:'legacy'},{name:'other'}]) assert.throws(()=>verifyDatabaseBranch(config,'staging','stage',[{...branch,...patch}]));
+  assert.throws(()=>verifyDatabaseBranch(config,'staging','stage',[]));
+  const preview={project_ref:'preview',name:'skillarc-ci-pr-66-abcdef012345',persistent:false,is_default:false,parent_project_ref:'parent'};
+  assert.equal(ownedPreview(preview,config),true);
+  for(const patch of [{project_ref:'legacy'},{parent_project_ref:'stage'},{project_ref:'parent'},{project_ref:'stage'},{persistent:true},{name:'skillarc-ci-pr-66-invalid'}]) assert.equal(ownedPreview({...preview,...patch},config),false);
 });

@@ -20,12 +20,35 @@ export function targetFor(config, environment, suppliedRef) {
   if (!['staging', 'production'].includes(environment)) throw new Error('Unknown deployment environment');
   const target = config[environment];
   if (!target?.projectRef || target.projectRef !== suppliedRef) throw new Error('Deployment project does not match the reviewed target');
-  if (config.staging.projectRef === config.production.projectRef) throw new Error('Staging and production must be separate');
+  if (config.excludedProjectRefs?.includes(suppliedRef)) throw new Error('Legacy project is excluded');
+  if (config.production.projectRef !== config.activeParentProjectRef || config.preview.parentProjectRef !== config.activeParentProjectRef) throw new Error('Inconsistent active parent');
+  if (config.staging.projectRef === config.production.projectRef) throw new Error('Staging must be an isolated branch');
+  if (config.staging.vercelProjectId !== config.production.vercelProjectId) throw new Error('Only one Vercel project is allowed');
   return target;
 }
 
-export function approvedMerge(pr, reviews, sha, owner = 'lumbinitechnologies') {
-  if (!pr?.merged_at || pr.base?.ref !== 'main' || pr.merge_commit_sha !== sha || pr.user?.login !== 'keanesc') return false;
+export function verifyDatabaseBranch(config, environment, suppliedRef, branches) {
+  targetFor(config, environment, suppliedRef);
+  if (!Array.isArray(branches)) throw new Error('Incomplete branch inventory');
+  const matches = branches.filter(b => b.project_ref === suppliedRef);
+  if (environment === 'production') {
+    // A clean parent may not yet have a default-branch metadata record.
+    if (matches.length && (matches.length !== 1 || !matches[0].is_default)) throw new Error('Production is not the default database');
+  } else {
+    const b = matches[0];
+    if (matches.length !== 1 || b.is_default || !b.persistent || b.name !== config.staging.branchName || b.parent_project_ref !== config.activeParentProjectRef) throw new Error('Staging branch ownership/persistence mismatch');
+  }
+}
+
+export function ownedPreview(branch, config) {
+  return new RegExp(`^${config.preview.namePrefix}\\d+-[a-f0-9]{12}$`).test(branch?.name || '') &&
+    branch.parent_project_ref === config.activeParentProjectRef && !branch.is_default && !branch.persistent &&
+    !!branch.project_ref && branch.project_ref !== config.activeParentProjectRef &&
+    branch.project_ref !== config.staging.projectRef && !config.excludedProjectRefs.includes(branch.project_ref);
+}
+
+export function approvedMerge(pr, reviews, sha, owner = 'lumbinitechnologies', baseBranch = 'main') {
+  if (!pr?.merged_at || pr.base?.ref !== baseBranch || pr.merge_commit_sha !== sha || pr.user?.login !== 'keanesc') return false;
   const latest = new Map();
   for (const review of [...reviews].sort((a, b) => Date.parse(a.submitted_at) - Date.parse(b.submitted_at))) {
     if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) latest.set(review.user?.login, review);
@@ -41,8 +64,7 @@ export function productionEnvironmentReady(environment) {
 }
 
 export function previewExpired(branch, now, config) {
-  if (!branch?.name?.startsWith(config.preview.namePrefix) || branch.is_default || branch.persistent) return false;
-  if (branch.parent_project_ref !== config.staging.projectRef) return false;
+  if (!ownedPreview(branch, config)) return false;
   const created = Date.parse(branch.created_at);
   return Number.isFinite(created) && now - created >= config.preview.ttlHours * 3_600_000;
 }

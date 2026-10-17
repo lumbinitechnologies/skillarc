@@ -5,7 +5,7 @@ on:
     types: [completed]
   pull_request_target:
     types: [closed]
-    branches: [main]
+    branches: [staging]
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -54,6 +54,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PREVIEW_BYPASS_SECRET: ${{ secrets.VERCEL_PREVIEW_BYPASS_SECRET }}
+          FIXTURE_PASSWORD: ${{ secrets.FIXTURE_PASSWORD }}
           PREVIEWS_ENABLED: ${{ vars.PREVIEWS_ENABLED }}
           PREVIEW_PR_NUMBER: ${{ inputs.pr_number }}
           PREVIEW_ACTION: ${{ (github.event_name == 'schedule' || github.event_name == 'pull_request_target') && 'cleanup' || inputs.action || 'create' }}

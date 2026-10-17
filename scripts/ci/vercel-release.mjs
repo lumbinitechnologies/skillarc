@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
+import { validateWebEnvironment } from './web-environment.mjs';
 import { readConfig } from './deployment-policy.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +15,11 @@ function cli(args) {
   if (result.status !== 0) throw new Error(`Vercel ${args[0]} failed; no production promotion`);
   return result.stdout.trim();
 }
-if (mode === 'stage') {
+if (mode === 'validate') {
+  validateWebEnvironment(config, 'production', JSON.parse(readFileSync('.vercel/project.json','utf8')), readFileSync('.vercel/.env.production.local','utf8'));
+  console.log('Production build configuration verified before build');
+} else if (mode === 'stage') {
+  validateWebEnvironment(config, 'production', JSON.parse(readFileSync('.vercel/project.json','utf8')), readFileSync('.vercel/.env.production.local','utf8'));
   if (cli(['--version']).replace(/^Vercel CLI /, '') !== '63.1.2') throw new Error('Unexpected Vercel CLI');
   const url = cli(['deploy', '--prebuilt', '--prod', '--skip-domain', '--yes', '--meta', `githubCommitSha=${sha}`]);
   const parsed = new URL(url);
