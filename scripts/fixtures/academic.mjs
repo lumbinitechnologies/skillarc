@@ -15,6 +15,9 @@ export function fixtureSql(accounts, anchor = new Date()) {
   function insert(table, record, conflict = 'id', refresh = []) {
     const keys = Object.keys(record);
     const values = keys.map(k => record[k]?.sql ?? literal(record[k]));
+    const identity = values[keys.indexOf(conflict)];
+    const immutable = keys.filter(k => k !== conflict && !refresh.includes(k));
+    if (immutable.length) rows.push(`IF EXISTS (SELECT 1 FROM public.${table} WHERE ${conflict}=${identity} AND (${immutable.map(k => `${k} IS DISTINCT FROM ${values[keys.indexOf(k)]}`).join(' OR ')})) THEN RAISE EXCEPTION 'Fixture row ownership collision: ${table}'; END IF;`);
     rows.push(`INSERT INTO public.${table} (${keys.join(',')}) VALUES (${values.join(',')}) ON CONFLICT (${conflict}) DO ${refresh.length ? 'UPDATE SET ' + refresh.map(k => `${k}=EXCLUDED.${k}`).join(',') : 'NOTHING'};`);
   }
   rows.push('DO $fixture_v1$ BEGIN');

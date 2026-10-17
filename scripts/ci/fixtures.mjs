@@ -15,9 +15,10 @@ async function request(url, token, method = 'GET', body, extra = {}) {
 const management = (suffix, method, body) => request(`https://api.supabase.com/v1/${suffix}`, process.env.SUPABASE_ACCESS_TOKEN, method, body);
 const branches = await management(`projects/${config.activeParentProjectRef}/branches`);
 if (mode === 'staging') {
+  if (config.activation?.staging !== true) throw new Error("Staging fixtures require reviewed activation");
   targetFor(config, mode, ref);
   verifyDatabaseBranch(config, mode, ref, branches);
-} else if (!branches.some(b => b.project_ref === ref && ownedPreview(b,config))) throw new Error('Preview is not owned');
+} else if (config.activation?.previews !== true || !branches.some(b => b.project_ref === ref && ownedPreview(b,config))) throw new Error('Preview is not owned');
 // Retrieve only this verified branch's API credentials; never log or export them.
 const keys = await management(`projects/${ref}/api-keys`);
 const serviceKey = keys.find(k => k.name === 'service_role')?.api_key;

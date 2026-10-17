@@ -67,6 +67,12 @@ try {
     writeFileSync(fixtureTest, query);
     run(['db', 'query', '--local', '--file', fixtureTest]);
   }
+  writeFileSync(fixtureTest, "UPDATE public.assignments SET title='Unowned collision' WHERE id='91000000-0000-4000-8000-000000000140';");
+  run(['db', 'query', '--local', '--file', fixtureTest]);
+  writeFileSync(fixtureTest, fixtureSql(identities));
+  const collision = spawnSync(cli, ['db','query','--local','--file',fixtureTest,'--workdir',directory], { cwd: root, encoding: 'utf8', timeout: 60_000 });
+  if (collision.status === 0 || !`${collision.stdout}${collision.stderr}`.includes('Fixture row ownership collision: assignments')) throw new Error('Fixture collision guard failed');
+  console.log('Fixture replay is repeatable and rejects unrelated row collisions');
   run(['db', 'lint', '--local', '--level', 'error', '--fail-on', 'error']);
   if (process.argv.includes('--production-readiness')) run(['db', 'advisors', '--local', '--type', 'security', '--fail-on', 'error']);
   console.log(`Replayed ${versions.length} migrations in a fresh local Supabase database without seeds`);
