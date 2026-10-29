@@ -121,7 +121,7 @@ export function ProgramsClientPage({
       toast({
         title: "Success",
         description:
-          "Program created successfully",
+          `${t.program} created successfully`,
       })
     } catch (error) {
       toast({
@@ -172,7 +172,7 @@ export function ProgramsClientPage({
       toast({
         title: "Success",
         description:
-          "Program updated successfully",
+          `${t.program} updated successfully`,
       })
     } catch (error) {
       toast({
@@ -216,7 +216,7 @@ export function ProgramsClientPage({
 
       toast({
         title: "Success",
-        description: "Program deleted successfully",
+        description: `${t.program} deleted successfully`,
       })
     } catch (error) {
       toast({

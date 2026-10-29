@@ -126,7 +126,7 @@ export function TimetableProvider({
       try {
         setLoading(true)
 
-        if (!semester || !sectionId) {
+        if (!sectionId) {
           setSubjects([])
           setFaculty([])
           setSlots([])

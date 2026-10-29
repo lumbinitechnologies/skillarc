@@ -422,7 +422,7 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
           disabled={!canBuild}
           onClick={() =>
             router.push(
-              `/dashboard/institution-admin/timetable/builder?department=${selectedDepartment}&program=${selectedProgram}&semester=${selectedSemester}&section=${selectedSection}`
+              `/dashboard/institution-admin/timetable/builder?department=${selectedDepartment}&program=${selectedProgram}&semester=${isSchool ? "1" : selectedSemester}&section=${selectedSection}`
             )
           }
           style={{

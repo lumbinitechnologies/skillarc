@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { GraduationCap, Mail, Trash2, Edit2, BookOpen, Users, Send, Phone, BadgeCheck } from "lucide-react"
 import type { FacultyWithStats } from "@/modules/faculty/types/faculty.types"
 import { ListSkeleton, EmptyState } from "@/components/ui/page-shell"
+import { useTerms } from "@/lib/org-type-context"
 
 interface FacultyListProps {
   faculty: FacultyWithStats[]
@@ -32,6 +33,7 @@ export function FacultyList({
   onDelete,
   onResendInvite,
 }: FacultyListProps) {
+  const t = useTerms()
   if (isLoading) return <ListSkeleton rows={5} />
 
   if (!faculty || faculty.length === 0) {
@@ -50,9 +52,9 @@ export function FacultyList({
       <div className="hidden md:grid grid-cols-[2.5fr_2fr_1.5fr_0.5fr_0.5fr_auto] gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-3">
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Member</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Contact</span>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Department</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{t.department}</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 text-center">Subjects</span>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 text-center">Sections</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 text-center">{t.section_plural}</span>
         <span className="w-20" />
       </div>
 

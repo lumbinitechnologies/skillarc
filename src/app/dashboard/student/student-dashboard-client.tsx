@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Activity, BookOpen, CalendarDays, ChevronRight, Clock, GraduationCap, CheckCircle2, AlertTriangle, ArrowUpRight, UserCheck, ShieldCheck } from "lucide-react"
 import { motion } from "framer-motion"
 import gsap from "gsap"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 interface Subject {
   id: string
@@ -58,6 +59,8 @@ export default function StudentPage({
   attendance: AttendanceSummary
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const t = useTerms()
+  const isSchool = useIsSchool()
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -142,10 +145,10 @@ export default function StudentPage({
       link: "/dashboard/student/timetable",
     },
     {
-      label: "Section & Program",
+      label: `${t.section} & ${t.program}`,
       value: student.sectionName || "—",
-      sublabel: student.programName || "Program pending",
-      badge: `Sem ${student.semester ?? "—"}`,
+      sublabel: student.programName || `${t.program} pending`,
+      badge: isSchool ? (student.sectionName || "—") : `Sem ${student.semester ?? "—"}`,
       badgeColor: "bg-amber-50 text-amber-700 border-amber-200",
       accent: "bg-amber-50 text-amber-600 border-amber-200",
       icon: <GraduationCap size={18} className="text-amber-600" />,

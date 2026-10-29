@@ -15,7 +15,7 @@ import {
   saveWarningLetterAction,
 } from "../../faculty/attendance/actions"
 import { useToast } from "@/components/ui/use-toast"
-import { useTerms } from "@/lib/org-type-context"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 interface Props {
   institutionId: string
@@ -38,6 +38,7 @@ export default function AttendanceClient({
 }: Props) {
   const { toast } = useToast()
   const t = useTerms()
+  const isSchool = useIsSchool()
   
   const [activeView, setActiveView] = useState<"sheets" | "analytics">("analytics")
 
@@ -232,7 +233,7 @@ export default function AttendanceClient({
         id: sec.id,
         name: sec.name,
         semester: sec.semester,
-        programName: prog?.name || "Program",
+        programName: prog?.name || t.program,
         rate,
         count: secStats.length,
       }
@@ -482,7 +483,7 @@ export default function AttendanceClient({
                   }}
                   className="w-full px-3 py-2 text-xs font-semibold border border-slate-100 rounded-xl bg-slate-50/50 outline-none hover:border-slate-200 focus:border-[#6C63FF] transition"
                 >
-                  <option value="">All Departments</option>
+                  <option value="">All {t.department_plural}</option>
                   {departments.map(d => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
@@ -490,44 +491,46 @@ export default function AttendanceClient({
               </div>
 
               <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Program</label>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.program}</label>
                 <select
                   value={analProg}
                   onChange={e => setAnalProg(e.target.value)}
                   disabled={!analDept}
                   className="w-full px-3 py-2 text-xs font-semibold border border-slate-100 rounded-xl bg-slate-50/50 outline-none hover:border-slate-200 focus:border-[#6C63FF] transition disabled:opacity-55"
                 >
-                  <option value="">All Programs</option>
+                  <option value="">All {t.program_plural}</option>
                   {programs.filter(p => !analDept || p.department_id === analDept).map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </div>
 
+              {!isSchool && (
               <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Semester</label>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.semester}</label>
                 <select
                   value={analSem}
                   onChange={e => setAnalSem(e.target.value)}
                   className="w-full px-3 py-2 text-xs font-semibold border border-slate-100 rounded-xl bg-slate-50/50 outline-none hover:border-slate-200 focus:border-[#6C63FF] transition"
                 >
-                  <option value="">All Semesters</option>
+                  <option value="">All {t.semester_plural}</option>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map(s => (
-                    <option key={s} value={String(s)}>Semester {s}</option>
+                    <option key={s} value={String(s)}>{t.semester} {s}</option>
                   ))}
                 </select>
               </div>
+              )}
 
               <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Section</label>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.section}</label>
                 <select
                   value={analSec}
                   onChange={e => setAnalSec(e.target.value)}
                   className="w-full px-3 py-2 text-xs font-semibold border border-slate-100 rounded-xl bg-slate-50/50 outline-none hover:border-slate-200 focus:border-[#6C63FF] transition"
                 >
-                  <option value="">All Sections</option>
+                  <option value="">All {t.section_plural}</option>
                   {sections.filter(s => !analProg || s.program_id === analProg).map(s => (
-                    <option key={s.id} value={s.id}>{s.name} (Sem {s.semester})</option>
+                    <option key={s.id} value={s.id}>{s.name}{!isSchool ? ` (${t.semester} ${s.semester})` : ""}</option>
                   ))}
                 </select>
               </div>

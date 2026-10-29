@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import type { StudentWithSection } from "@/modules/students"
 import { Trash2, ChevronLeft, ChevronRight, Pencil } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 const ROWS_OPTIONS = [10, 25, 50, 100] as const
 
@@ -58,6 +59,8 @@ export function StudentList({
   onLimitChange,
 }: StudentListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const t = useTerms()
+  const isSchool = useIsSchool()
 
   const allSelected = students.length > 0 && students.every((s) => selectedIds.has(s.id))
 
@@ -124,9 +127,9 @@ export function StudentList({
               </TableHead>
               <TableHead>USN</TableHead>
               <TableHead>Student</TableHead>
-              <TableHead>Program</TableHead>
-              <TableHead>Semester</TableHead>
-              <TableHead>Section</TableHead>
+              <TableHead>{t.program}</TableHead>
+              {!isSchool && <TableHead>{t.semester}</TableHead>}
+              <TableHead>{t.section}</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -191,9 +194,11 @@ export function StudentList({
                     {student.section?.program?.name || "-"}
                   </TableCell>
 
+                  {!isSchool && (
                   <TableCell>
                     {student.semester ? `Sem ${student.semester}` : "-"}
                   </TableCell>
+                  )}
 
                   <TableCell>
                     {student.section?.name || "-"}

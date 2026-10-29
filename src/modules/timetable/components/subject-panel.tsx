@@ -6,12 +6,15 @@ import { useTimetable } from "../context/timetable-context"
 import SubjectCard from "./subject-card"
 import { supabase } from "@/lib/supabase"
 import { BookOpen, Search } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 const font = "'Plus Jakarta Sans', 'Inter', sans-serif"
 
 export default function SubjectPanel() {
   const { subjects, loading } = useTimetable()
   const searchParams = useSearchParams()
+  const t = useTerms()
+  const isSchool = useIsSchool()
   const [query, setQuery] = useState("")
   const [sectionName, setSectionName] = useState<string | null>(null)
   const [programName, setProgramName] = useState<string | null>(null)
@@ -65,9 +68,9 @@ export default function SubjectPanel() {
 
   const subtitle = [
     programName,
-    semester ? `Sem ${semester}` : null,
-    sectionName ? `Sec ${sectionName}` : null,
-  ].filter(Boolean).join(" · ") || (semester ? `Semester ${semester}` : "Select a section")
+    (!isSchool && semester) ? `${t.semester} ${semester}` : null,
+    sectionName ? `${t.section} ${sectionName}` : null,
+  ].filter(Boolean).join(" · ") || ((!isSchool && semester) ? `${t.semester} ${semester}` : "Select a section")
 
   return (
     <div
@@ -163,7 +166,7 @@ export default function SubjectPanel() {
           <div style={{ textAlign: "center", padding: "36px 16px", color: "#64748b", fontSize: 12 }}>
             <p style={{ fontWeight: 700, margin: 0, color: "#334155" }}>No units found</p>
             <p style={{ fontSize: 11, marginTop: 4, color: "#94a3b8" }}>
-              {query ? "Try another search term" : "No subjects configured for this program & semester"}
+              {query ? "Try another search term" : `No subjects configured for this ${t.program.toLowerCase()}${!isSchool ? ` & ${t.semester.toLowerCase()}` : ""}`}
             </p>
           </div>
         ) : (

@@ -188,13 +188,19 @@ export function SubjectsClientPage({
     }
   }
 
+  // Collect program IDs that belong to the selected department (for robust dept filter)
+  const programIdsInDept = deptFilter
+    ? programs.filter((p: any) => p.department_id === deptFilter).map((p: any) => p.id)
+    : null
+
   const filteredSubjects = subjects.filter((s: any) => {
     const nameMatch = s.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const codeMatch = s.code?.toLowerCase().includes(searchQuery.toLowerCase())
     const deptMatch = s.program?.department?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const progMatch = s.program?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const searchOk = nameMatch || codeMatch || deptMatch || progMatch
-    const deptOk = !deptFilter || s.program?.department?.id === deptFilter
+    // Use program_id lookup against client-side programs list (robust — works even if nested join is missing)
+    const deptOk = !deptFilter || (programIdsInDept !== null && s.program_id && programIdsInDept.includes(s.program_id))
     const progOk = !progFilter || s.program_id === progFilter
     return searchOk && deptOk && progOk
   })
@@ -249,7 +255,7 @@ export function SubjectsClientPage({
       <SearchBar
         value={searchQuery}
         onChange={setSearchQuery}
-        placeholder="Search subjects, codes, or programs…"
+        placeholder={`Search subjects, codes, or ${t.program_plural.toLowerCase()}…`}
         filters={
           <>
             <FilterSelect
@@ -259,7 +265,7 @@ export function SubjectsClientPage({
               options={departments.map((d: any) => ({ value: d.id, label: d.name }))}
             />
             <FilterSelect
-              label="All Programs"
+              label={`All ${t.program_plural}`}
               value={progFilter}
               onChange={setProgFilter}
               options={filteredPrograms.map((p: any) => ({ value: p.id, label: p.name }))}

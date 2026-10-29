@@ -97,7 +97,7 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                 <div className={`flex items-center gap-3 rounded-xl p-3 ${progStyle.bg}`}>
                   <GraduationCap className={`w-4 h-4 flex-shrink-0 ${progStyle.text}`} />
                   <div className="min-w-0">
-                    <p className={`text-[9px] font-bold uppercase tracking-wider opacity-85 ${progStyle.text}`}>Program</p>
+                    <p className={`text-[9px] font-bold uppercase tracking-wider opacity-85 ${progStyle.text}`}>{t.program}</p>
                     <p className={`text-xs font-bold truncate mt-0.5 ${progStyle.text}`}>
                       {subject.program?.name ?? "Not Assigned"}
                     </p>

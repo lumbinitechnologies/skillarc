@@ -181,7 +181,7 @@ export function SectionsList({
                 }}>
                   <BookOpen size={13} color={progColor.text} style={{ flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 10, fontWeight: 600, color: progColor.text, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em" }}>Program</p>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: progColor.text, opacity: 0.7, textTransform: "uppercase", letterSpacing: "0.05em" }}>{t.program}</p>
                     <p style={{
                       fontSize: 13, fontWeight: 700, color: progColor.text,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",

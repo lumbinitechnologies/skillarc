@@ -195,18 +195,18 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
 
           {/* Programs */}
           <div>
-            <FieldLabel>{isEdit ? "Program *" : "Programs *"}</FieldLabel>
+            <FieldLabel>{isEdit ? `${t.program} *` : `${t.program_plural} *`}</FieldLabel>
             {!formData.department_id ? (
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
                 Select a {t.department.toLowerCase()} first
               </div>
             ) : filteredPrograms.length === 0 ? (
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
-                No programs for this {t.department.toLowerCase()}
+              No {t.program_plural.toLowerCase()} for this {t.department.toLowerCase()}
               </div>
             ) : isEdit ? (
               <StyledSelect value={formData.program_id} onChange={v => set("program_id", v)}>
-                <option value="">Select Program</option>
+                <option value="">Select {t.program}</option>
                 {filteredPrograms.map(p => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -239,7 +239,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
           {/* Semester — hidden for schools */}
           {!isSchool && (
           <div>
-            <FieldLabel>Semester</FieldLabel>
+            <FieldLabel>{t.semester}</FieldLabel>
             <StyledSelect
               value={String(formData.semester)}
               onChange={v => set("semester", Number(v))}
@@ -248,7 +248,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
               {!formData.department_id
                 ? <option value="">Select a {t.department.toLowerCase()} first</option>
                 : [1,2,3,4,5,6,7,8].map(s => (
-                    <option key={s} value={s}>Semester {s}</option>
+                    <option key={s} value={s}>{t.semester} {s}</option>
                   ))
               }
             </StyledSelect>
