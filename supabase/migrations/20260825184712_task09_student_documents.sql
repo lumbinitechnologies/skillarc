@@ -1,0 +1,3 @@
+-- Historical hosted migration 20260825184712_task09_student_documents; superseded by 20261010094633_reconciled_hosted_schema.sql.
+-- Original applied SQL: migrations/hosted-history/20260825184712_task09_student_documents.sql
+-- Intentionally no DDL: a fresh reset receives the complete schema in the baseline.

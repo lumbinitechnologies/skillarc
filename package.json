@@ -18,7 +18,9 @@
     "local:test": "bash scripts/local/test.sh",
     "seed:demo": "node --env-file=.env scripts/seed-demo-data.mjs",
     "seed:client-meeting": "node --env-file=.env --import tsx scripts/seed-client-meeting-data.ts",
-    "knowledge:backfill": "node --env-file=.env.local --import tsx scripts/backfill-knowledge.ts"
+    "knowledge:backfill": "node --env-file=.env.local --import tsx scripts/backfill-knowledge.ts",
+    "db:check-migrations": "node scripts/local/check-migrations.mjs",
+    "db:test-migrations": "node --test scripts/local/check-migrations.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.37",

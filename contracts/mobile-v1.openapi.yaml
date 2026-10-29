@@ -1,0 +1,135 @@
+openapi: 3.0.3
+info:
+  title: SkillArc Mobile API
+  version: 1.0.0
+  description: |
+    Contract for implemented release-one mobile endpoints. Add operations here only
+    when the matching SkillArc handler and authorization tests are ready.
+servers:
+  - url: /
+    description: Resolve against the deployment-specific HTTPS origin.
+paths:
+  /api/mobile/v1/me:
+    get:
+      operationId: getMobilePrincipal
+      summary: Get the verified mobile user's profile and enabled organization features
+      security:
+        - SupabaseAccessToken: []
+      responses:
+        "200":
+          description: Active student, parent, or faculty profile
+          headers:
+            X-Request-Id:
+              schema:
+                type: string
+                format: uuid
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+components:
+  securitySchemes:
+    SupabaseAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth access token, verified by the SkillArc server.
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Inactive account, unsupported role, or missing tenant scope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unavailable:
+      description: Temporary profile or feature lookup failure
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [data, request_id]
+      properties:
+        data:
+          $ref: "#/components/schemas/MobilePrincipal"
+        request_id:
+          type: string
+          format: uuid
+    MobilePrincipal:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - role
+        - organization_id
+        - institution_id
+        - department_id
+        - name
+        - email
+        - profile_image_url
+        - features
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [STUDENT, PARENT, FACULTY]
+        organization_id:
+          type: string
+          format: uuid
+        institution_id:
+          type: string
+          format: uuid
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        profile_image_url:
+          type: string
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, request_id]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        request_id:
+          type: string
+          format: uuid

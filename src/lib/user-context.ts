@@ -1,7 +1,7 @@
 import { cache } from "react"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
-import { cookies, headers } from "next/headers"
+import { cookies } from "next/headers"
 import { ROLES } from "@/constants/roles"
 
 export type UserContext = {
@@ -34,22 +34,16 @@ export type UserContext = {
 
 export const getCurrentUserContext = cache(async (): Promise<UserContext | null> => {
   const t0 = performance.now()
-  const headerList = await headers()
-  let userId = headerList.get("x-user-id")
-  const source = userId ? "header-fastpath" : "gotrue-fallback"
+  const supabase = await createSupabaseServerClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
 
-  if (!userId) {
-    const supabase = await createSupabaseServerClient()
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
-
-    if (userError || !user?.id) {
-      return null
-    }
-    userId = user.id
+  if (userError || !user?.id) {
+    return null
   }
+  const userId = user.id
 
   const admin = createSupabaseAdminClient()
   const [profileRes, userPermRes] = await Promise.all([
@@ -71,16 +65,14 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     return null
   }
 
-  // Fetch org_type in parallel — no longer sequential after profile
+  // org_type depends on the profile's organization_id, so this runs after the profile fetch
   const effectiveOrgId = actualProfile.organization_id
-  const [orgRes] = await Promise.all([
-    effectiveOrgId
-      ? admin.from("organizations").select("org_type").eq("id", effectiveOrgId).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  const orgRes = effectiveOrgId
+    ? await admin.from("organizations").select("org_type").eq("id", effectiveOrgId).maybeSingle()
+    : { data: null }
 
   const t1 = performance.now()
-  console.info(`[UserContext] source=${source} userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
+  console.info(`[UserContext] source=gotrue-verified userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
 
   const isTimetableBuilder = Boolean(userPermRes.data?.id)
   const orgType: 'school' | 'college' = (orgRes.data?.org_type as 'school' | 'college') ?? 'college'
@@ -92,8 +84,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
   const impUserId = cookieStore.get("sa_impersonate_user_id")?.value
 
   if (actualProfile.role === ROLES.SUPER_ADMIN && impRole) {
-    // Run impersonation target fetch and org_type lookups in parallel
-    const impEffectiveOrgIdEarly = impOrgId
+    // Run impersonation target fetch and org_type lookup in parallel
     const [targetProfileData, impOrgDataRes] = await Promise.all([
       impUserId
         ? admin
@@ -102,8 +93,8 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
             .eq("id", impUserId)
             .single()
         : Promise.resolve({ data: null, error: null }),
-      impEffectiveOrgIdEarly
-        ? admin.from("organizations").select("org_type").eq("id", impEffectiveOrgIdEarly).maybeSingle()
+      impOrgId
+        ? admin.from("organizations").select("org_type").eq("id", impOrgId).maybeSingle()
         : Promise.resolve({ data: null }),
     ])
 
@@ -112,7 +103,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     // If the target's org differs from impOrgId, fetch again (rare case)
     let impOrgType: 'school' | 'college' = 'college'
     const impEffectiveOrgId = targetProfile?.organization_id ?? impOrgId
-    if (impEffectiveOrgId && impEffectiveOrgId !== impEffectiveOrgIdEarly) {
+    if (impEffectiveOrgId && impEffectiveOrgId !== impOrgId) {
       const { data: impOrgData } = await admin
         .from("organizations")
         .select("org_type")
