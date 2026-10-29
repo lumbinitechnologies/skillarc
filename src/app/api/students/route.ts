@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     const programIds = Array.from(new Set(students.map(s => s.program_id).filter(Boolean)))
 
     const [usersRes, sectionsRes, programsRes] = await Promise.all([
-      adminClient.from("users").select("id, name, email, role, is_active").in("id", studentIds),
+      adminClient.from("users").select("id, name, email, role, phone, is_active").in("id", studentIds),
       sectionIds.length
         ? adminClient.from("sections").select("id, name, semester, program_id").in("id", sectionIds)
         : Promise.resolve({ data: [] }),
@@ -110,6 +110,7 @@ export async function GET(request: NextRequest) {
         ...student,
         name: user?.name || "Unknown",
         email: user?.email || "",
+        phone: user?.phone || "",
         role: user?.role || "STUDENT",
         is_active: user?.is_active ?? true,
         section: sec
@@ -153,6 +154,9 @@ export async function POST(request: NextRequest) {
       institution_id,
       registration_number,
       admission_year,
+      phone,
+      dob,
+      gender,
       parentName,
       parentEmail,
       parentRelationship,
@@ -192,6 +196,7 @@ export async function POST(request: NextRequest) {
         name,
         role: ROLES.STUDENT,
         institution_id,
+        phone: phone || null,
       })
       .eq("id", invitedUser.id)
       .select()
@@ -211,8 +216,8 @@ export async function POST(request: NextRequest) {
           semester: semester || 1,
           registration_number: registration_number || null,
           admission_year: admission_year ? Number(admission_year) : new Date().getFullYear(),
-          dob: null,
-          gender: null,
+          dob: dob || null,
+          gender: gender || null,
         },
       ], { onConflict: "id" })
       .select()

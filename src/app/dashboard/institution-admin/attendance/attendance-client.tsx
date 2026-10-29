@@ -15,6 +15,7 @@ import {
   saveWarningLetterAction,
 } from "../../faculty/attendance/actions"
 import { useToast } from "@/components/ui/use-toast"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Props {
   institutionId: string
@@ -36,6 +37,7 @@ export default function AttendanceClient({
   allStats,
 }: Props) {
   const { toast } = useToast()
+  const t = useTerms()
   
   const [activeView, setActiveView] = useState<"sheets" | "analytics">("analytics")
 
@@ -471,7 +473,7 @@ export default function AttendanceClient({
             
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Department</label>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.department}</label>
                 <select
                   value={analDept}
                   onChange={e => {
@@ -613,7 +615,7 @@ export default function AttendanceClient({
             {/* Department Wise Attendance Rate (Horizontal premium bar chart) */}
             <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Department Performance</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-['Plus_Jakarta_Sans']">{t.department} Performance</h3>
                 <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">All-Time</span>
               </div>
               

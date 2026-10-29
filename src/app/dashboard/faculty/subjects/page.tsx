@@ -17,49 +17,41 @@ export default async function FacultySubjectsPage() {
 
   if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
 
-  const { data: assignmentRows } = await supabase
-    .from("faculty_subjects")
-    .select("subject_id")
-    .eq("faculty_id", profile.id)
-    .eq("institution_id", profile.institution_id)
-
-  const subjectIds = (assignmentRows ?? []).map((row: any) => row.subject_id).filter(Boolean)
-
-  const [subjectResult, timetableResult] = await measureServer("dashboard.faculty.subjects.data", () => Promise.all([
-    subjectIds.length
-      ? supabase
-          .from("subjects")
-          .select("id, name, code")
-          .in("id", subjectIds)
-          .eq("institution_id", profile.institution_id)
-          .order("name")
-      : Promise.resolve({ data: [] }),
-    subjectIds.length
-      ? supabase
-          .from("timetable_slots")
-          .select("subject_id, section_id, semester")
-          .eq("faculty_id", profile.id)
-          .in("subject_id", subjectIds)
-          .order("semester")
-      : Promise.resolve({ data: [] }),
+  const [assignmentRows, subjectResult, timetableResult, sectionsResult] = await measureServer("dashboard.faculty.subjects.data", () => Promise.all([
+    supabase
+      .from("faculty_subjects")
+      .select("subject_id, section_id, semester")
+      .eq("faculty_id", profile.id)
+      .eq("institution_id", profile.institution_id),
+    supabase
+      .from("subjects")
+      .select("id, name, code")
+      .eq("institution_id", profile.institution_id)
+      .order("name"),
+    supabase
+      .from("timetable_slots")
+      .select("subject_id, section_id, semester")
+      .eq("faculty_id", profile.id)
+      .eq("institution_id", profile.institution_id)
+      .order("semester"),
+    supabase
+      .from("sections")
+      .select("id, name")
+      .eq("institution_id", profile.institution_id),
   ]))
 
-  const subjectRows = Array.isArray(subjectResult.data) ? subjectResult.data : []
-  const timetableRows = timetableResult.data ?? []
-
-  const sectionIds = Array.from(
-    new Set(
-      (timetableRows ?? [])
-        .map((row: any) => row.section_id)
-        .filter(Boolean) as string[],
-    ),
+  const assignedSubjectIds = new Set(
+    (assignmentRows.data ?? []).map((row: any) => row.subject_id).filter(Boolean)
   )
 
-  const { data: sectionsData } = sectionIds.length
-    ? await supabase.from("sections").select("id, name").in("id", sectionIds)
-    : { data: [] }
+  const subjectRows = assignedSubjectIds.size > 0
+    ? ((subjectResult.data ?? []) as any[]).filter((s: any) => assignedSubjectIds.has(s.id))
+    : (Array.isArray(subjectResult.data) ? subjectResult.data : [])
+  const timetableRows: any[] = (timetableResult.data ?? []) as any[]
 
-  const sectionMap = new Map((Array.isArray(sectionsData) ? sectionsData : []).map((section: any) => [section.id, section.name]))
+  const sectionMap = new Map(
+    (Array.isArray(sectionsResult.data) ? sectionsResult.data : []).map((section: any) => [section.id, section.name])
+  )
 
   const subjectMetaMap = new Map<string, { sectionNames: string[]; semester?: number }>()
   for (const row of timetableRows ?? []) {

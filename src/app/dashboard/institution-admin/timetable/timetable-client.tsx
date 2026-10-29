@@ -5,6 +5,7 @@ import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { TimetableSettingsDialog } from "@/components/timetable/timetable-settings-dialog"
 import { useState } from "react"
 import { Settings } from "lucide-react"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Department {
   id: string
@@ -39,6 +40,7 @@ export function TimetableClientPage({
 }: Props) {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const t = useTerms()
 
   return (
     <div className="space-y-6 p-6">
@@ -49,7 +51,7 @@ export function TimetableClientPage({
           </h1>
 
           <p className="text-muted-foreground mt-1">
-            Select a Program, Semester and Section to build a timetable.
+            Select a {t.program}, {t.semester} and {t.section} to build a timetable.
           </p>
         </div>
         <div className="flex items-center gap-2">

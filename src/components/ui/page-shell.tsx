@@ -112,35 +112,69 @@ export function SearchBar({
   value,
   onChange,
   placeholder = "Search…",
+  filters,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  filters?: ReactNode
 }) {
   return (
-    <motion.div variants={itemVariants} className="relative">
-      <svg
-        className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"
-        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
-      </svg>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full h-10 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all duration-150 shadow-sm"
-      />
-      {value && (
-        <button
-          onClick={() => onChange("")}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-base leading-none"
+    <motion.div variants={itemVariants} className="flex flex-wrap items-center gap-2.5">
+      <div className="relative flex-1 min-w-[200px]">
+        <svg
+          className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
-          ×
-        </button>
-      )}
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" />
+        </svg>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full h-10 rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all duration-150 shadow-sm"
+        />
+        {value && (
+          <button
+            onClick={() => onChange("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-base leading-none"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {filters}
     </motion.div>
+  )
+}
+
+/**
+ * Reusable filter dropdown — pill-style select for list pages.
+ */
+export function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-10 rounded-xl border border-slate-200 bg-white px-3 pr-8 text-sm font-medium text-slate-700 outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/10 transition-all shadow-sm appearance-none cursor-pointer"
+      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" }}
+    >
+      <option value="">{label}</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>{opt.label}</option>
+      ))}
+    </select>
   )
 }
 

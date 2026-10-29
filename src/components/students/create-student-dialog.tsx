@@ -18,9 +18,11 @@ import {
   ArrowRight,
   ArrowLeft,
   Mail,
-  Users
+  Users,
+  Calendar,
 } from "lucide-react"
 import type { StudentWithSection, CreateStudentInput, UpdateStudentInput } from "@/modules/students"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 interface CreateStudentDialogProps {
   open: boolean
@@ -78,6 +80,8 @@ export function CreateStudentDialog({
     section_id: "", semester: 1, program_id: null as string | null,
     institution_id: "", phone: "", registration_number: "",
     admission_year: currentYear,
+    dob: "",
+    gender: "",
     parentName: "", parentEmail: "", parentPhone: "", parentRelationship: "Guardian"
   }
 
@@ -92,12 +96,16 @@ export function CreateStudentDialog({
     phone: student?.phone || "",
     registration_number: student?.registration_number || "",
     admission_year: student?.admission_year || currentYear,
+    dob: student?.dob ? String(student.dob).slice(0, 10) : "",
+    gender: student?.gender || "",
   })
 
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(0)
   const [formData, setFormData] = useState<CreateStudentInput | UpdateStudentInput>(fromStudent())
   const { toast } = useToast()
+  const t = useTerms()
+  const isSchool = useIsSchool()
 
   // Reset steps and form state when modal toggles
   useEffect(() => {
@@ -181,15 +189,15 @@ export function CreateStudentDialog({
       setStep(2)
     } else if (step === 2) {
       if (!formData.program_id) {
-        toast({ title: "Validation Error", description: "Please select a Program.", variant: "destructive" })
+        toast({ title: "Validation Error", description: `Please select a ${t.program}.`, variant: "destructive" })
         return
       }
-      if (!formData.semester) {
-        toast({ title: "Validation Error", description: "Please select a Semester.", variant: "destructive" })
+      if (!isSchool && !formData.semester) {
+        toast({ title: "Validation Error", description: `Please select a ${t.semester}.`, variant: "destructive" })
         return
       }
       if (!formData.section_id) {
-        toast({ title: "Validation Error", description: "Please select a Section.", variant: "destructive" })
+        toast({ title: "Validation Error", description: `Please select a ${t.section}.`, variant: "destructive" })
         return
       }
       setDirection(1)
@@ -342,6 +350,38 @@ export function CreateStudentDialog({
                     </div>
                   </div>
 
+                  {/* Gender & DOB */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Gender</label>
+                      <div className="relative">
+                        <select
+                          value={(formData as any).gender || ""}
+                          onChange={e => set("gender", e.target.value)}
+                          className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer"
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Date of Birth</label>
+                      <div className="relative">
+                        <Input
+                          type="date"
+                          value={(formData as any).dob || ""}
+                          onChange={e => set("dob", e.target.value)}
+                          className="h-12 pl-11 pr-4 rounded-2xl border border-slate-200/80 bg-white/50 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-800 placeholder-slate-400 text-sm font-medium outline-none"
+                        />
+                        <Calendar size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Reg No & Admission Year */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -376,7 +416,7 @@ export function CreateStudentDialog({
                 <>
                   {/* Program */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Academic Program <span className="text-red-500">*</span></label>
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">{t.program} <span className="text-red-500">*</span></label>
                     <div className="relative">
                       <select
                         value={formData.program_id || ""}
@@ -391,9 +431,10 @@ export function CreateStudentDialog({
                   </div>
 
                   {/* Semester & Section */}
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className={`grid gap-4 ${isSchool ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {!isSchool && (
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Semester <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">{t.semester} <span className="text-red-500">*</span></label>
                       <div className="relative">
                         <select
                           value={formData.semester || ""}
@@ -402,19 +443,20 @@ export function CreateStudentDialog({
                           className="w-full h-12 pl-4 pr-10 rounded-2xl border border-slate-200/80 bg-white/50 text-sm font-medium text-slate-800 outline-none appearance-none transition-all duration-300 focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-md cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                         >
                           {!formData.program_id ? (
-                            <option value="">Select program first</option>
+                            <option value="">Select {t.program.toLowerCase()} first</option>
                           ) : availableSemesters.length === 0 ? (
-                            <option value="">No semesters</option>
+                            <option value="">No {t.semester_plural}</option>
                           ) : (
-                            availableSemesters.map(s => <option key={s} value={s}>Semester {s}</option>)
+                            availableSemesters.map(s => <option key={s} value={s}>{t.semester} {s}</option>)
                           )}
                         </select>
                         <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                       </div>
                     </div>
+                    )}
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Section <span className="text-red-500">*</span></label>
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">{t.section} <span className="text-red-500">*</span></label>
                       <div className="relative">
                         <select
                           value={formData.section_id || ""}
@@ -424,10 +466,10 @@ export function CreateStudentDialog({
                         >
                           <option value="">
                             {!formData.program_id
-                              ? "Select program first"
+                              ? `Select ${t.program.toLowerCase()} first`
                               : filteredSections.length === 0
-                                ? "No sections available"
-                                : "Select section"}
+                                ? `No ${t.section_plural} available`
+                                : `Select ${t.section.toLowerCase()}`}
                           </option>
                           {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>

@@ -35,6 +35,7 @@ test("dashboard session stays serializable for the client provider", () => {
     institution_id: "institution-1",
     organization_id: "organization-1",
     department_id: null,
+    org_type: "college" as const,
     name: "Test Student",
     email: "student@example.com",
     created_at: "2026-01-01T00:00:00.000Z",

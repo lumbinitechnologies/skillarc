@@ -30,13 +30,18 @@ export default function TimetableCell({ day, period }: { day: string; period: st
   const { slots, clearSlot, clashes = [] } = useTimetable()
   const [hovered, setHovered] = useState(false)
 
-  const assigned = slots.find((s: any) => s.day === day && s.period === period)
+  const periodNum = Number(String(period).replace(/[^0-9]/g, ""))
+  const assigned = slots.find((s: any) => {
+    if (s.day !== day) return false
+    if (s.period === period) return true
+    const sPeriodNum = Number(String(s.period).replace(/[^0-9]/g, ""))
+    return sPeriodNum > 0 && sPeriodNum === periodNum
+  })
   const assignedSubject = assigned?.subject
   const c = COLORS[assignedSubject?.code ?? ""] ?? DEFAULT
   const isLab = assignedSubject?.subject_type === "LAB"
 
   // Check if this slot is involved in any detected clash
-  const periodNum = Number(period.replace("P", ""))
   const hasClash = clashes.some((clash) => {
     if (clash.day !== day) return false
     const clashPeriod = typeof clash.period === "number" ? clash.period : Number(String(clash.period).replace("P", ""))

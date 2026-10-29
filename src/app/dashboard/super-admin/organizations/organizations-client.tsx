@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { DEFAULT_FEATURES_BY_TYPE, HIDDEN_FEATURES_BY_TYPE, type OrgType } from "@/lib/org-terminology"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Organization = {
   id: string
   name: string
+  org_type: OrgType
   created_at: string
   institution_count: number
   admin_count: number
@@ -14,9 +16,9 @@ type Organization = {
 
 type Props = {
   organizations: Organization[]
-  onCreateOrg: (name: string, features: string[]) => Promise<{ success: boolean; org?: Organization; error?: string }>
+  onCreateOrg: (name: string, features: string[], org_type: OrgType) => Promise<{ success: boolean; org?: Organization; error?: string }>
   onDeleteOrg?: (id: string) => Promise<{ success: boolean; error?: string }>
-  onEditOrg?: (id: string, name: string, features: string[]) => Promise<{ success: boolean; error?: string }>
+  onEditOrg?: (id: string, name: string, features: string[], org_type: OrgType) => Promise<{ success: boolean; error?: string }>
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -84,6 +86,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
   const [editTarget, setEditTarget] = useState<Organization | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null)
   const [orgName, setOrgName] = useState("")
+  const [orgType, setOrgType] = useState<OrgType>('college')
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([])
   const [formError, setFormError] = useState("")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
@@ -100,11 +103,12 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
     if (!orgName.trim()) { setFormError("Organization name is required."); return }
     setFormError("")
     startTransition(async () => {
-      const res = await onCreateOrg(orgName.trim(), selectedFeatures)
+      const res = await onCreateOrg(orgName.trim(), selectedFeatures, orgType)
       if (res.success && res.org) {
-        setOrgs(prev => [{ ...res.org!, features: selectedFeatures }, ...prev])
+        setOrgs(prev => [{ ...res.org!, features: selectedFeatures, org_type: orgType }, ...prev])
         setOrgName("")
         setSelectedFeatures([])
+        setOrgType('college')
         setShowCreate(false)
         showToast(`"${res.org.name}" created`, "success")
       } else {
@@ -118,9 +122,9 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
     if (!orgName.trim() || !editTarget) { setFormError("Name is required."); return }
     setFormError("")
     startTransition(async () => {
-      const res = await onEditOrg?.(editTarget.id, orgName.trim(), selectedFeatures)
+      const res = await onEditOrg?.(editTarget.id, orgName.trim(), selectedFeatures, orgType)
       if (res?.success) {
-        setOrgs(prev => prev.map(o => o.id === editTarget.id ? { ...o, name: orgName.trim(), features: selectedFeatures } : o))
+        setOrgs(prev => prev.map(o => o.id === editTarget.id ? { ...o, name: orgName.trim(), features: selectedFeatures, org_type: orgType } : o))
         setEditTarget(null)
         setOrgName("")
         setSelectedFeatures([])
@@ -213,7 +217,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:"#f9fafb" }}>
-                  {["Organization","Institutions","Org Admins","Created","Actions"].map(h => (
+                  {["Organization","Type","Institutions","Org Admins","Created","Actions"].map(h => (
                     <th key={h} style={{ textAlign:"left", padding:"10px 20px", fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.07em", borderBottom:"1px solid #e5e7eb" }}>{h}</th>
                   ))}
                 </tr>
@@ -245,13 +249,21 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
                           </div>
                         </div>
                       </td>
+                      <td style={{ padding:"13px 20px" }}>
+                        <Badge
+                          bg={org.org_type === 'school' ? '#fef3c7' : '#dbeafe'}
+                          color={org.org_type === 'school' ? '#92400e' : '#1d4ed8'}
+                        >
+                          {org.org_type === 'school' ? '🏫 School' : '🎓 College'}
+                        </Badge>
+                      </td>
                       <td style={{ padding:"13px 20px" }}><Badge bg="#dbeafe" color="#1d4ed8">{org.institution_count} inst.</Badge></td>
                       <td style={{ padding:"13px 20px" }}><Badge bg="#ede9fe" color="#6d28d9">{org.admin_count} admins</Badge></td>
                       <td style={{ padding:"13px 20px", color:"#9ca3af", fontSize:13 }}>{fmt(org.created_at)}</td>
                       <td style={{ padding:"13px 20px" }}>
                         <div style={{ display:"flex", gap:6 }}>
                           <button className="org-action-btn" style={{ borderRadius:7, padding:"4px 10px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}
-                            onClick={() => { setEditTarget(org); setOrgName(org.name); setSelectedFeatures(org.features || []); setFormError(""); }}>
+                            onClick={() => { setEditTarget(org); setOrgName(org.name); setOrgType(org.org_type ?? 'college'); setSelectedFeatures(org.features || []); setFormError(""); }}>
                             Edit
                           </button>
                           <button className="org-action-btn org-del-btn" style={{ borderRadius:7, padding:"4px 10px", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", color:"#6b7280" }}
@@ -276,10 +288,47 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:6 }}>Organization Name</label>
             <input type="text" value={orgName} onChange={e=>setOrgName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleCreate()} placeholder="e.g. Lumbini Technologies" style={inputStyle} autoFocus />
           </div>
+
+          {/* Institution Type Picker */}
+          <div style={{ marginBottom:20 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Institution Type</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {(["school", "college"] as OrgType[]).map(t => {
+                const isSelected = orgType === t
+                const meta = t === 'school'
+                  ? { icon: "🏫", label: "School", desc: "K-12 / Secondary education" }
+                  : { icon: "🎓", label: "College / University", desc: "Higher education & polytechnics" }
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setOrgType(t)
+                      // Auto-apply smart default features for this type
+                      setSelectedFeatures(DEFAULT_FEATURES_BY_TYPE[t])
+                    }}
+                    style={{
+                      border: isSelected ? "2px solid #E57D37" : "1.5px solid #e5e7eb",
+                      background: isSelected ? "#fff7ed" : "#f9fafb",
+                      borderRadius:12, padding:"14px 12px", cursor:"pointer", fontFamily:"inherit",
+                      textAlign:"left", transition:"all 0.15s",
+                      boxShadow: isSelected ? "0 0 0 3px rgba(229,125,55,0.15)" : "none"
+                    }}
+                  >
+                    <div style={{ fontSize:24, marginBottom:6 }}>{meta.icon}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: isSelected ? "#E57D37" : "#111827" }}>{meta.label}</div>
+                    <div style={{ fontSize:11, color:"#9ca3af", marginTop:3, lineHeight:1.4 }}>{meta.desc}</div>
+                    {isSelected && <div style={{ fontSize:10, color:"#E57D37", marginTop:6, fontWeight:600 }}>✓ Selected</div>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div style={{ marginBottom: 20 }}>
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Permitted Modules</label>
             <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto", paddingRight:4 }}>
-              {AVAILABLE_FEATURES.map(f => {
+              {AVAILABLE_FEATURES.filter(f => !HIDDEN_FEATURES_BY_TYPE[orgType].includes(f.id)).map(f => {
                 const checked = selectedFeatures.includes(f.id)
                 return (
                   <label key={f.id} style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:10, padding:10, cursor:"pointer", transition:"border-color 0.15s" }}>
@@ -291,7 +340,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
                           prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]
                         )
                       }}
-                      style={{ marginTop: 2, accentColor: "#4f46e5", cursor: "pointer" }}
+                      style={{ marginTop: 2, accentColor: "#E57D37", cursor: "pointer" }}
                     />
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{f.label}</div>
@@ -304,7 +353,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
           </div>
           {formError && <p style={{ color:"#dc2626", fontSize:13, margin:"0 0 8px" }}>{formError}</p>}
           <button onClick={handleCreate} disabled={isPending}
-            style={{ width:"100%", padding:11, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(29,78,216,0.25)", opacity: isPending ? 0.6 : 1 }}>
+            style={{ width:"100%", padding:11, background:"linear-gradient(135deg,#E57D37,#d06325)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 14px rgba(229,125,55,0.3)", opacity: isPending ? 0.6 : 1 }}>
             {isPending ? "Creating…" : "Create Organization"}
           </button>
         </Modal>
@@ -317,10 +366,43 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:6 }}>Organization Name</label>
             <input type="text" value={orgName} onChange={e=>setOrgName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleEdit()} style={inputStyle} autoFocus />
           </div>
+
+          {/* Institution Type Picker */}
+          <div style={{ marginBottom:20 }}>
+            <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Institution Type</label>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {(["school", "college"] as OrgType[]).map(t => {
+                const isSelected = orgType === t
+                const meta = t === 'school'
+                  ? { icon: "🏫", label: "School", desc: "K-12 / Secondary education" }
+                  : { icon: "🎓", label: "College / University", desc: "Higher education & polytechnics" }
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setOrgType(t)}
+                    style={{
+                      border: isSelected ? "2px solid #E57D37" : "1.5px solid #e5e7eb",
+                      background: isSelected ? "#fff7ed" : "#f9fafb",
+                      borderRadius:12, padding:"14px 12px", cursor:"pointer", fontFamily:"inherit",
+                      textAlign:"left", transition:"all 0.15s",
+                      boxShadow: isSelected ? "0 0 0 3px rgba(229,125,55,0.15)" : "none"
+                    }}
+                  >
+                    <div style={{ fontSize:24, marginBottom:6 }}>{meta.icon}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color: isSelected ? "#E57D37" : "#111827" }}>{meta.label}</div>
+                    <div style={{ fontSize:11, color:"#9ca3af", marginTop:3, lineHeight:1.4 }}>{meta.desc}</div>
+                    {isSelected && <div style={{ fontSize:10, color:"#E57D37", marginTop:6, fontWeight:600 }}>✓ Selected</div>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div style={{ marginBottom: 20 }}>
             <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#111827", marginBottom:10 }}>Permitted Modules</label>
             <div style={{ display:"flex", flexDirection:"column", gap:10, maxHeight:220, overflowY:"auto", paddingRight:4 }}>
-              {AVAILABLE_FEATURES.map(f => {
+              {AVAILABLE_FEATURES.filter(f => !HIDDEN_FEATURES_BY_TYPE[orgType].includes(f.id)).map(f => {
                 const checked = selectedFeatures.includes(f.id)
                 return (
                   <label key={f.id} style={{ display:"flex", gap:10, alignItems:"flex-start", background:"#f9fafb", border:"1px solid #e5e7eb", borderRadius:10, padding:10, cursor:"pointer", transition:"border-color 0.15s" }}>
@@ -332,7 +414,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
                           prev.includes(f.id) ? prev.filter(x => x !== f.id) : [...prev, f.id]
                         )
                       }}
-                      style={{ marginTop: 2, accentColor: "#4f46e5", cursor: "pointer" }}
+                      style={{ marginTop: 2, accentColor: "#E57D37", cursor: "pointer" }}
                     />
                     <div>
                       <div style={{ fontSize:12, fontWeight:700, color:"#111827" }}>{f.label}</div>
@@ -345,7 +427,7 @@ export default function OrganizationsPage({ organizations: initialOrgs, onCreate
           </div>
           {formError && <p style={{ color:"#dc2626", fontSize:13, margin:"0 0 8px" }}>{formError}</p>}
           <button onClick={handleEdit} disabled={isPending}
-            style={{ width:"100%", padding:11, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", opacity: isPending ? 0.6 : 1 }}>
+            style={{ width:"100%", padding:11, background:"linear-gradient(135deg,#E57D37,#d06325)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit", opacity: isPending ? 0.6 : 1 }}>
             {isPending ? "Saving…" : "Save Changes"}
           </button>
         </Modal>

@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation"
 import { facultySubjectService } from "@/modules/faculty-subjects/services/facultySubjectService"
 import SummaryPanel from "@/modules/faculty-subjects/components/SummaryPanel"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
-import { Search, Users, X, CheckCircle2, AlertCircle, Save, Loader2 } from "lucide-react"
+import { Search, Users, X, CheckCircle2, AlertCircle, Save, Loader2, AlertTriangle, Building2 } from "lucide-react"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Faculty {
   id: string
   name: string
-  department?: string
+  department?: string | null
+  department_id?: string | null
 }
 
 interface Subject {
@@ -19,6 +21,14 @@ interface Subject {
   code: string
   semester?: number
   credits?: number
+  subject_type?: string
+  department_id?: string | null
+  program_id?: string | null
+}
+
+interface Department {
+  id: string
+  name: string
 }
 
 interface Assignment {
@@ -30,6 +40,8 @@ interface Props {
   faculty: Faculty[]
   subjects: Subject[]
   assignments: Assignment[] | null
+  departments: Department[]
+  institutionId?: string
 }
 
 const AVATAR_COLORS = [
@@ -74,9 +86,12 @@ export function FacultySubjectsClientPage({
   faculty,
   subjects,
   assignments,
+  departments,
+  institutionId = "",
 }: Props) {
   const safeAssignments = assignments ?? []
   const router = useRouter()
+  const t = useTerms()
 
   const [localAssignments, setLocalAssignments] = useState<Assignment[]>(safeAssignments)
   const [search, setSearch] = useState("")
@@ -86,6 +101,8 @@ export function FacultySubjectsClientPage({
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<Toast>(null)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [showAllDepts, setShowAllDepts] = useState(false)
+  const [deptFilter, setDeptFilter] = useState<string>("")
 
   // Animation state
   const [subjectsVisible, setSubjectsVisible] = useState(false)
@@ -131,12 +148,34 @@ export function FacultySubjectsClientPage({
 
   const filteredFaculty = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return faculty
-    return faculty.filter((f) => f.name.toLowerCase().includes(q))
-  }, [faculty, search])
+    return faculty.filter((f) => {
+      const matchesSearch = !q || f.name.toLowerCase().includes(q)
+      const matchesDept = !deptFilter || f.department_id === deptFilter
+      return matchesSearch && matchesDept
+    })
+  }, [faculty, search, deptFilter])
 
   const activeFaculty = faculty.find((f) => f.id === selectedFaculty)
   const hasChanges = !sameSet(selectedSubjects, savedSubjects)
+
+  // Department filtering for subjects
+  const activeFacultyDeptId = activeFaculty?.department_id ?? null
+  const deptMap = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments])
+
+  const filteredSubjects = useMemo(() => {
+    if (showAllDepts || !activeFacultyDeptId) return subjects
+    // Show subjects that belong to the faculty's department (via program) OR have no department
+    return subjects.filter((s) => !s.department_id || s.department_id === activeFacultyDeptId)
+  }, [subjects, activeFacultyDeptId, showAllDepts])
+
+  // Cross-dept subjects already selected
+  const crossDeptSelected = useMemo(() => {
+    if (!activeFacultyDeptId) return []
+    return selectedSubjects.filter((sid) => {
+      const sub = subjects.find((s) => s.id === sid)
+      return sub?.department_id && sub.department_id !== activeFacultyDeptId
+    })
+  }, [selectedSubjects, subjects, activeFacultyDeptId])
 
   function selectFaculty(f: Faculty) {
     if (hasChanges) {
@@ -242,6 +281,27 @@ export function FacultySubjectsClientPage({
         </div>
       )}
 
+      {/* Cross-stream/department warning banner */}
+      {crossDeptSelected.length > 0 && activeFaculty && (
+        <div className="max-w-6xl mx-auto mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">{crossDeptSelected.length} subject{crossDeptSelected.length > 1 ? "s" : ""} from a different {t.department.toLowerCase()}</span> are assigned to <span className="font-semibold">{activeFaculty.name}</span> ({activeFaculty.department ?? `No ${t.department}`}).
+            {" "}Cross-{t.department.toLowerCase()} assignments are allowed but should be intentional.
+            {" "}<button onClick={() => setShowAllDepts(true)} className="underline font-medium hover:text-amber-900">Show all subjects</button>
+          </div>
+        </div>
+      )}
+
+      {/* BulkImportDialog — faculty-subjects CSV import */}
+      <BulkImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        entity="faculty-subjects"
+        institutionId={institutionId}
+        onImported={() => router.refresh()}
+      />
+
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -263,7 +323,8 @@ export function FacultySubjectsClientPage({
         <div className="grid grid-cols-1 xl:grid-cols-[320px_1fr_300px] gap-6 items-start">
           {/* ── Faculty column ── */}
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col">
-            <div className="p-3 border-b border-gray-100">
+            <div className="p-3 border-b border-gray-100 space-y-2">
+              {/* Search */}
               <div className="relative">
                 <Search
                   size={15}
@@ -276,6 +337,19 @@ export function FacultySubjectsClientPage({
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
                 />
               </div>
+              {/* Department filter */}
+              {departments.length > 0 && (
+                <select
+                  value={deptFilter}
+                  onChange={(e) => setDeptFilter(e.target.value)}
+                  className="w-full py-2 px-3 text-sm rounded-lg border border-gray-200 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition bg-white text-gray-700 cursor-pointer"
+                >
+                  <option value="">All {t.department_plural}</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="overflow-y-auto max-h-[70vh] p-2 space-y-1.5">
@@ -399,13 +473,32 @@ export function FacultySubjectsClientPage({
                       <p className="font-semibold text-gray-900 text-sm">
                         {activeFaculty.name}
                       </p>
-                      <p className="text-xs text-gray-400">
-                        {selectedSubjects.length} of {subjects.length} subjects selected
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {activeFaculty.department && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                            <Building2 size={9} /> {activeFaculty.department}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-gray-400">
+                          {selectedSubjects.length} of {filteredSubjects.length} subject{filteredSubjects.length !== 1 ? "s" : ""} selected
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-medium">
+                  <div className="flex items-center gap-2 text-xs font-medium flex-wrap">
+                    {activeFacultyDeptId && (
+                      <button
+                        onClick={() => setShowAllDepts((p) => !p)}
+                        className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+                          showAllDepts
+                            ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                            : "text-gray-500 hover:bg-gray-100"
+                        }`}
+                      >
+                        {showAllDepts ? "My dept only" : "All depts"}
+                      </button>
+                    )}
                     <button
                       onClick={selectAll}
                       className="px-2.5 py-1 rounded-lg text-indigo-600 hover:bg-indigo-50 transition"
@@ -423,25 +516,30 @@ export function FacultySubjectsClientPage({
 
                 {/* ── Subject cards grid ── */}
                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto max-h-[58vh]">
-                  {subjects.map((s, i) => {
+                  {filteredSubjects.map((s, i) => {
                     const checked = selectedSubjects.includes(s.id)
                     const countOnSubject = assignedCountBySubject[s.id] ?? 0
                     const semEmoji = s.semester ? (SEMESTER_EMOJI[s.semester] ?? "📄") : null
+                    const isCrossDept = !!activeFacultyDeptId && !!s.department_id && s.department_id !== activeFacultyDeptId
+                    const subDeptName = s.department_id ? deptMap.get(s.department_id) : null
 
                     return (
                       <button
                         key={s.id}
                         onClick={() => toggleSubject(s.id)}
                         style={{
-                          // Staggered scale-in on faculty switch
                           transitionDelay: subjectsVisible ? `${i * 18}ms` : "0ms",
                         }}
                         className={`flex items-start gap-3 p-4 rounded-2xl border text-left
                           transition-all duration-300 ease-out
-                          hover:shadow-lg hover:border-violet-300 hover:-translate-y-1 active:scale-[0.97]
+                          hover:shadow-lg hover:-translate-y-1 active:scale-[0.97]
                           ${
-                            checked
+                            checked && isCrossDept
+                              ? "bg-amber-50 border-amber-300 scale-100"
+                              : checked
                               ? "bg-violet-50 border-violet-300 scale-100"
+                              : isCrossDept
+                              ? "border-amber-100 hover:bg-amber-50 hover:border-amber-300 scale-[0.98]"
                               : "border-gray-200 hover:bg-gray-50 scale-[0.98]"
                           }
                           ${subjectsVisible ? "opacity-100 scale-100" : "opacity-0 scale-95"}`}
@@ -449,7 +547,13 @@ export function FacultySubjectsClientPage({
                         {/* Circle checkbox */}
                         <div
                           className={`mt-0.5 h-5 w-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300
-                            ${checked ? "bg-violet-600 border-violet-600" : "border-gray-300"}`}
+                            ${
+                              checked && isCrossDept
+                                ? "bg-amber-500 border-amber-500"
+                                : checked
+                                ? "bg-violet-600 border-violet-600"
+                                : "border-gray-300"
+                            }`}
                         >
                           {checked && (
                             <span className="text-white text-xs">✓</span>
@@ -463,13 +567,14 @@ export function FacultySubjectsClientPage({
                               {s.name}
                             </h3>
                             {checked && (
-                              <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700">
-                                Selected
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                isCrossDept ? "bg-amber-100 text-amber-700" : "bg-violet-100 text-violet-700"
+                              }`}>
+                                {isCrossDept ? "⚠️ Cross-dept" : "Selected"}
                               </span>
                             )}
                           </div>
 
-                          {/* ── STEP 3: Emoji-polished tags ── */}
                           <div className="flex flex-wrap gap-2 mt-3">
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                               {s.code}
@@ -477,6 +582,15 @@ export function FacultySubjectsClientPage({
                             {s.semester && (
                               <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
                                 {semEmoji} Semester {s.semester}
+                              </span>
+                            )}
+                            {subDeptName && (
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-medium flex items-center gap-1 ${
+                                isCrossDept
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-indigo-50 text-indigo-600"
+                              }`}>
+                                <Building2 size={9} /> {subDeptName}
                               </span>
                             )}
                             <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
@@ -487,6 +601,15 @@ export function FacultySubjectsClientPage({
                       </button>
                     )
                   })}
+                  {filteredSubjects.length === 0 && (
+                    <div className="col-span-2 flex flex-col items-center justify-center py-12 text-center text-sm text-gray-400">
+                      <Building2 size={28} className="mb-2 opacity-40" />
+                      <p className="font-medium text-gray-500">No subjects in this {t.department.toLowerCase()}</p>
+                      <button onClick={() => setShowAllDepts(true)} className="mt-2 text-xs text-indigo-500 underline">
+                        Show all {t.department_plural.toLowerCase()}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Footer bar ── */}

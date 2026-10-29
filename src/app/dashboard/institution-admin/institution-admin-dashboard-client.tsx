@@ -20,6 +20,7 @@ import { ROLES } from "@/constants/roles"
 import gsap from "gsap"
 import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Institution { id: string; name: string; domain: string | null }
 interface Stats { 
@@ -97,6 +98,7 @@ export default function InstitutionAdminDashboardClient({
 }) {
   const router = useRouter()
   const { toast } = useToast()
+  const t = useTerms()
 
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
@@ -338,8 +340,8 @@ export default function InstitutionAdminDashboardClient({
     ...(attentionMetrics.unassignedFacultyCount > 0 ? [{
       id: "unassigned",
       priority: "HIGH" as const,
-      title: `${attentionMetrics.unassignedFacultyCount} Faculty members need assignments`,
-      desc: "Educators are registered but haven't been linked to any subjects.",
+      title: `${attentionMetrics.unassignedFacultyCount} ${t.faculty_plural} need assignments`,
+      desc: `Educators are registered but haven't been linked to any subjects.`,
       link: "/dashboard/institution-admin/faculty-subjects"
     }] : []),
     ...(attentionMetrics.pendingInvitesCount > 0 ? [{
@@ -352,8 +354,8 @@ export default function InstitutionAdminDashboardClient({
     ...(attentionMetrics.programsWithoutSectionsCount > 0 ? [{
       id: "programs",
       priority: "LOW" as const,
-      title: `${attentionMetrics.programsWithoutSectionsCount} Programs don't have active sections`,
-      desc: "Academic programs that require intake class sections to be created.",
+      title: `${attentionMetrics.programsWithoutSectionsCount} ${t.program_plural} don't have active ${t.section_plural.toLowerCase()}`,
+      desc: `Academic ${t.program_plural.toLowerCase()} that require intake class ${t.section_plural.toLowerCase()} to be created.`,
       link: "/dashboard/institution-admin/sections"
     }] : [])
   ]
@@ -587,7 +589,7 @@ export default function InstitutionAdminDashboardClient({
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6C63FF]">02 · ACADEMIC STRUCTURE</p>
             <div className="mt-6 flex items-baseline gap-2">
               <span className="text-5xl font-black text-slate-900 font-['Space_Grotesk']">{String(stats.departments).padStart(2, "0")}</span>
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Departments</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.department_plural}</span>
             </div>
             <p className="text-xs text-slate-400 mt-2">Operational divisions configured inside the institution catalog.</p>
           </div>
@@ -596,11 +598,11 @@ export default function InstitutionAdminDashboardClient({
             <div className="grid grid-cols-3 gap-4 text-center">
               <Link href="/dashboard/institution-admin/programs" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.programs}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Programs</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">{t.program_plural}</p>
               </Link>
               <Link href="/dashboard/institution-admin/sections" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.sections}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Sections</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">{t.section_plural}</p>
               </Link>
               <Link href="/dashboard/institution-admin/subjects" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.courses}</p>
@@ -632,7 +634,7 @@ export default function InstitutionAdminDashboardClient({
             <div className="grid grid-cols-2 gap-4 text-center">
               <Link href="/dashboard/institution-admin/faculty" prefetch={false} className="group block border-r border-slate-100">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.faculty}</p>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">Faculty</p>
+                <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">{t.faculty_plural}</p>
               </Link>
               <Link href="/dashboard/institution-admin/parents" prefetch={false} className="group block">
                 <p className="text-2xl font-black text-slate-800 font-['Space_Grotesk'] group-hover:text-[#6C63FF] transition-colors">{stats.parents}</p>
@@ -843,7 +845,7 @@ export default function InstitutionAdminDashboardClient({
               >
                 <option value={ROLES.FACULTY}>Faculty</option>
                 <option value={ROLES.STUDENT}>Student</option>
-                <option value={ROLES.HOD}>Head of Department</option>
+                <option value={ROLES.HOD}>Head of {t.department}</option>
                 <option value={ROLES.PROGRAM_HEAD}>Program Head</option>
               </select>
             </div>

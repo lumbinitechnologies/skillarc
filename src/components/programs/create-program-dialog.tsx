@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import type { Program, CreateProgramInput } from "@/modules/programs"
+import { useTerms } from "@/lib/org-type-context"
 
 interface CreateProgramDialogProps {
   open: boolean
@@ -32,6 +33,7 @@ export function CreateProgramDialog({
   departments,
   isLoading = false,
 }: CreateProgramDialogProps) {
+  const t = useTerms()
   const [formData, setFormData] = useState<CreateProgramInput>({
     name: program?.name || "",
     department_id: program?.department_id || "",
@@ -87,23 +89,23 @@ export function CreateProgramDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>
-            {program ? "Edit Program" : "Create Program"}
+            {program ? `Edit ${t.program}` : `Create ${t.program}`}
           </DialogTitle>
 
           <DialogDescription>
             {program
-              ? "Update program details"
-              : "Create a new academic program"}
+              ? `Update ${t.program.toLowerCase()} details`
+              : `Create a new ${t.program.toLowerCase()}`}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Program Name *</Label>
+            <Label htmlFor="name">{t.program} Name *</Label>
 
             <Input
               id="name"
-              placeholder="e.g. B.Tech Computer Science"
+              placeholder={t.program === "Grade" ? "e.g. Grade 10" : "e.g. Bachelor of Computer Applications"}
               value={formData.name}
               onChange={(e) =>
                 setFormData({
@@ -119,7 +121,7 @@ export function CreateProgramDialog({
           {departments.length > 0 ? (
             <div className="space-y-2">
               <Label htmlFor="department">
-                Department (Optional)
+                {t.department} (Optional)
               </Label>
 
               <select
@@ -134,7 +136,7 @@ export function CreateProgramDialog({
                 className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300 font-medium"
               >
                 <option value="">
-                  No Department (General)
+                  No {t.department} (General)
                 </option>
 
                 {departments.map((dept) => (
@@ -149,7 +151,7 @@ export function CreateProgramDialog({
             </div>
           ) : (
             <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-500">
-              💡 No departments configured yet. You can create this program now and assign it to a department later.
+              💡 No {t.department_plural.toLowerCase()} configured yet. You can create this {t.program.toLowerCase()} now and assign it to a {t.department.toLowerCase()} later.
             </div>
           )}
 
@@ -168,7 +170,7 @@ export function CreateProgramDialog({
               disabled={isLoading}
               className="flex-[2] h-11 text-xs font-bold text-white rounded-2xl bg-slate-900 hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 flex items-center justify-center shadow-md shadow-slate-100 border-none outline-none disabled:opacity-50"
             >
-              {isLoading ? "Saving..." : program ? "Update Program" : "Create Program"}
+              {isLoading ? "Saving..." : program ? `Update ${t.program}` : `Create ${t.program}`}
             </Button>
           </DialogFooter>
         </form>

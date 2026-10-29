@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { 
+import {
   CalendarDays, 
   BookOpen, 
   Users, 
@@ -16,6 +16,7 @@ import {
   Bookmark,
   BellRing
 } from "lucide-react"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Subject { id: string; name: string; code: string }
 interface TimetableSlot {
@@ -58,6 +59,7 @@ export default function FacultyDashboardClient({
 }) {
   const today = new Date().toLocaleDateString("en-US", { weekday: "long" })
   const greeting = getGreeting()
+  const t = useTerms()
 
   const todaySchedule = timetableSlots
     .filter((slot) => slot.day === today)
@@ -95,9 +97,9 @@ export default function FacultyDashboardClient({
               <span className="text-2xl">👩‍🏫</span>
             </div>
             <div>
-              <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#ECDFCB]">Faculty Portal</p>
+              <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#ECDFCB]">{t.faculty_member} Portal</p>
               <h1 className="mt-2 text-3xl font-semibold text-[#ECDFCB] font-['Plus_Jakarta_Sans']">
-                {greeting}, {faculty.name ?? "Professor"} 👋
+                {greeting}, {faculty.name ?? t.faculty_member} 👋
               </h1>
               <p className="mt-2 text-sm text-[#94BAC4]/80">
                 {faculty.institution} • {faculty.email}
