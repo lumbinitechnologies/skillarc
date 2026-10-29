@@ -10,6 +10,7 @@ export type UserContext = {
   institution_id: string | null
   organization_id: string | null
   department_id?: string | null
+  org_type: 'school' | 'college'
   name: string
   email: string
   created_at?: string
@@ -65,15 +66,24 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       .maybeSingle(),
   ])
 
-  const t1 = performance.now()
-  console.info(`[UserContext] source=${source} userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
-
   const actualProfile = profileRes.data
   if (profileRes.error || !actualProfile) {
     return null
   }
 
+  // Fetch org_type in parallel — no longer sequential after profile
+  const effectiveOrgId = actualProfile.organization_id
+  const [orgRes] = await Promise.all([
+    effectiveOrgId
+      ? admin.from("organizations").select("org_type").eq("id", effectiveOrgId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const t1 = performance.now()
+  console.info(`[UserContext] source=${source} userId=${userId} durationMs=${(t1 - t0).toFixed(1)}`)
+
   const isTimetableBuilder = Boolean(userPermRes.data?.id)
+  const orgType: 'school' | 'college' = (orgRes.data?.org_type as 'school' | 'college') ?? 'college'
 
   const cookieStore = await cookies()
   const impRole = cookieStore.get("sa_impersonate_role")?.value
@@ -82,15 +92,36 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
   const impUserId = cookieStore.get("sa_impersonate_user_id")?.value
 
   if (actualProfile.role === ROLES.SUPER_ADMIN && impRole) {
-    const targetProfileData = impUserId
-      ? await admin
-          .from("users")
-          .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
-          .eq("id", impUserId)
-          .single()
-      : { data: null, error: null }
+    // Run impersonation target fetch and org_type lookups in parallel
+    const impEffectiveOrgIdEarly = impOrgId
+    const [targetProfileData, impOrgDataRes] = await Promise.all([
+      impUserId
+        ? admin
+            .from("users")
+            .select("id, role, name, email, phone, organization_id, institution_id, department_id, is_active, profile_image_url, created_at")
+            .eq("id", impUserId)
+            .single()
+        : Promise.resolve({ data: null, error: null }),
+      impEffectiveOrgIdEarly
+        ? admin.from("organizations").select("org_type").eq("id", impEffectiveOrgIdEarly).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
 
     const targetProfile = targetProfileData.data
+
+    // If the target's org differs from impOrgId, fetch again (rare case)
+    let impOrgType: 'school' | 'college' = 'college'
+    const impEffectiveOrgId = targetProfile?.organization_id ?? impOrgId
+    if (impEffectiveOrgId && impEffectiveOrgId !== impEffectiveOrgIdEarly) {
+      const { data: impOrgData } = await admin
+        .from("organizations")
+        .select("org_type")
+        .eq("id", impEffectiveOrgId)
+        .maybeSingle()
+      impOrgType = (impOrgData?.org_type as 'school' | 'college') ?? 'college'
+    } else if (impOrgDataRes.data) {
+      impOrgType = (impOrgDataRes.data.org_type as 'school' | 'college') ?? 'college'
+    }
 
     return {
       id: targetProfile?.id ?? userId,
@@ -98,6 +129,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
       institution_id: targetProfile?.institution_id ?? impInstId ?? null,
       organization_id: targetProfile?.organization_id ?? impOrgId ?? null,
       department_id: targetProfile?.department_id ?? actualProfile.department_id ?? null,
+      org_type: impOrgType,
       name: targetProfile?.name ?? actualProfile.name ?? "",
       email: targetProfile?.email ?? actualProfile.email ?? "",
       created_at: targetProfile?.created_at ?? actualProfile.created_at,
@@ -126,6 +158,7 @@ export const getCurrentUserContext = cache(async (): Promise<UserContext | null>
     institution_id: actualProfile.institution_id,
     organization_id: actualProfile.organization_id,
     department_id: actualProfile.department_id,
+    org_type: orgType,
     name: actualProfile.name ?? "",
     email: actualProfile.email ?? "",
     created_at: actualProfile.created_at,

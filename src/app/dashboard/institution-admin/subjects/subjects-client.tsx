@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, BookMarked, Search } from "lucide-react"
+import { Plus, BookMarked } from "lucide-react"
 import { motion } from "framer-motion"
+import { useTerms } from "@/lib/org-type-context"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -32,6 +33,7 @@ import { CreateSubjectDialog } from "@/components/subjects/create-subject-dialog
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { SearchBar, FilterSelect } from "@/components/ui/page-shell"
 
 export function SubjectsClientPage({
   initialSubjects,
@@ -47,8 +49,11 @@ export function SubjectsClientPage({
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deptFilter, setDeptFilter] = useState("")
+  const [progFilter, setProgFilter] = useState("")
 
   const { toast } = useToast()
+  const t = useTerms()
 
   function handleOpenDialog(subject?: any) {
     if (subject) {
@@ -188,8 +193,13 @@ export function SubjectsClientPage({
     const codeMatch = s.code?.toLowerCase().includes(searchQuery.toLowerCase())
     const deptMatch = s.program?.department?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const progMatch = s.program?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-    return nameMatch || codeMatch || deptMatch || progMatch
+    const searchOk = nameMatch || codeMatch || deptMatch || progMatch
+    const deptOk = !deptFilter || s.program?.department?.id === deptFilter
+    const progOk = !progFilter || s.program_id === progFilter
+    return searchOk && deptOk && progOk
   })
+
+  const filteredPrograms = programs.filter((p: any) => !deptFilter || p.department_id === deptFilter)
 
   return (
     <motion.div
@@ -214,7 +224,7 @@ export function SubjectsClientPage({
                 {subjects.length} Total
               </span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">Manage academic subjects, syllabus configuration, and department settings.</p>
+            <p className="mt-2 text-sm text-slate-500">Manage academic subjects, syllabus configuration, and {t.department_plural.toLowerCase()} settings.</p>
           </div>
         </div>
 
@@ -235,20 +245,28 @@ export function SubjectsClientPage({
         </div>
       </motion.div>
 
-      {/* Search Filter Bar */}
-      <motion.div
-        variants={itemVariants}
-        className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.01)] max-w-md"
-      >
-        <Search className="w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search subjects, codes, or programs..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full text-sm text-slate-800 placeholder-slate-400 outline-none bg-transparent"
-        />
-      </motion.div>
+      {/* Search & Filter Bar */}
+      <SearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search subjects, codes, or programs…"
+        filters={
+          <>
+            <FilterSelect
+              label={`All ${t.department_plural}`}
+              value={deptFilter}
+              onChange={(v) => { setDeptFilter(v); setProgFilter("") }}
+              options={departments.map((d: any) => ({ value: d.id, label: d.name }))}
+            />
+            <FilterSelect
+              label="All Programs"
+              value={progFilter}
+              onChange={setProgFilter}
+              options={filteredPrograms.map((p: any) => ({ value: p.id, label: p.name }))}
+            />
+          </>
+        }
+      />
 
       {/* Main Subjects Display list */}
       <motion.div variants={itemVariants} className="pt-2">

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { useTerms } from "@/lib/org-type-context"
 import {
   ArrowLeft,
   Building2,
@@ -80,6 +81,7 @@ export function DepartmentDetailClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("programs")
   const { toast } = useToast()
+  const t = useTerms()
 
   // --- Entity States ---
   const [programs, setPrograms] = useState<ProgramWithDepartment[]>(initialPrograms)
@@ -759,7 +761,7 @@ export function DepartmentDetailClient({
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-[#6C63FF] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Departments
+          Back to {t.department_plural}
         </Link>
 
         <div className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between border border-slate-100">
@@ -769,7 +771,7 @@ export function DepartmentDetailClient({
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6C63FF]">
-                Department Workspace
+                {t.department} Workspace
               </p>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 mt-1">
                 {department.name}
@@ -781,17 +783,17 @@ export function DepartmentDetailClient({
           <div className="flex items-center gap-6 text-sm text-slate-500 font-medium">
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{programs.length}</span>
-              <span>Programs</span>
+              <span>{t.program_plural}</span>
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{sections.length}</span>
-              <span>Sections</span>
+              <span>{t.section_plural}</span>
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{faculty.length}</span>
-              <span>Faculty</span>
+              <span>{t.faculty_plural}</span>
             </div>
           </div>
         </div>
@@ -800,11 +802,11 @@ export function DepartmentDetailClient({
       {/* Modern, elegant tabs selector */}
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
         {[
-          { id: "programs", label: "Programs", count: programs.length, icon: BookOpenCheck },
-          { id: "sections", label: "Sections", count: sections.length, icon: BookOpen },
+                  { id: "programs", label: t.program_plural, count: programs.length, icon: BookOpenCheck },
+          { id: "sections", label: t.section_plural, count: sections.length, icon: BookOpen },
           { id: "courses", label: "Courses", count: subjects.length, icon: BookMarked },
           { id: "assign-courses", label: "Assign Courses", count: assignments.length, icon: BookOpen },
-          { id: "faculty", label: "Faculty", count: faculty.length, icon: Users },
+          { id: "faculty", label: t.faculty_plural, count: faculty.length, icon: Users },
           { id: "students", label: "Students", count: studentCount, icon: GraduationCap },
           { id: "parents", label: "Parents", count: parents.length, icon: Users },
         ].map((t) => {
@@ -841,7 +843,7 @@ export function DepartmentDetailClient({
         {activeTab === "programs" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-              <span className="text-sm font-medium text-slate-500">Manage all undergraduate & postgraduate programs.</span>
+              <span className="text-sm font-medium text-slate-500">Manage all {t.program_plural.toLowerCase()} in this {t.department.toLowerCase()}.</span>
               <Button
                 onClick={() => {
                   setSelectedProgram(null)
@@ -850,7 +852,7 @@ export function DepartmentDetailClient({
                 className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Program
+                New {t.program}
               </Button>
             </div>
             <Card className="p-6 shadow-sm border border-slate-100">
@@ -871,7 +873,7 @@ export function DepartmentDetailClient({
         {activeTab === "sections" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-              <span className="text-sm font-medium text-slate-500">Manage class sections and assign faculty advisors.</span>
+              <span className="text-sm font-medium text-slate-500">Manage class {t.section_plural.toLowerCase()} and assign {t.faculty_plural.toLowerCase()} advisors.</span>
               <Button
                 onClick={() => {
                   setSelectedSection(null)
@@ -880,7 +882,7 @@ export function DepartmentDetailClient({
                 className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Section
+                New {t.section}
               </Button>
             </div>
             <Card className="p-6 shadow-sm border border-slate-100">
@@ -958,6 +960,7 @@ export function DepartmentDetailClient({
               faculty={facultyForAssignment}
               subjects={subjects}
               assignments={assignments}
+              departments={[]}
             />
           </div>
         )}

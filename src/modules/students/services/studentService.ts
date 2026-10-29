@@ -47,7 +47,7 @@ export async function getStudentsByInstitution(
   const programIds = Array.from(new Set(students.map(s => s.program_id).filter(Boolean))) as string[]
 
   const [usersRes, sectionsRes, programsRes] = await Promise.all([
-    supabase.from("users").select("id, name, email, role, organization_id, institution_id, created_at, is_active").in("id", studentIds),
+    supabase.from("users").select("id, name, email, role, phone, organization_id, institution_id, created_at, is_active").in("id", studentIds),
     sectionIds.length ? supabase.from("sections").select("id, name, semester, program_id").in("id", sectionIds) : Promise.resolve({ data: [] }),
     programIds.length ? supabase.from("programs").select("id, name").in("id", programIds) : Promise.resolve({ data: [] }),
   ])
@@ -66,6 +66,7 @@ export async function getStudentsByInstitution(
       ...student,
       name: user?.name || "Unknown",
       email: user?.email || "",
+      phone: user?.phone || null,
       role: user?.role || ROLES.STUDENT,
       organization_id: user?.organization_id,
       created_at: user?.created_at,
@@ -101,7 +102,7 @@ export async function getStudentById(studentId: string): Promise<StudentWithSect
   // Fetch user data
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("name, email, role, organization_id, institution_id, created_at, is_active")
+    .select("name, email, role, phone, organization_id, institution_id, created_at, is_active")
     .eq("id", studentId)
     .single()
 
@@ -120,6 +121,7 @@ export async function getStudentById(studentId: string): Promise<StudentWithSect
     gender: student.gender,
     name: user?.name || "Unknown",
     email: user?.email || "",
+    phone: user?.phone || null,
     role: user?.role || ROLES.STUDENT,
     organization_id: user?.organization_id,
     created_at: user?.created_at,
@@ -176,8 +178,8 @@ export async function createStudent(
         semester: input.semester,
         registration_number: input.registration_number || null,
         admission_year: input.admission_year || null,
-        dob: null,
-        gender: null,
+        dob: input.dob || null,
+        gender: input.gender || null,
       },
     ])
     .select()
@@ -211,12 +213,15 @@ export async function updateStudent(
   const studentFields: Record<string, any> = {}
 
   if (input.name !== undefined) userFields.name = input.name
+  if (input.phone !== undefined) userFields.phone = input.phone || null
 
   if (input.section_id !== undefined) studentFields.section_id = input.section_id
   if (input.semester !== undefined) studentFields.semester = input.semester
   if (input.program_id !== undefined) studentFields.program_id = input.program_id
   if (input.registration_number !== undefined) studentFields.registration_number = input.registration_number
   if (input.admission_year !== undefined) studentFields.admission_year = input.admission_year
+  if (input.dob !== undefined) studentFields.dob = input.dob || null
+  if (input.gender !== undefined) studentFields.gender = input.gender || null
 
   // Update users table if needed
   if (Object.keys(userFields).length > 0) {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Users, BookOpen, Clock, UserCheck, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { useTerms } from "@/lib/org-type-context"
 
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
 
@@ -34,6 +35,7 @@ export default function HodDashboardClient({
   subjects: Subject[]
 }) {
   const router = useRouter()
+  const t = useTerms()
   const [selectedSubjectId, setSelectedSubjectId] = useState("")
   const [selectedFacultyId, setSelectedFacultyId] = useState("")
   const [allocationStatus, setAllocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
@@ -98,10 +100,10 @@ export default function HodDashboardClient({
           </div>
           <div>
             <h1 style={{ fontSize: 16, fontWeight: 700, color: "#111827", letterSpacing: "-0.02em" }}>
-              Department Head Portal
+              {t.hod_full} Portal
             </h1>
             <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 1 }}>
-              {hod.institution} &nbsp;·&nbsp; Head of Department: <strong>{hod.name}</strong>
+              {hod.institution} &nbsp;·&nbsp; {t.hod_full}: <strong>{hod.name}</strong>
             </p>
           </div>
         </div>
@@ -121,7 +123,7 @@ export default function HodDashboardClient({
       {/* Stats Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
         {[
-          { label: "Department Faculty", value: stats.facultyCount, accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
+        { label: `${t.department} ${t.faculty_plural}`, value: stats.facultyCount, accent: "#d1fae5", text: "#065f46", icon: <Users size={17} color="#065f46" /> },
           { label: "Active Subjects", value: stats.subjectsCount, accent: "#dbeafe", text: "#1d4ed8", icon: <BookOpen size={17} color="#1d4ed8" /> },
           { label: "Unallocated Subjects", value: unassignedCount, accent: unassignedCount > 0 ? "#fee2e2" : "#fef3c7", text: unassignedCount > 0 ? "#991b1b" : "#b45309", icon: <Clock size={17} color={unassignedCount > 0 ? "#991b1b" : "#b45309"} /> },
         ].map((s, idx) => (
@@ -164,8 +166,8 @@ export default function HodDashboardClient({
             display: "flex", flexDirection: "column", gap: 16,
           }}>
           <div>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Assign Faculty</h2>
-            <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Bind faculty to curricular syllabus subjects</p>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>Assign {t.faculty_member}</h2>
+            <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>Bind {t.faculty_plural.toLowerCase()} to curricular syllabus subjects</p>
           </div>
 
           {allocationStatus === "success" && (
@@ -213,7 +215,7 @@ export default function HodDashboardClient({
 
           <div>
             <label style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginBottom: 5, display: "block" }}>
-              Assign Faculty
+              Assign {t.faculty_member}
             </label>
             <select
               value={selectedFacultyId}
@@ -245,7 +247,7 @@ export default function HodDashboardClient({
               marginTop: 8,
             }}
           >
-            {allocationStatus === "loading" ? "Assigning..." : "Assign Faculty"}
+            {allocationStatus === "loading" ? "Assigning..." : `Assign ${t.faculty_member}`}
           </button>
 
           {/* Allocation Ratio Bar */}
@@ -305,7 +307,7 @@ export default function HodDashboardClient({
                       <div>
                         <p style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{s.name}</p>
                         <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
-                          Code: <strong>{s.code}</strong> &nbsp;·&nbsp; Faculty: <strong style={{ color: isAssigned ? "#10b981" : "#ef4444" }}>{s.facultyName}</strong>
+                          Code: <strong>{s.code}</strong> &nbsp;·&nbsp; {t.faculty_member}: <strong style={{ color: isAssigned ? "#10b981" : "#ef4444" }}>{s.facultyName}</strong>
                         </p>
                       </div>
                     </div>

@@ -41,25 +41,38 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     redirect("/dashboard/student/subjects")
   }
 
-  // 2. Fetch Faculty details for this subject + section from timetable
-  const { data: slots } = await adminClient
-    .from("timetable_slots")
-    .select("faculty_id")
-    .eq("institution_id", profile.institution_id)
-    .eq("section_id", profile.section_id)
-    .eq("subject_id", subjectId)
-    .limit(1)
-
-  const facultyId = slots?.[0]?.faculty_id
+  // 2. Fetch Faculty details: check faculty_subjects first, fallback to timetable_slots
   let facultyName = "Faculty pending"
 
-  if (facultyId) {
-    const { data: fac } = await adminClient
-      .from("users")
-      .select("name")
-      .eq("id", facultyId)
-      .single()
-    if (fac) facultyName = fac.name
+  const { data: fsRows } = await adminClient
+    .from("faculty_subjects")
+    .select("faculty_id, section_id, users:faculty_id(name)")
+    .eq("institution_id", profile.institution_id)
+    .eq("subject_id", subjectId)
+
+  if (fsRows && fsRows.length > 0) {
+    const secMatch = fsRows.find((r: any) => r.section_id === profile.section_id)
+    const targetRow = secMatch || fsRows[0]
+    const u = Array.isArray(targetRow?.users) ? targetRow?.users[0] : targetRow?.users
+    if (u?.name) {
+      facultyName = u.name
+    }
+  }
+
+  if (facultyName === "Faculty pending") {
+    const { data: slots } = await adminClient
+      .from("timetable_slots")
+      .select("faculty_id, users:faculty_id(name)")
+      .eq("institution_id", profile.institution_id)
+      .eq("section_id", profile.section_id)
+      .eq("subject_id", subjectId)
+      .not("faculty_id", "is", null)
+      .limit(1)
+
+    const u = Array.isArray(slots?.[0]?.users) ? slots?.[0]?.users[0] : slots?.[0]?.users
+    if (u?.name) {
+      facultyName = u.name
+    }
   }
 
   // 3. Fetch Assignments for this subject

@@ -7,6 +7,7 @@ import {
   Building2, Users, GraduationCap, BookOpen,
   LayoutGrid, Clock, ChevronRight, Mail, Plus
 } from "lucide-react"
+import { useTerms } from "@/lib/org-type-context"
 
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
 type Status = "idle" | "loading" | "success" | "error"
@@ -25,6 +26,7 @@ export default function AdminDashboardClient({
   recentUsers: RecentUser[]
 }) {
   const router = useRouter()
+  const t = useTerms()
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteRole, setInviteRole] = useState("teacher")
   const [inviteStatus, setInviteStatus] = useState<Status>("idle")
@@ -64,7 +66,7 @@ export default function AdminDashboardClient({
   ]
 
   const quickActions = [
-    { label: "Departments", desc: "Manage all departments", icon: "🏢", href: "/dashboard/institution-admin/departments" },
+    { label: t.department_plural, desc: `Manage all ${t.department_plural.toLowerCase()}`, icon: "🏢", href: "/dashboard/institution-admin/departments" },
     { label: "Programs", desc: "Manage programs", icon: "🎓", href: "/dashboard/institution-admin/programs" },
     { label: "Teachers", desc: "View & invite faculty", icon: "👨‍🏫", href: "/dashboard/institution-admin/faculty" },
     { label: "Students", desc: "View & invite students", icon: "👩‍🎓", href: "/dashboard/institution-admin/students" },
@@ -269,7 +271,7 @@ export default function AdminDashboardClient({
           >
             <option value="teacher">Faculty / Teacher</option>
             <option value="student">Student</option>
-            <option value="hod">Head of Department</option>
+            <option value="hod">Head of {t.department}</option>
             <option value="program_head">Program Head</option>
           </select>
 

@@ -19,7 +19,7 @@ export default async function StudentSubjectsPage() {
   const adminClient = createSupabaseAdminClient()
 
   const tBatchStart = performance.now()
-  const [studentRes, timetableRes, subjectsRes] = await Promise.all([
+  const [studentRes, timetableRes, subjectsRes, facultySubjectsRes] = await Promise.all([
     adminClient
       .from("students")
       .select("id, section_id, program_id, semester")
@@ -37,49 +37,83 @@ export default async function StudentSubjectsPage() {
           .select("id, name, code, subject_type, program_id, semester")
           .eq("institution_id", context.institution_id)
       : Promise.resolve({ data: [] }),
+    context.institution_id
+      ? adminClient
+          .from("faculty_subjects")
+          .select("subject_id, faculty_id, section_id, users:faculty_id(id, name)")
+          .eq("institution_id", context.institution_id)
+      : Promise.resolve({ data: [] }),
   ])
   const batchMs = performance.now() - tBatchStart
 
   const studentData = studentRes.data
   const allSlots = (timetableRes.data ?? []) as any[]
   const allSubjects = (subjectsRes.data ?? []) as any[]
+  const allFacultySubjects = (facultySubjectsRes.data ?? []) as any[]
+
+  // Build faculty map from faculty_subjects (official course allocation)
+  const fsMap = new Map<string, string>()
+  allFacultySubjects.forEach((fs: any) => {
+    const u = Array.isArray(fs.users) ? fs.users[0] : fs.users
+    if (fs.subject_id && u?.name) {
+      if (fs.section_id === studentData?.section_id) {
+        fsMap.set(fs.subject_id, u.name)
+      } else if (!fsMap.has(fs.subject_id)) {
+        fsMap.set(fs.subject_id, u.name)
+      }
+    }
+  })
 
   // Filter slots for student's section
   const sectionSlots = studentData?.section_id
     ? allSlots.filter((slot: any) => slot.section_id === studentData.section_id)
     : []
 
-  const subjectMap = new Map<string, { id: string; name: string; code: string; subjectType: string; facultyName: string }>()
-
+  // Build slot faculty map
+  const slotFacultyMap = new Map<string, string>()
   sectionSlots.forEach((slot: any) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
+    if (sub?.id && fac?.name && !slotFacultyMap.has(sub.id)) {
+      slotFacultyMap.set(sub.id, fac.name)
+    }
+  })
+
+  const subjectMap = new Map<string, { id: string; name: string; code: string; subjectType: string; facultyName: string }>()
+
+  // 1. First add subjects from student's section timetable slots
+  sectionSlots.forEach((slot: any) => {
+    const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     if (sub?.id && !subjectMap.has(sub.id)) {
+      const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
       subjectMap.set(sub.id, {
         id: sub.id,
         name: sub.name,
         code: sub.code,
         subjectType: sub.subject_type || "THEORY",
-        facultyName: fac?.name ?? "Faculty pending",
+        facultyName,
       })
     }
   })
 
-  // Fallback: If section has no timetable slots yet, find subjects for student's program/semester
-  if (subjectMap.size === 0 && studentData?.program_id) {
+  // 2. Also ensure all curriculum subjects for the student's program and semester are included
+  if (studentData?.program_id) {
     const progSubs = allSubjects.filter((s: any) => {
       const matchProg = s.program_id === studentData.program_id
       const matchSem = !studentData.semester || !s.semester || s.semester === studentData.semester
       return matchProg && matchSem
     })
     progSubs.forEach((sub: any) => {
-      subjectMap.set(sub.id, {
-        id: sub.id,
-        name: sub.name,
-        code: sub.code,
-        subjectType: sub.subject_type || "THEORY",
-        facultyName: "Faculty pending",
-      })
+      if (!subjectMap.has(sub.id)) {
+        const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
+        subjectMap.set(sub.id, {
+          id: sub.id,
+          name: sub.name,
+          code: sub.code,
+          subjectType: sub.subject_type || "THEORY",
+          facultyName,
+        })
+      }
     })
   }
 

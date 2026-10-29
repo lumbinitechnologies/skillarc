@@ -8,6 +8,8 @@ export interface FacultyWithStats extends Faculty {
   assignedSubjects?: number
   assignedSections?: number
   is_timetable_builder?: boolean
+  employee_id?: string | null
+  phone?: string | null
   department?: {
     id: string
     name: string
@@ -20,6 +22,8 @@ export interface CreateFacultyInput {
   department_id?: string
   institution_id: string
   organization_id?: string
+  phone?: string
+  employee_id?: string
 }
 
 export interface UpdateFacultyInput {
@@ -28,4 +32,6 @@ export interface UpdateFacultyInput {
   department_id?: string
   role?: string
   is_timetable_builder?: boolean
+  phone?: string
+  employee_id?: string
 }

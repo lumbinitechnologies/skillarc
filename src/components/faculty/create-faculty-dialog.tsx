@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { GraduationCap, ShieldAlert } from "lucide-react"
 import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
+import { useTerms } from "@/lib/org-type-context"
 
 interface CreateFacultyDialogProps {
   open: boolean
@@ -39,6 +40,8 @@ export function CreateFacultyDialog({
     department_id: faculty?.department_id || "",
     role: (faculty?.role || "FACULTY") as any,
     is_timetable_builder: faculty?.is_timetable_builder || false,
+    phone: faculty?.phone || "",
+    employee_id: faculty?.employee_id || "",
   })
   const { toast } = useToast()
 
@@ -49,6 +52,8 @@ export function CreateFacultyDialog({
       department_id: faculty?.department_id || (departments.length === 1 ? departments[0].id : ""),
       role: (faculty?.role || "FACULTY") as any,
       is_timetable_builder: faculty?.is_timetable_builder || false,
+      phone: faculty?.phone || "",
+      employee_id: faculty?.employee_id || "",
     })
   }, [faculty, departments])
 
@@ -75,7 +80,7 @@ export function CreateFacultyDialog({
     try {
       await onSubmit(formData, !!faculty)
       onOpenChange(false)
-      setFormData({ name: "", email: "", department_id: "", role: "FACULTY", is_timetable_builder: false })
+      setFormData({ name: "", email: "", department_id: "", role: "FACULTY", is_timetable_builder: false, phone: "", employee_id: "" })
     } catch (error) {
       toast({
         title: "Error",
@@ -86,6 +91,7 @@ export function CreateFacultyDialog({
   }
 
   const isEdit = !!faculty
+  const t = useTerms()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,10 +105,10 @@ export function CreateFacultyDialog({
             </div>
             <div>
               <h2 className="text-lg font-black text-slate-900 tracking-tight leading-none">
-                {isEdit ? "Edit Faculty Profile" : "Register Faculty"}
+                {isEdit ? `Edit ${t.faculty_member} Profile` : `Register ${t.faculty_member}`}
               </h2>
               <p className="text-xs text-slate-400 mt-1 font-medium">
-                {isEdit ? "Modify faculty catalog parameters" : "Configure new faculty account metadata"}
+                {isEdit ? `Modify ${t.faculty_member.toLowerCase()} catalog parameters` : `Configure new ${t.faculty_member.toLowerCase()} account metadata`}
               </p>
             </div>
           </div>
@@ -142,17 +148,40 @@ export function CreateFacultyDialog({
             )}
           </div>
 
+          {/* Phone & Employee ID — 2-col grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="phone" className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="e.g. +91 98765 43210"
+                value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="employee_id" className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Employee ID</Label>
+              <Input
+                id="employee_id"
+                placeholder="e.g. FAC-101"
+                value={formData.employee_id}
+                onChange={(e) => setFormData({ ...formData, employee_id: e.target.value })}
+              />
+            </div>
+          </div>
+
           {/* Department select */}
           {departments.length > 0 ? (
             <div className="space-y-1.5">
-              <Label htmlFor="department" className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Academic Department</Label>
+              <Label htmlFor="department" className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-slate-400">Academic {t.department}</Label>
               <select
                 id="department"
                 value={formData.department_id}
                 onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
                 className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300"
               >
-                <option value="">No Department (Unassigned)</option>
+                <option value="">No {t.department} (Unassigned)</option>
                 {departments.map((dept) => (
                   <option key={dept.id} value={dept.id}>
                     {dept.name}
@@ -162,7 +191,7 @@ export function CreateFacultyDialog({
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-500">
-              💡 No departments configured yet. You can register faculty now and assign them to a department later from the Departments tab.
+              💡 No {t.department_plural.toLowerCase()} configured yet. You can register {t.faculty_plural.toLowerCase()} now and assign them to a {t.department.toLowerCase()} later from the {t.department_plural} tab.
             </div>
           )}
 
@@ -175,9 +204,9 @@ export function CreateFacultyDialog({
               onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
               className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300"
             >
-              <option value="FACULTY">Faculty Member</option>
-              <option value="HOD">Head of Department (HOD)</option>
-              <option value="PROGRAM_HEAD">Program Head</option>
+              <option value="FACULTY">{t.faculty_member}</option>
+              <option value="HOD">{t.hod_full}</option>
+              <option value="PROGRAM_HEAD">{t.program_head}</option>
             </select>
           </div>
 
@@ -216,7 +245,7 @@ export function CreateFacultyDialog({
               disabled={isLoading}
               className="flex-[2] h-11 text-xs font-bold text-white rounded-2xl bg-slate-900 hover:bg-slate-800 transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 flex items-center justify-center gap-1.5 shadow-md shadow-slate-100 border-none outline-none disabled:opacity-50"
             >
-              {isLoading ? "Saving..." : isEdit ? "Save Changes" : "Register Faculty"}
+              {isLoading ? "Saving..." : isEdit ? "Save Changes" : `Register ${t.faculty_member}`}
             </Button>
           </div>
 

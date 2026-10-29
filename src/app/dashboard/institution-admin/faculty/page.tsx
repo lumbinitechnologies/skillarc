@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
 import { FacultyClientPage } from "./faculty-client"
 import { ROLES } from "@/constants/roles"
@@ -16,6 +17,7 @@ export default async function FacultyPage() {
 
   const institutionId = context.institution_id
   const supabase = await createSupabaseServerClient()
+  const adminSupabase = createSupabaseAdminClient()
 
   // Consolidated parallel batch: Fetch faculty, faculty_subjects, sections, departments, and timetable builder permissions in ONE single Promise.all
   const tBatchStart = performance.now()
@@ -25,6 +27,7 @@ export default async function FacultyPage() {
     sectionsRes,
     departmentsRes,
     userPermsRes,
+    staffRes,
   ] = await Promise.all([
     supabase
       .from("users")
@@ -54,6 +57,10 @@ export default async function FacultyPage() {
       .from("user_permissions")
       .select("user_id, permissions!inner(name)")
       .eq("permissions.name", "timetable_builder"),
+    adminSupabase
+      .from("staff")
+      .select("id, employee_id")
+      .eq("institution_id", institutionId),
   ])
   const batchMs = performance.now() - tBatchStart
 
@@ -62,12 +69,15 @@ export default async function FacultyPage() {
   const sections = sectionsRes.data ?? []
   const departments = departmentsRes.data ?? []
   const userPerms = (userPermsRes.data ?? []) as any[]
+  const staffRecords = staffRes.data ?? []
 
   const builderUserIds = new Set(userPerms.map((up) => up.user_id))
+  const staffMap = new Map(staffRecords.map((s: any) => [s.id, s.employee_id]))
 
   const facultyWithStats = faculty.map((f) => ({
     ...f,
     is_timetable_builder: builderUserIds.has(f.id),
+    employee_id: staffMap.get(f.id) ?? null,
     assignedSubjects: facultySubjects.filter((fs) => fs.faculty_id === f.id).length,
     assignedSections: sections.filter((s) => s.faculty_advisor_id === f.id).length,
   }))

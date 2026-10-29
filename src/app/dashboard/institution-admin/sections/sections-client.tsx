@@ -7,8 +7,10 @@ import { SectionsList } from "@/components/sections/sections-list"
 import { CreateSectionDialog } from "@/components/sections/create-section-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import type { Section, SectionWithFacultyAdvisor, CreateSectionInput } from "@/modules/sections"
-import { Plus } from "lucide-react"
+import { Plus, Upload } from "lucide-react"
+import { useTerms } from "@/lib/org-type-context"
 
 interface SectionsClientPageProps {
   initialSections: SectionWithFacultyAdvisor[]
@@ -23,6 +25,7 @@ export function SectionsClientPage({
   facultyAdvisors,
   institutionId,
 }: SectionsClientPageProps) {
+  const t = useTerms()
   const [sections, setSections] = useState<SectionWithFacultyAdvisor[]>(initialSections)
   const [isOpen, setIsOpen] = useState(false)
   const [selectedSection, setSelectedSection] = useState<Section | null>(null)
@@ -30,6 +33,22 @@ export function SectionsClientPage({
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const { toast } = useToast()
+  const [isImportOpen, setIsImportOpen] = useState(false)
+
+  const loadSections = async () => {
+    try {
+      const res = await fetch(`/api/sections?institution_id=${institutionId}`)
+      if (!res.ok) throw new Error("Failed to load sections")
+      const data = await res.json()
+      setSections(data)
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load sections",
+        variant: "destructive",
+      })
+    }
+  }
 
   const handleCreateSection = async (data: CreateSectionInput) => {
     setIsLoading(true)
@@ -145,13 +164,23 @@ export function SectionsClientPage({
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Sections</h1>
-          <p className="text-gray-600 mt-1">Manage sections and faculty advisors</p>
+          <h1 className="text-3xl font-bold">{t.section_plural}</h1>
+          <p className="text-gray-600 mt-1">Manage {t.section_plural.toLowerCase()} and {t.faculty_plural.toLowerCase()} advisors</p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Section
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsImportOpen(true)}
+            className="inline-flex items-center gap-2 rounded-2xl border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Upload className="h-4 w-4" />
+            Import CSV
+          </Button>
+          <Button onClick={() => handleOpenDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            New {t.section}
+          </Button>
+        </div>
       </div>
 
       <Card className="p-6">
@@ -177,10 +206,19 @@ export function SectionsClientPage({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={confirmDelete}
-        title="Delete Section"
-        description="Are you sure you want to delete this class section? Students assigned to this section will lose their section registration."
+        title={`Delete ${t.section}`}
+        description={`Are you sure you want to delete this ${t.section.toLowerCase()}? Students assigned to this ${t.section.toLowerCase()} will lose their registration.`}
         loading={isLoading}
       />
+
+      <BulkImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        entity="sections"
+        institutionId={institutionId}
+        onImported={loadSections}
+      />
+
     </div>
   )
 }

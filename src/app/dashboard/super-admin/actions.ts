@@ -32,14 +32,14 @@ async function requireSuperAdmin() {
   return { error: null, supabase, adminClient }
 }
 
-export async function createOrganization(name: string, features: string[] = []) {
+export async function createOrganization(name: string, features: string[] = [], org_type: 'school' | 'college' = 'college') {
   const { error: authError, supabase } = await requireSuperAdmin()
   if (authError || !supabase) return { success: false, error: authError }
 
   const { data, error } = await supabase
     .from("organizations")
-    .insert({ name, features })
-    .select("id, name, created_at, features")
+    .insert({ name, features, org_type })
+    .select("id, name, created_at, features, org_type")
     .single()
 
   if (error) {
@@ -47,14 +47,14 @@ export async function createOrganization(name: string, features: string[] = []) 
     return { success: false, error: error.message }
   }
 
-  return { success: true, org: { ...data, institution_count: 0, admin_count: 0, features: data.features } }
+  return { success: true, org: { ...data, institution_count: 0, admin_count: 0, features: data.features, org_type: data.org_type } }
 }
 
-export async function editOrganization(id: string, name: string, features: string[] = []) {
+export async function editOrganization(id: string, name: string, features: string[] = [], org_type: 'school' | 'college' = 'college') {
   const { error: authError, supabase } = await requireSuperAdmin()
   if (authError || !supabase) return { success: false, error: authError }
 
-  const { error } = await supabase.from("organizations").update({ name, features }).eq("id", id)
+  const { error } = await supabase.from("organizations").update({ name, features, org_type }).eq("id", id)
   if (error) return { success: false, error: error.message }
 
   return { success: true }
