@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { motion } from "framer-motion"
+import { SearchBar, FilterSelect, itemVariants } from "@/components/ui/page-shell"
+import { useTerms } from "@/lib/org-type-context"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -17,23 +19,12 @@ const containerVariants = {
   },
 }
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 15 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      type: "spring" as const,
-      stiffness: 100,
-      damping: 15,
-    },
-  },
-}
-import { BookOpenCheck, Plus } from "lucide-react"
+import { BookOpenCheck, Plus, Upload } from "lucide-react"
 
 import { ProgramList } from "@/components/programs/program-list"
 import { CreateProgramDialog } from "@/components/programs/create-program-dialog"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 
 import type {
   Program,
@@ -57,6 +48,7 @@ export function ProgramsClientPage({
   institutionId,
   organizationId,
 }: ProgramsClientPageProps) {
+  const t = useTerms()
   const [programs, setPrograms] =
     useState<ProgramWithDepartment[]>(initialPrograms)
 
@@ -70,6 +62,9 @@ export function ProgramsClientPage({
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   const { toast } = useToast()
+  const [search, setSearch] = useState("")
+  const [deptFilter, setDeptFilter] = useState("")
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   const loadPrograms = async () => {
     try {
@@ -264,12 +259,12 @@ export function ProgramsClientPage({
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-[#6C63FF]">Academic Planning</p>
             <div className="mt-1 flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-slate-900">Programs</h1>
+              <h1 className="text-3xl font-semibold text-slate-900">{t.program_plural}</h1>
               <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-[#6C63FF]">
                 {programs.length} Active
               </span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">Create and manage academic programs with better structure and visibility.</p>
+            <p className="mt-2 text-sm text-slate-500">Create and manage {t.program_plural.toLowerCase()} with better structure and visibility.</p>
           </div>
         </div>
 
@@ -278,14 +273,40 @@ export function ProgramsClientPage({
           className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:shadow-md"
         >
           <Plus className="h-4 w-4" />
-          New Program
+          New {t.program}
+        </Button>
+        <Button
+          onClick={() => setIsImportOpen(true)}
+          variant="outline"
+          className="inline-flex items-center gap-2 rounded-2xl border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <Upload className="h-4 w-4" />
+          Import CSV
         </Button>
       </motion.div>
+
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder={`Search ${t.program_plural.toLowerCase()}…`}
+        filters={
+          <FilterSelect
+            label={`All ${t.department_plural}`}
+            value={deptFilter}
+            onChange={setDeptFilter}
+            options={departments.map(d => ({ value: d.id, label: d.name }))}
+          />
+        }
+      />
 
       <motion.div variants={itemVariants}>
         <Card className="p-6 shadow-sm">
         <ProgramList
-          programs={programs}
+          programs={programs.filter(p => {
+            const matchSearch = !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.department?.name?.toLowerCase().includes(search.toLowerCase())
+            const matchDept = !deptFilter || p.department_id === deptFilter
+            return matchSearch && matchDept
+          })}
           isLoading={isLoading}
           onEdit={handleOpenDialog}
           onDelete={triggerDelete}
@@ -310,9 +331,17 @@ export function ProgramsClientPage({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={confirmDelete}
-        title="Delete Program"
-        description="Are you sure you want to delete this program? All classes, students, and subjects associated with this program will be affected."
+        title={`Delete ${t.program}`}
+        description={`Are you sure you want to delete this ${t.program.toLowerCase()}? All classes, students, and subjects associated with this ${t.program.toLowerCase()} will be affected.`}
         loading={isLoading}
+      />
+
+      <BulkImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        entity="programs"
+        institutionId={institutionId}
+        onImported={loadPrograms}
       />
     </motion.div>
   )

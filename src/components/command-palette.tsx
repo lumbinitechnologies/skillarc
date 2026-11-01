@@ -118,6 +118,20 @@ export default function CommandPalette({ role }: { role: string }) {
   const listRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+  const [isMac, setIsMac] = useState(true)
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined") {
+      const uaData = (navigator as any).userAgentData
+      if (uaData?.platform) {
+        setIsMac(/mac/i.test(uaData.platform))
+      } else {
+        const str = `${navigator.platform || ""} ${navigator.userAgent || ""}`
+        setIsMac(/(Mac|iPhone|iPod|iPad)/i.test(str))
+      }
+    }
+  }, [])
+
   // ⌘K / Ctrl+K shortcut
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -218,12 +232,20 @@ export default function CommandPalette({ role }: { role: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        title={isMac ? "Search (⌘K)" : "Search (Ctrl+K)"}
         className="hidden sm:flex min-w-0 flex-1 items-center gap-3 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 transition hover:border-gray-300 hover:bg-white cursor-pointer group"
       >
         <Search size={14} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
         <span className="flex-1 text-left text-sm text-gray-400 group-hover:text-gray-500 transition-colors">Search anything…</span>
-        <kbd className="hidden lg:inline-flex items-center gap-0.5 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-400 shadow-sm">
-          <Command size={10} />K
+        <kbd className="hidden lg:inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-gray-400 shadow-sm">
+          {isMac ? (
+            <>
+              <Command size={10} />
+              <span>K</span>
+            </>
+          ) : (
+            <span>Ctrl K</span>
+          )}
         </kbd>
       </button>
 

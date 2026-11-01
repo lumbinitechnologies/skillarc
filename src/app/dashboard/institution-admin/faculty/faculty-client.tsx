@@ -8,8 +8,9 @@ import { CreateFacultyDialog } from "@/components/faculty/create-faculty-dialog"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
-import { PageShell, PageHeader, SearchBar, itemVariants, actionButtonClass } from "@/components/ui/page-shell"
+import { PageShell, PageHeader, SearchBar, FilterSelect, itemVariants, actionButtonClass } from "@/components/ui/page-shell"
 import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
+import { useTerms } from "@/lib/org-type-context"
 
 interface FacultyClientPageProps {
   initialFaculty: FacultyWithStats[]
@@ -22,8 +23,10 @@ export function FacultyClientPage({
   departments,
   institutionId,
 }: FacultyClientPageProps) {
+  const t = useTerms()
   const [faculty, setFaculty] = useState<FacultyWithStats[]>(initialFaculty)
   const [search, setSearch] = useState("")
+  const [deptFilter, setDeptFilter] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [selectedFaculty, setSelectedFaculty] = useState<FacultyWithStats | null>(null)
@@ -129,20 +132,21 @@ export function FacultyClientPage({
 
   const filtered = faculty.filter(
     (f) =>
-      !search ||
+      (!search ||
       f.name?.toLowerCase().includes(search.toLowerCase()) ||
-      f.email?.toLowerCase().includes(search.toLowerCase())
+      f.email?.toLowerCase().includes(search.toLowerCase())) &&
+      (!deptFilter || f.department_id === deptFilter)
   )
 
   return (
     <PageShell>
       <PageHeader
         icon={<GraduationCap className="h-5 w-5" />}
-        eyebrow="Faculty Management"
-        title="Faculty"
+        eyebrow={`${t.faculty_member} Management`}
+        title={t.faculty_plural}
         count={faculty.length}
         countLabel="Members"
-        subtitle="Track faculty members, departments, and teaching assignments."
+        subtitle={`Track ${t.faculty_plural.toLowerCase()}, ${t.department_plural.toLowerCase()}, and teaching assignments.`}
         actions={
           <>
             <button onClick={() => setIsImportOpen(true)} className={actionButtonClass.secondary}>
@@ -151,7 +155,7 @@ export function FacultyClientPage({
             </button>
             <button onClick={() => setIsOpen(true)} className={actionButtonClass.primary}>
               <Plus className="h-4 w-4" />
-              Add Faculty
+              Add {t.faculty_member}
             </button>
           </>
         }
@@ -161,6 +165,14 @@ export function FacultyClientPage({
         value={search}
         onChange={setSearch}
         placeholder="Search by name or email…"
+        filters={
+          <FilterSelect
+            label={`All ${t.department_plural}`}
+            value={deptFilter}
+            onChange={setDeptFilter}
+            options={departments.map(d => ({ value: d.id, label: d.name }))}
+          />
+        }
       />
 
       <motion.div variants={itemVariants}>
@@ -194,8 +206,8 @@ export function FacultyClientPage({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={confirmDelete}
-        title="Remove Faculty Member"
-        description="This will remove the faculty member and unassign their timetable slots and subject assignments."
+        title={`Remove ${t.faculty_member}`}
+        description={`This will remove the ${t.faculty_member.toLowerCase()} and unassign their timetable slots and subject assignments.`}
         loading={isLoading}
       />
     </PageShell>

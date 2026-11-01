@@ -30,7 +30,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, department_id, role, is_timetable_builder } = body
+    const { name, department_id, role, is_timetable_builder, phone, employee_id } = body
 
     const updateData: any = {}
     if (name) updateData.name = name
@@ -39,6 +39,9 @@ export async function PUT(
     }
     if (department_id !== undefined) {
       updateData.department_id = department_id || null
+    }
+    if (phone !== undefined) {
+      updateData.phone = phone || null
     }
 
     const { data: faculty, error } = await supabase
@@ -58,6 +61,22 @@ export async function PUT(
     if (error) {
       console.error("Faculty update error:", error)
       return NextResponse.json({ error: error.message || "Failed to update faculty" }, { status: 400 })
+    }
+
+    // Save employee_id to staff table if provided
+    if (employee_id !== undefined && faculty?.id) {
+      const trimmed = String(employee_id || "").trim()
+      if (trimmed) {
+        await supabase.from("staff").upsert({
+          id: faculty.id,
+          institution_id: existingFaculty.institution_id,
+          employee_id: trimmed,
+        }, { onConflict: "id" })
+      } else {
+        await supabase.from("staff").update({
+          employee_id: null,
+        }).eq("id", faculty.id)
+      }
     }
 
     // Handle Timetable Builder permission
@@ -92,7 +111,10 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json(faculty)
+    return NextResponse.json({
+      ...faculty,
+      employee_id: employee_id !== undefined ? (String(employee_id || "").trim() || null) : undefined,
+    })
   } catch (error) {
     console.error("Faculty update error:", error)
     return NextResponse.json(

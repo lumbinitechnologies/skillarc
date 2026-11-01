@@ -1,6 +1,14 @@
-day,period,section_name,subject_code,faculty_email,semester
-Monday,1,Section A,CS202,ada.lovelace@example.com,3
-Monday,2,Section A,CS203,grace.hopper@example.com,3
-Monday,3,Section A,CS204,alan.turing@example.com,3
-Tuesday,1,Section A,CS202,ada.lovelace@example.com,3
-Tuesday,2,Section B,CS203,grace.hopper@example.com,3
+day,period,section_name,subject_code,faculty_email,semester,department_name,program_name,room
+Monday,1,Section A,IT201,iskalasailajatest5@gmail.com,1,Information Technology,B.Tech IT,Lab 101
+Monday,2,Section A,IT202,,1,Information Technology,B.Tech IT,Lab 101
+Monday,3,Section A,IT203,,1,Information Technology,B.Tech IT,Room 204
+Tuesday,1,Section A,IT302,iskalasailajatest5@gmail.com,1,Information Technology,B.Tech IT,Room 204
+Tuesday,2,Section A,IT303,,1,Information Technology,B.Tech IT,Lab 102
+Monday,1,cse *a,t101,alan.turing@example.com,1,CSE,CSE*,Room 301
+Monday,2,cse *a,CS202,ada.lovelace@example.com,1,CSE,CSE*,Room 301
+Monday,3,cse *a,CS203,grace.hopper.test@example.com,1,CSE,CSE*,Room 302
+Tuesday,1,cse *a,CS204,grace.hopper.test@example.com,1,CSE,CSE*,Lab 201
+Tuesday,2,cse *a,t101,alan.turing@example.com,1,CSE,CSE*,Room 301
+Wednesday,1,Section B,CS202,ada.lovelace@example.com,1,Computer Science,B.tech Cse (core),Room 105
+Wednesday,2,Section B,CS203,grace.hopper.test@example.com,1,Computer Science,B.tech Cse (core),Room 105
+Wednesday,3,Section B,t101,alan.turing@example.com,1,Computer Science,B.tech Cse (core),Room 105

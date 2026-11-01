@@ -11,11 +11,36 @@ async function authorizeStudent(id: string) {
   if (!actor) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   if (!adminRoles.has(actor.role)) return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
   const admin = createSupabaseAdminClient()
-  const { data: student, error } = await admin.from("students").select("id,institution_id").eq("id", id).maybeSingle()
-  if (error) throw error
-  if (!student) return { response: NextResponse.json({ error: "Student not found" }, { status: 404 }) }
-  if (actor.role === ROLES.INSTITUTION_ADMIN && actor.institution_id !== student.institution_id) return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
-  return { actor, admin, student }
+
+  // 1. Check users table first (primary identity table)
+  const { data: studentUser } = await admin
+    .from("users")
+    .select("id, institution_id, role")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (studentUser) {
+    if (studentUser.role !== ROLES.STUDENT) {
+      return { response: NextResponse.json({ error: "User is not a student" }, { status: 400 }) }
+    }
+    if (actor.role === ROLES.INSTITUTION_ADMIN && actor.institution_id !== studentUser.institution_id) {
+      return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
+    }
+    return { actor, admin, student: studentUser }
+  }
+
+  // 2. Fallback: check students table if users record wasn't found directly
+  const { data: studentRow } = await admin
+    .from("students")
+    .select("id, institution_id")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!studentRow) return { response: NextResponse.json({ error: "Student not found" }, { status: 404 }) }
+  if (actor.role === ROLES.INSTITUTION_ADMIN && actor.institution_id !== studentRow.institution_id) {
+    return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
+  }
+  return { actor, admin, student: studentRow }
 }
 
 export async function PUT(
@@ -36,16 +61,23 @@ export async function PUT(
       program_id,
       registration_number,
       admission_year,
+      phone,
+      dob,
+      gender,
       parentName,
       parentEmail,
       parentPhone,
       parentRelationship,
     } = body
 
-    if (name) {
+    const userUpdate: Record<string, any> = {}
+    if (name !== undefined) userUpdate.name = name
+    if (phone !== undefined) userUpdate.phone = phone || null
+
+    if (Object.keys(userUpdate).length > 0) {
       const { error: userError } = await admin
         .from("users")
-        .update({ name })
+        .update(userUpdate)
         .eq("id", id)
         .eq("role", ROLES.STUDENT)
         .eq("institution_id", student.institution_id)
@@ -59,6 +91,8 @@ export async function PUT(
     if (program_id !== undefined) studentUpdate.program_id = program_id || null
     if (registration_number !== undefined) studentUpdate.registration_number = registration_number || null
     if (admission_year !== undefined) studentUpdate.admission_year = admission_year || null
+    if (dob !== undefined) studentUpdate.dob = dob || null
+    if (gender !== undefined) studentUpdate.gender = gender || null
 
     if (Object.keys(studentUpdate).length > 0) {
       const { error: studentError } = await admin
@@ -164,6 +198,47 @@ export async function DELETE(
     const auth = await authorizeStudent(id)
     if ("response" in auth) return auth.response
     const { admin, student } = auth
+
+    // 1. Clean up all child/dependent records that reference this student to prevent foreign key errors
+    await Promise.allSettled([
+      // Parent relations
+      admin.from("parent_student_relations").delete().eq("student_id", id),
+      // Student profile & documents
+      admin.from("student_documents").delete().eq("student_id", id),
+      admin.from("student_profile_details").delete().eq("student_id", id),
+      admin.from("student_addresses").delete().eq("student_id", id),
+      admin.from("student_emergency_contacts").delete().eq("student_id", id),
+      admin.from("student_notes").delete().eq("student_id", id),
+      admin.from("student_communications").delete().eq("student_id", id),
+      admin.from("student_portal_access").delete().eq("student_id", id),
+      admin.from("student_portal_access").delete().eq("auth_user_id", id),
+      // Attendance & Academics
+      admin.from("attendance_records").delete().eq("student_id", id),
+      admin.from("attendance_warning_letters").delete().eq("student_id", id),
+      admin.from("leave_applications").delete().eq("student_id", id),
+      admin.from("warning_letters").delete().eq("student_id", id),
+      admin.from("submissions").delete().eq("student_id", id),
+      admin.from("grade_entries").delete().eq("student_id", id),
+      admin.from("enrolments").delete().eq("student_id", id),
+      admin.from("payment_plans").delete().eq("student_id", id),
+      admin.from("applications").delete().eq("student_id", id),
+      admin.from("complaints").delete().eq("student_id", id),
+      admin.from("group_members").delete().eq("student_id", id),
+      admin.from("user_permissions").delete().eq("user_id", id),
+      admin.from("audit_logs").delete().eq("user_id", id),
+      // Notifications & preferences
+      admin.from("notifications").delete().eq("user_id", id),
+      admin.from("notification_preferences").delete().eq("user_id", id),
+    ])
+
+    // 2. Delete specialized student record if present
+    await admin
+      .from("students")
+      .delete()
+      .eq("id", id)
+      .eq("institution_id", student.institution_id)
+
+    // 3. Delete from users table
     const { error } = await admin
       .from("users")
       .delete()
@@ -171,11 +246,24 @@ export async function DELETE(
       .eq("role", ROLES.STUDENT)
       .eq("institution_id", student.institution_id)
 
-    if (error) throw error
+    if (error) {
+      console.error("Student user delete error:", error)
+      return NextResponse.json({ error: error.message || "Failed to delete student" }, { status: 400 })
+    }
+
+    // 4. Also remove from Supabase Auth if auth account exists
+    try {
+      await admin.auth.admin.deleteUser(id)
+    } catch (authError) {
+      console.warn("Could not delete student from Supabase Auth:", authError)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Student delete error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Student delete unexpected error:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    )
   }
 }

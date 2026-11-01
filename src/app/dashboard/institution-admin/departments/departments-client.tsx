@@ -2,8 +2,9 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Building2, Plus, Search, Trash2 } from "lucide-react"
+import { Building2, Plus, Search, Trash2, Upload } from "lucide-react"
 import { motion } from "framer-motion"
+import { useTerms } from "@/lib/org-type-context"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -31,6 +32,7 @@ const itemVariants = {
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import {
   Table,
   TableBody,
@@ -54,12 +56,14 @@ export function DepartmentsClientPage({
   initialDepartments,
   institutionId,
 }: Props) {
+  const t = useTerms()
   const [departments, setDepartments] = useState<Department[]>(initialDepartments)
   const [name, setName] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   const loadDepartments = async () => {
     const res = await fetch(`/api/departments?institution_id=${institutionId}`)
@@ -154,32 +158,40 @@ export function DepartmentsClientPage({
               Institution Structure
             </p>
             <div className="mt-1 flex items-center gap-3">
-              <h1 className="text-3xl font-semibold text-slate-900">Departments</h1>
+              <h1 className="text-3xl font-semibold text-slate-900">{t.department_plural}</h1>
               <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-[#6C63FF]">
                 {departments.length} Total
               </span>
             </div>
             <p className="mt-2 text-sm text-slate-500">
-              Create and manage academic departments with a cleaner, more consistent workspace.
+              Create and manage {t.department_plural.toLowerCase()} with a cleaner, more consistent workspace.
             </p>
           </div>
         </div>
+        <Button
+          onClick={() => setIsImportOpen(true)}
+          variant="outline"
+          className="inline-flex items-center gap-2 rounded-2xl border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <Upload className="h-4 w-4" />
+          Import CSV
+        </Button>
       </motion.div>
 
       <motion.div variants={itemVariants}>
         <Card className="p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Add a new department</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Add a new {t.department.toLowerCase()}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Keep the institution catalog organized by department.
+              Keep the institution catalog organized by {t.department.toLowerCase()}.
             </p>
           </div>
           <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Department name"
+              placeholder={`${t.department} name`}
               className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:bg-white"
             />
             <Button
@@ -198,7 +210,7 @@ export function DepartmentsClientPage({
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search departments"
+              placeholder={`Search ${t.department_plural.toLowerCase()}`}
               className="w-full rounded-xl bg-white px-9 py-2.5 text-sm text-slate-700 outline-none transition focus:bg-white"
             />
           </div>
@@ -211,7 +223,7 @@ export function DepartmentsClientPage({
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50">
-                <TableHead className="px-4 py-3">Department</TableHead>
+                <TableHead className="px-4 py-3">{t.department}</TableHead>
                 <TableHead className="w-24 px-4 py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -219,7 +231,7 @@ export function DepartmentsClientPage({
               {filteredDepartments.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={2} className="px-4 py-10 text-center text-sm text-slate-500">
-                    No departments found.
+                    No {t.department_plural.toLowerCase()} found.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -256,9 +268,17 @@ export function DepartmentsClientPage({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onConfirm={confirmDelete}
-        title="Delete Department"
-        description="Are you sure you want to delete this department? All academic programs, sections, and student registries belonging to this department will be impacted."
+        title={`Delete ${t.department}`}
+        description={`Are you sure you want to delete this ${t.department.toLowerCase()}? All academic ${t.program_plural.toLowerCase()}, ${t.section_plural.toLowerCase()}, and student registries belonging to this ${t.department.toLowerCase()} will be impacted.`}
         loading={isDeleting}
+      />
+
+      <BulkImportDialog
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+        entity="departments"
+        institutionId={institutionId}
+        onImported={loadDepartments}
       />
     </motion.div>
   )

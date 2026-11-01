@@ -313,32 +313,15 @@ function mapEvent(row: any): DashboardEvent {
 }
 
 async function loadEventsRows(admin: ReturnType<typeof createSupabaseAdminClient>, institutionId: string | null) {
-  let primaryQuery = admin.from("events").select(`
+  // Single query — image_url / gallery_images are nullable columns, no need for fallbacks.
+  let query = admin.from("events").select(`
     id, title, description, event_date, venue, created_by, image_url, gallery_images,
     event_registrations(user_id)
   `)
-  if (institutionId) primaryQuery = primaryQuery.eq("institution_id", institutionId)
-  const primary = await primaryQuery.order("event_date", { ascending: true })
-  if (!primary.error) return (primary.data ?? []) as any[]
-
-  let fallbackQuery = admin.from("events").select(`
-    id, title, description, event_date, venue, created_by,
-    event_registrations(user_id)
-  `)
-  if (institutionId) fallbackQuery = fallbackQuery.eq("institution_id", institutionId)
-  const fallback = await fallbackQuery.order("event_date", { ascending: true })
-  if (!fallback.error) return (fallback.data ?? []) as any[]
-
-  let bareQuery = admin.from("events").select("id, title, description, event_date, venue, created_by")
-  if (institutionId) bareQuery = bareQuery.eq("institution_id", institutionId)
-  const bare = await bareQuery.order("event_date", { ascending: true })
-  if (!bare.error) return (bare.data ?? []) as any[]
-
-  let simpleQuery = admin.from("events").select("*")
-  if (institutionId) simpleQuery = simpleQuery.eq("institution_id", institutionId)
-  const simple = await simpleQuery.order("event_date", { ascending: true })
-  if (simple.error) throw new Error(simple.error.message)
-  return (simple.data ?? []) as any[]
+  if (institutionId) query = query.eq("institution_id", institutionId)
+  const { data, error } = await query.order("event_date", { ascending: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as any[]
 }
 
 async function loadEventsDashboardDataImpl(context: UserContext): Promise<EventsDashboardData> {
