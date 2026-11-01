@@ -550,7 +550,7 @@ export const timetableService = {
     // 2. Check if a slot already exists in this logical cell
     let existingSlotId: string | null = null
     try {
-      let checkQuery = supabase
+      const checkQuery = supabase
         .from("timetable_slots")
         .select("id")
         .eq("institution_id", institutionId)
@@ -631,7 +631,7 @@ export const timetableService = {
     }
 
     // 4. If no slot exists, INSERT (with tier fallback)
-    let { data: inserted1, error: insertError1 } = await supabase
+    const { data: inserted1, error: insertError1 } = await supabase
       .from("timetable_slots")
       .insert(fullPayload)
       .select()
@@ -670,7 +670,7 @@ export const timetableService = {
       console.warn("saveSlot: Insert Tier 1 failed, trying Tier 2:", insertError1.message)
 
       // Tier 2: Base schema with week_id
-      let { data: inserted2, error: insertError2 } = await supabase
+      const { data: inserted2, error: insertError2 } = await supabase
         .from("timetable_slots")
         .insert(tier2Payload)
         .select()

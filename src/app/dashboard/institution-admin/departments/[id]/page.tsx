@@ -93,7 +93,7 @@ export default async function DepartmentDetailPage({ params }: PageProps) {
     .order("name")
 
   // Load timetable builder permissions for faculty
-  let { data: perm } = await adminClient
+  const { data: perm } = await adminClient
     .from("permissions")
     .select("id")
     .eq("name", "timetable_builder")
