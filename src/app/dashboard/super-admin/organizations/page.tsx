@@ -11,6 +11,7 @@ export default async function OrganizationsPage() {
       id,
       name,
       created_at,
+      org_type,
       institutions(count)
     `)
     .order("created_at", { ascending: false })
@@ -54,6 +55,7 @@ export default async function OrganizationsPage() {
       id: org.id,
       name: org.name,
       created_at: org.created_at,
+      org_type: (org.org_type ?? 'college') as 'school' | 'college',
       institution_count: org.institutions?.[0]?.count ?? 0,
       admin_count: adminCountMap[org.id] ?? 0,
       features: featuresMap[org.id] || [],

@@ -41,6 +41,8 @@ export type CreateStudentInput = {
   registration_number?: string
   admission_year?: number
   phone?: string
+  dob?: string | null
+  gender?: string | null
   parentName?: string
   parentEmail?: string
   parentPhone?: string

@@ -6,18 +6,24 @@ import { ParentList } from "@/components/parents/parent-list"
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
-import { PageShell, PageHeader, SearchBar, itemVariants } from "@/components/ui/page-shell"
+import { PageShell, PageHeader, SearchBar, FilterSelect, itemVariants } from "@/components/ui/page-shell"
 import { motion } from "framer-motion"
 import type { Parent } from "@/modules/parents"
 
 interface ParentsClientPageProps {
-  initialParents: Parent[]
+  initialParents: any[]
   institutionId: string
+  departments: Array<{ id: string; name: string }>
+  programs: Array<{ id: string; name: string; department_id: string }>
+  sections: Array<{ id: string; name: string; program_id: string }>
 }
 
-export function ParentsClientPage({ initialParents, institutionId }: ParentsClientPageProps) {
-  const [parents, setParents] = useState<Parent[]>(initialParents)
+export function ParentsClientPage({ initialParents, institutionId, departments, programs, sections }: ParentsClientPageProps) {
+  const [parents, setParents] = useState<any[]>(initialParents)
   const [search, setSearch] = useState("")
+  const [deptFilter, setDeptFilter] = useState("")
+  const [progFilter, setProgFilter] = useState("")
+  const [secFilter, setSecFilter] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -67,11 +73,18 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
     }
   }
 
-  const filtered = parents.filter((p) =>
-    !search ||
-    p.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.email?.toLowerCase().includes(search.toLowerCase())
-  )
+  const filteredPrograms = programs.filter(p => !deptFilter || p.department_id === deptFilter)
+  const filteredSections = sections.filter(s => !progFilter || s.program_id === progFilter)
+
+  const filtered = parents.filter((p) => {
+    const searchOk = !search ||
+      p.name?.toLowerCase().includes(search.toLowerCase()) ||
+      p.email?.toLowerCase().includes(search.toLowerCase())
+    const deptOk = !deptFilter || p._departmentIds?.includes(deptFilter)
+    const progOk = !progFilter || p._programIds?.includes(progFilter)
+    const secOk = !secFilter || p._sectionIds?.includes(secFilter)
+    return searchOk && deptOk && progOk && secOk
+  })
 
   return (
     <PageShell>
@@ -88,6 +101,28 @@ export function ParentsClientPage({ initialParents, institutionId }: ParentsClie
         value={search}
         onChange={setSearch}
         placeholder="Search by name or email…"
+        filters={
+          <>
+            <FilterSelect
+              label="All Departments"
+              value={deptFilter}
+              onChange={(v) => { setDeptFilter(v); setProgFilter(""); setSecFilter("") }}
+              options={departments.map(d => ({ value: d.id, label: d.name }))}
+            />
+            <FilterSelect
+              label="All Programs"
+              value={progFilter}
+              onChange={(v) => { setProgFilter(v); setSecFilter("") }}
+              options={filteredPrograms.map(p => ({ value: p.id, label: p.name }))}
+            />
+            <FilterSelect
+              label="All Sections"
+              value={secFilter}
+              onChange={setSecFilter}
+              options={filteredSections.map(s => ({ value: s.id, label: s.name }))}
+            />
+          </>
+        }
       />
 
       {/* Info banner */}

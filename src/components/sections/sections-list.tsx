@@ -2,6 +2,7 @@
 
 import type { SectionWithFacultyAdvisor } from "@/modules/sections"
 import { Trash2, Edit2, GraduationCap, BookOpen, Users, UserCheck, AlertTriangle } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 interface SectionsListProps {
   sections: SectionWithFacultyAdvisor[]
@@ -57,6 +58,9 @@ export function SectionsList({
   onEdit,
   onDelete,
 }: SectionsListProps) {
+  const t = useTerms()
+  const isSchool = useIsSchool()
+
   if (isLoading) {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 16 }}>
@@ -88,8 +92,8 @@ export function SectionsList({
         }}>
           <BookOpen size={24} color="#1d4ed8" />
         </div>
-        <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 4 }}>No sections yet</p>
-        <p style={{ fontSize: 13, color: "#9ca3af" }}>Create a section to get started</p>
+        <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 4 }}>No {t.section_plural.toLowerCase()} yet</p>
+        <p style={{ fontSize: 13, color: "#9ca3af" }}>Create a {t.section.toLowerCase()} to get started</p>
       </div>
     )
   }
@@ -102,7 +106,8 @@ export function SectionsList({
       fontFamily: font,
     }}>
       {sections.map((section) => {
-        const semColor = semesterColors[section.semester] ?? semesterColors[8]
+        // For schools: semester is always defaulted to 1 so use program colour for the accent bar instead
+        const semColor = isSchool ? getProgramColor(section.program?.name) : (semesterColors[section.semester] ?? semesterColors[8])
         const progColor = getProgramColor(section.program?.name)
         const hasAdvisor = !!section.faculty_advisor
         const enrolled = section.student_count ?? 0
@@ -146,18 +151,21 @@ export function SectionsList({
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-                    Section {section.name}
+                    {t.section} {section.name}
                   </h3>
-                  <span style={{
-                    display: "inline-block",
-                    fontSize: 10, fontWeight: 700,
-                    color: semColor.text, backgroundColor: semColor.bg,
-                    border: `1px solid ${semColor.border}`,
-                    padding: "2px 9px", borderRadius: 20, letterSpacing: "0.05em",
-                    marginTop: 2,
-                  }}>
-                    Semester {romanNumerals[section.semester] ?? section.semester}
-                  </span>
+                  {/* Schools don't have semester — hide the badge entirely */}
+                  {!isSchool && (
+                    <span style={{
+                      display: "inline-block",
+                      fontSize: 10, fontWeight: 700,
+                      color: semColor.text, backgroundColor: semColor.bg,
+                      border: `1px solid ${semColor.border}`,
+                      padding: "2px 9px", borderRadius: 20, letterSpacing: "0.05em",
+                      marginTop: 2,
+                    }}>
+                      {t.semester} {romanNumerals[section.semester] ?? section.semester}
+                    </span>
+                  )}
                 </div>
               </div>
 

@@ -292,8 +292,12 @@ END:VCALENDAR`
                         {day}
                       </td>
                       {periods.map((p) => {
+                        const pNum = Number(String(p.id).replace(/[^0-9]/g, ""))
                         const slot = slots.find(
-                          (s) => s.day === day && s.period === p.id
+                          (s) =>
+                            s.day === day &&
+                            (s.period === p.id ||
+                              Number(String(s.period).replace(/[^0-9]/g, "")) === pNum)
                         )
                         const assignedSubject = slot?.subject
 

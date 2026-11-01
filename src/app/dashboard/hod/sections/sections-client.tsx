@@ -3,6 +3,7 @@
 import { motion } from "framer-motion"
 import { Layers, Users, UserCheck } from "lucide-react"
 import { PageShell, PageHeader } from "@/components/ui/page-shell"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Section {
   id: string
@@ -24,13 +25,14 @@ export default function HodSectionsClient({
   hodName: string
   sections: Section[]
 }) {
+  const t = useTerms()
   return (
     <PageShell>
       <PageHeader
         icon={<Layers className="h-5 w-5" />}
         eyebrow="HOD Portal"
-        title="Sections"
-        subtitle={`${sections.length} sections across the institution.`}
+        title={t.section_plural}
+        subtitle={`${sections.length} ${t.section_plural.toLowerCase()} across the institution.`}
       />
 
       {sections.length === 0 ? (

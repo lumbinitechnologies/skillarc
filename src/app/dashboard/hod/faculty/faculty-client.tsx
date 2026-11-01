@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { GraduationCap, ChevronDown, BookOpen } from "lucide-react"
 import { PageShell, PageHeader } from "@/components/ui/page-shell"
+import { useTerms } from "@/lib/org-type-context"
 
 interface FacultyAssignment {
   subjectName: string
@@ -38,6 +39,7 @@ export default function HodFacultyClient({
   hodName: string
   faculty: FacultyMember[]
 }) {
+  const t = useTerms()
   const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
@@ -45,14 +47,14 @@ export default function HodFacultyClient({
       <PageHeader
         icon={<GraduationCap className="h-5 w-5" />}
         eyebrow="HOD Portal"
-        title="Faculty"
-        subtitle={`${faculty.length} faculty members in the institution.`}
+        title={t.faculty_plural}
+        subtitle={`${faculty.length} ${t.faculty_plural.toLowerCase()} in the institution.`}
       />
 
       <motion.div variants={container} initial="hidden" animate="show" className="rounded-3xl border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-50">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--primary)]">Department</p>
-          <h2 className="mt-0.5 text-base font-bold text-slate-900">Faculty Directory</h2>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--primary)]">{t.department}</p>
+          <h2 className="mt-0.5 text-base font-bold text-slate-900">{t.faculty_member} Directory</h2>
         </div>
 
         {faculty.length === 0 ? (

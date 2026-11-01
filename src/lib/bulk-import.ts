@@ -2,7 +2,21 @@ export interface BulkImportRow {
   [key: string]: string | undefined
 }
 
+/**
+ * Detect the delimiter used in a CSV/TSV file.
+ * Looks at the first line and counts tabs vs commas — whichever appears more wins.
+ * Falls back to comma for ambiguous cases.
+ */
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/)[0] ?? ""
+  const tabCount = (firstLine.match(/\t/g) ?? []).length
+  const commaCount = (firstLine.match(/,/g) ?? []).length
+  // If there are any tabs and they outnumber or equal commas, use tab
+  return tabCount > 0 && tabCount >= commaCount ? "\t" : ","
+}
+
 export function parseCsvText(text: string): BulkImportRow[] {
+  const delimiter = detectDelimiter(text)
   const parsedRows: string[][] = []
   let currentRow: string[] = []
   let currentValue = ""
@@ -27,7 +41,7 @@ export function parseCsvText(text: string): BulkImportRow[] {
       continue
     }
 
-    if (char === "," && !inQuotes) {
+    if (char === delimiter && !inQuotes) {
       currentRow.push(currentValue)
       currentValue = ""
       continue
@@ -61,11 +75,17 @@ export function parseCsvText(text: string): BulkImportRow[] {
   const body = parsedRows.slice(1)
 
   return body
+    // Skip rows where ALL cells are empty (blank separator lines in TSV files)
     .filter((cells) => cells.some((cell) => cell.trim() !== ""))
+    // Also skip rows that don't have any header-mapped values
+    .filter((cells) => {
+      const hasData = headers.some((h, idx) => h && cells[idx]?.trim())
+      return hasData
+    })
     .map((cells) => {
       const row: BulkImportRow = {}
       headers.forEach((header, idx) => {
-        row[header] = cells[idx] ?? ""
+        if (header) row[header] = cells[idx] ?? ""
       })
       return row
     })

@@ -356,122 +356,126 @@ export const timetableService = {
 
   // ─── Slots Management (With Fallback) ───────────────────────────────────────
   async getSlots(institutionId: string, sectionId: string, semester: number, weekId?: string | null): Promise<Slot[]> {
+    const slotSelect = `
+      id,
+      day,
+      period,
+      subject_id,
+      faculty_id,
+      week_id,
+      room,
+      delivery_mode,
+      meeting_link,
+      notes,
+      faculty:faculty_id(id, name),
+      subjects(
+        id,
+        name,
+        code,
+        semester,
+        institution_id,
+        program_id,
+        credits,
+        subject_type
+      )
+    `
+    const slotSelectFallback = `
+      id,
+      day,
+      period,
+      subject_id,
+      faculty_id,
+      week_id,
+      faculty:faculty_id(id, name),
+      subjects(
+        id,
+        name,
+        code,
+        semester,
+        institution_id,
+        program_id,
+        credits,
+        subject_type
+      )
+    `
+
+    const mapRow = (s: any, useFallback = false): Slot => ({
+      id: s.id,
+      day: s.day,
+      period: `P${s.period}`,
+      faculty_id: s.faculty_id ?? null,
+      faculty_name: s.faculty?.name ?? null,
+      week_id: s.week_id ?? null,
+      room: useFallback ? null : (s.room ?? null),
+      delivery_mode: useFallback ? "ON_CAMPUS" : (s.delivery_mode ?? "ON_CAMPUS"),
+      meeting_link: useFallback ? null : (s.meeting_link ?? null),
+      notes: useFallback ? null : (s.notes ?? null),
+      subject: s.subjects
+        ? { ...s.subjects, faculty_name: s.faculty?.name ?? null }
+        : undefined,
+    })
+
     try {
-      let query = supabase
+      // Always fetch base slots (week_id = null) — these include CSV-imported slots
+      const baseQuery = supabase
         .from("timetable_slots")
-        .select(`
-          id,
-          day,
-          period,
-          subject_id,
-          faculty_id,
-          week_id,
-          room,
-          delivery_mode,
-          meeting_link,
-          notes,
-          faculty:faculty_id(id, name),
-          subjects(
-            id,
-            name,
-            code,
-            semester,
-            institution_id,
-            program_id,
-            credits,
-            subject_type
-          )
-        `)
+        .select(slotSelect)
         .eq("institution_id", institutionId)
         .eq("section_id", sectionId)
         .eq("semester", semester)
+        .is("week_id", null)
 
-      if (weekId) {
-        query = query.eq("week_id", weekId)
-      } else {
-        query = query.is("week_id", null)
-      }
+      const { data: baseData, error: baseError } = await baseQuery
 
-      const { data, error } = await query
-
-      if (error) {
-        // Fallback for when room / delivery_mode columns are not yet in DB schema
-        console.warn("getSlots: retrying with base schema fallback:", error.message)
-        let fallbackQuery = supabase
+      let baseSlots: Slot[] = []
+      if (!baseError && baseData) {
+        baseSlots = baseData.map((s: any) => mapRow(s, false))
+      } else if (baseError) {
+        // Fallback without extended columns
+        const { data: baseFallback } = await supabase
           .from("timetable_slots")
-          .select(`
-            id,
-            day,
-            period,
-            subject_id,
-            faculty_id,
-            week_id,
-            faculty:faculty_id(id, name),
-            subjects(
-              id,
-              name,
-              code,
-              semester,
-              institution_id,
-              program_id,
-              credits,
-              subject_type
-            )
-          `)
+          .select(slotSelectFallback)
           .eq("institution_id", institutionId)
           .eq("section_id", sectionId)
           .eq("semester", semester)
-
-        if (weekId) {
-          fallbackQuery = fallbackQuery.eq("week_id", weekId)
-        } else {
-          fallbackQuery = fallbackQuery.is("week_id", null)
-        }
-
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery
-        if (fallbackError) {
-          console.error("getSlots fallback failed:", fallbackError.message)
-          return []
-        }
-
-        return (fallbackData ?? []).map((s: any) => ({
-          id: s.id,
-          day: s.day,
-          period: `P${s.period}`,
-          faculty_id: s.faculty_id ?? null,
-          faculty_name: s.faculty?.name ?? null,
-          week_id: s.week_id ?? null,
-          room: null,
-          delivery_mode: "ON_CAMPUS",
-          meeting_link: null,
-          notes: null,
-          subject: s.subjects
-            ? {
-                ...s.subjects,
-                faculty_name: s.faculty?.name ?? null,
-              }
-            : undefined,
-        }))
+          .is("week_id", null)
+        baseSlots = (baseFallback ?? []).map((s: any) => mapRow(s, true))
       }
 
-      return (data ?? []).map((s: any) => ({
-        id: s.id,
-        day: s.day,
-        period: `P${s.period}`,
-        faculty_id: s.faculty_id ?? null,
-        faculty_name: s.faculty?.name ?? null,
-        week_id: s.week_id ?? null,
-        room: s.room ?? null,
-        delivery_mode: s.delivery_mode ?? "ON_CAMPUS",
-        meeting_link: s.meeting_link ?? null,
-        notes: s.notes ?? null,
-        subject: s.subjects
-          ? {
-              ...s.subjects,
-              faculty_name: s.faculty?.name ?? null,
-            }
-          : undefined,
-      }))
+      // If a specific week is selected, also fetch week-specific slots
+      // Week-specific slots take priority over base slots for the same day+period
+      if (weekId) {
+        const weekQuery = supabase
+          .from("timetable_slots")
+          .select(slotSelect)
+          .eq("institution_id", institutionId)
+          .eq("section_id", sectionId)
+          .eq("semester", semester)
+          .eq("week_id", weekId)
+
+        const { data: weekData, error: weekError } = await weekQuery
+
+        let weekSlots: Slot[] = []
+        if (!weekError && weekData) {
+          weekSlots = weekData.map((s: any) => mapRow(s, false))
+        } else if (weekError) {
+          const { data: weekFallback } = await supabase
+            .from("timetable_slots")
+            .select(slotSelectFallback)
+            .eq("institution_id", institutionId)
+            .eq("section_id", sectionId)
+            .eq("semester", semester)
+            .eq("week_id", weekId)
+          weekSlots = (weekFallback ?? []).map((s: any) => mapRow(s, true))
+        }
+
+        // Merge: week-specific slots override base slots for the same (day, period)
+        const overriddenCells = new Set(weekSlots.map((s) => `${s.day}-${s.period}`))
+        const mergedBaseSlots = baseSlots.filter((s) => !overriddenCells.has(`${s.day}-${s.period}`))
+        return [...mergedBaseSlots, ...weekSlots]
+      }
+
+      return baseSlots
     } catch (err) {
       console.error("getSlots exception:", err)
       return []

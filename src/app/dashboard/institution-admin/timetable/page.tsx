@@ -24,7 +24,7 @@ export default async function TimetablePage() {
     redirect("/dashboard")
   }
 
-  let hasAccess = [ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)
+  let hasAccess = [ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN, ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)
 
   if (!hasAccess && user.id) {
     const { data: perm } = await adminClient
@@ -51,7 +51,11 @@ export default async function TimetablePage() {
     redirect("/dashboard")
   }
 
-  const institutionId = profile.institution_id
+  let institutionId = profile.institution_id
+  if (!institutionId && (profile.role === ROLES.SUPER_ADMIN || profile.role === ROLES.ORG_ADMIN)) {
+    const { data: inst } = await adminClient.from("institutions").select("id").limit(1).maybeSingle()
+    institutionId = inst?.id ?? null
+  }
 
   const [departmentsRes, programsRes, sectionsRes] = await Promise.all([
     supabase
@@ -81,6 +85,7 @@ export default async function TimetablePage() {
       departments={departmentsData ?? []}
       programs={programsData ?? []}
       sections={sectionsData ?? []}
+      institutionId={institutionId ?? ""}
     />
   )
 }

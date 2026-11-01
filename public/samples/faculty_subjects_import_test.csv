@@ -1,4 +1,9 @@
-faculty_email,subject_code,section_name,semester,academic_year,faculty_name,subject_name
-ada.lovelace@example.com,CS202,Section A,3,2024-2025,Prof. Ada Lovelace,Database Management Systems
-grace.hopper@example.com,CS203,Section A,3,2024-2025,Prof. Grace Hopper,Computer Networks
-alan.turing@example.com,CS204,Section A,3,2024-2025,Dr. Alan Turing,Data Structures Lab
+faculty_name,subject_code,subject_name
+Dr. Sailaja Iskala,IT201,Web Technologies
+Dr. Sailaja Iskala,IT202,Web Technologies Lab
+Dr. Sailaja Iskala,IT302,Information & Network Security
+Dr. Sailaja Iskala,IT303,Cloud Computing & DevOps
+Prof. Ada Lovelace,CS202,Database Management Systems
+Prof. Grace Hopper,CS203,Computer Networks
+Prof. Grace Hopper,CS204,Data Structures Lab
+Dr. Alan Turing,t101,data structures

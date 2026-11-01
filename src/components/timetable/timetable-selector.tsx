@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Layers, CalendarDays, Users2, Check, ChevronDown, CalendarRange } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
 
@@ -189,6 +190,8 @@ function FlowSelect({
 export function TimetableSelector({ departments, programs, sections }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const t = useTerms()
+  const isSchool = useIsSchool()
 
   const [selectedDepartment, setSelectedDepartment] = useState("")
   const [selectedProgram, setSelectedProgram] = useState("")
@@ -226,17 +229,21 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
   }, [selectedProgram, sections])
 
   const availableSections = useMemo(() => {
-    if (!selectedProgram || !selectedSemester) return []
+    if (!selectedProgram) return []
+    if (isSchool) return sections.filter((s) => s.program_id === selectedProgram)
+    if (!selectedSemester) return []
     return sections.filter(
       (s) => s.program_id === selectedProgram && s.semester === Number(selectedSemester)
     )
-  }, [selectedProgram, selectedSemester, sections])
+  }, [selectedProgram, selectedSemester, sections, isSchool])
 
   const departmentName = departments.find((d) => d.id === selectedDepartment)?.name
   const programName = programs.find((p) => p.id === selectedProgram)?.name
   const sectionName = availableSections.find((s) => s.id === selectedSection)?.name
 
-  const canBuild = Boolean(selectedDepartment && selectedProgram && selectedSemester && selectedSection)
+  const canBuild = isSchool
+    ? Boolean(selectedDepartment && selectedProgram && selectedSection)
+    : Boolean(selectedDepartment && selectedProgram && selectedSemester && selectedSection)
 
   return (
     <Card
@@ -284,11 +291,11 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
           index={1}
           state={selectedDepartment ? "done" : "active"}
           icon={<Layers size={14} />}
-          label="Department"
+          label={t.department}
         >
           <FlowSelect
             value={selectedDepartment}
-            placeholder="Select a department"
+            placeholder={`Select a ${t.department.toLowerCase()}`}
             onChange={(v) => {
               setSelectedDepartment(v)
               setSelectedProgram("")
@@ -308,13 +315,13 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
           index={2}
           state={!selectedDepartment ? "locked" : selectedProgram ? "done" : "active"}
           icon={<Layers size={14} />}
-          label="Program"
+          label={t.program}
         >
           <FlowSelect
             value={selectedProgram}
-            placeholder="Select a program"
+            placeholder={`Select a ${t.program.toLowerCase()}`}
             disabled={!selectedDepartment}
-            lockedHint="Choose a department first"
+            lockedHint={`Choose a ${t.department.toLowerCase()} first`}
             onChange={(v) => {
               setSelectedProgram(v)
               setSelectedSemester("")
@@ -329,17 +336,18 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
           </FlowSelect>
         </StepRow>
 
+        {!isSchool && (
         <StepRow
           index={3}
           state={!selectedProgram ? "locked" : selectedSemester ? "done" : "active"}
           icon={<CalendarDays size={14} />}
-          label="Semester"
+          label={t.semester}
         >
           <FlowSelect
             value={selectedSemester}
-            placeholder="Select a semester"
+            placeholder={`Select a ${t.semester.toLowerCase()}`}
             disabled={!selectedProgram}
-            lockedHint="Choose a program first"
+            lockedHint={`Choose a ${t.program.toLowerCase()} first`}
             onChange={(v) => {
               setSelectedSemester(v)
               setSelectedSection("")
@@ -347,29 +355,30 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
           >
             {semesters.map((s) => (
               <option key={s} value={s}>
-                Semester {s}
+                {t.semester} {s}
               </option>
             ))}
           </FlowSelect>
         </StepRow>
+        )}
 
         <StepRow
-          index={4}
-          state={!selectedSemester ? "locked" : selectedSection ? "done" : "active"}
+          index={isSchool ? 3 : 4}
+          state={(!isSchool && !selectedSemester) || !selectedProgram ? "locked" : selectedSection ? "done" : "active"}
           icon={<Users2 size={14} />}
-          label="Section"
+          label={t.section}
           isLast
         >
           <FlowSelect
             value={selectedSection}
-            placeholder="Select a section"
-            disabled={!selectedSemester}
-            lockedHint="Choose a semester first"
+            placeholder={`Select a ${t.section.toLowerCase()}`}
+            disabled={isSchool ? !selectedProgram : !selectedSemester}
+            lockedHint={isSchool ? `Choose a ${t.program.toLowerCase()} first` : `Choose a ${t.semester.toLowerCase()} first`}
             onChange={setSelectedSection}
           >
             {availableSections.map((s) => (
               <option key={s.id} value={s.id}>
-                Section {s.name}
+                {t.section} {s.name}
               </option>
             ))}
           </FlowSelect>
@@ -398,10 +407,14 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
             <span style={{ color: "#E57D37" }}>{departmentName}</span>
             <span style={{ color: "#d1d5db" }}>/</span>
             <span>{programName}</span>
+            {!isSchool && (
+            <>
             <span style={{ color: "#d1d5db" }}>/</span>
-            <span>Semester {selectedSemester}</span>
+            <span>{t.semester} {selectedSemester}</span>
+            </>
+            )}
             <span style={{ color: "#d1d5db" }}>/</span>
-            <span>Section {sectionName}</span>
+            <span>{t.section} {sectionName}</span>
           </div>
         )}
         <Button

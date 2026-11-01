@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { GraduationCap, Mail, Trash2, Edit2, BookOpen, Users, Send } from "lucide-react"
+import { GraduationCap, Mail, Trash2, Edit2, BookOpen, Users, Send, Phone, BadgeCheck } from "lucide-react"
 import type { FacultyWithStats } from "@/modules/faculty/types/faculty.types"
 import { ListSkeleton, EmptyState } from "@/components/ui/page-shell"
 
@@ -49,7 +49,7 @@ export function FacultyList({
       {/* Table header */}
       <div className="hidden md:grid grid-cols-[2.5fr_2fr_1.5fr_0.5fr_0.5fr_auto] gap-4 border-b border-slate-100 bg-slate-50/80 px-6 py-3">
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Member</span>
-        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Email</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Contact</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Department</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 text-center">Subjects</span>
         <span className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400 text-center">Sections</span>
@@ -82,9 +82,21 @@ export function FacultyList({
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar initials={initials} imageUrl={f.profile_image_url} />
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-900 text-sm truncate">{f.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-slate-900 text-sm truncate">{f.name}</p>
+                      {f.employee_id && (
+                        <span className="inline-flex items-center rounded-md bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#E57D37]">
+                          EMP ID: {f.employee_id}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-400 truncate">{f.email}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{f.department?.name ?? "—"}</p>
+                    {f.phone && (
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate flex items-center gap-1 font-medium">
+                        <Phone className="h-3 w-3 text-slate-400" /> {f.phone}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0">
@@ -95,7 +107,7 @@ export function FacultyList({
 
               {/* Desktop grid row */}
               <div className="hidden md:grid grid-cols-[2.5fr_2fr_1.5fr_0.5fr_0.5fr_auto] gap-4 items-center">
-                {/* Name + role */}
+                {/* Name + role + Employee ID */}
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar initials={initials} imageUrl={f.profile_image_url} />
                   <div className="min-w-0">
@@ -112,16 +124,36 @@ export function FacultyList({
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {roleLabel[role] ?? "Faculty Member"}
-                    </p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <p className="text-[11px] text-slate-400">
+                        {roleLabel[role] ?? "Faculty Member"}
+                      </p>
+                      {f.employee_id && (
+                        <>
+                          <span className="text-slate-300 text-xs">•</span>
+                          <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 font-mono text-[11px] font-bold text-[#E57D37]">
+                            EMP ID: {f.employee_id}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Email */}
-                <div className="flex items-center gap-2 min-w-0">
-                  <Mail className="h-3.5 w-3.5 shrink-0 text-slate-300" />
-                  <span className="text-sm text-slate-600 truncate">{f.email}</span>
+                {/* Email + Phone */}
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    <span className="text-xs text-slate-600 truncate">{f.email}</span>
+                  </div>
+                  {f.phone ? (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Phone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <span className="text-xs font-medium text-slate-600 truncate">{f.phone}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 italic">No phone added</span>
+                  )}
                 </div>
 
                 {/* Department */}

@@ -38,6 +38,8 @@ import {
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
 import type { DashboardSession } from "@/lib/dashboard-session"
+import { useOrgType } from "@/lib/org-type-context"
+import { getTerm, type OrgType } from "@/lib/org-terminology"
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
@@ -49,102 +51,108 @@ type MenuItem = {
   prefetch?: boolean
 }
 
-const roleMenus: Record<Role, MenuItem[]> = {
-  [ROLES.SUPER_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin" },
-    { name: "Organizations", icon: Building2, path: "/dashboard/super-admin/organizations" },
-    { name: "Org Admins", icon: UserCog, path: "/dashboard/super-admin/org-admins" },
-    { name: "Institutions", icon: School, path: "/dashboard/super-admin/institutions" },
-    { name: "Analytics", icon: BarChart3, path: "/dashboard/super-admin/analytics" },
-    { name: "Audit Logs", icon: ClipboardList, path: "/dashboard/super-admin/audit-logs" },
-    { name: "Settings", icon: Settings, path: "/dashboard/super-admin/settings" },
-  ],
+function buildRoleMenus(orgType: OrgType): Record<Role, MenuItem[]> {
+  const t = (key: Parameters<typeof getTerm>[1]) => getTerm(orgType, key)
+  return {
+    [ROLES.SUPER_ADMIN]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/super-admin" },
+      { name: "Organizations", icon: Building2, path: "/dashboard/super-admin/organizations" },
+      { name: "Org Admins", icon: UserCog, path: "/dashboard/super-admin/org-admins" },
+      { name: "Institutions", icon: School, path: "/dashboard/super-admin/institutions" },
+      { name: "Analytics", icon: BarChart3, path: "/dashboard/super-admin/analytics" },
+      { name: "Audit Logs", icon: ClipboardList, path: "/dashboard/super-admin/audit-logs" },
+      { name: "Settings", icon: Settings, path: "/dashboard/super-admin/settings" },
+    ],
 
-  [ROLES.ORG_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin" },
-  ],
+    [ROLES.ORG_ADMIN]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/org-admin" },
+    ],
 
-  [ROLES.INSTITUTION_ADMIN]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin" },
-    { name: "Admissions", icon: FileText, path: "/dashboard/institution-admin/admissions" },
-    { name: "Intake Cohorts", icon: FolderKanban, path: "/dashboard/institution-admin/intakes" },
-    { name: "Billing Desk", icon: CreditCard, path: "/dashboard/institution-admin/billing" },
-    { name: "Interventions", icon: AlertTriangle, path: "/dashboard/institution-admin/warnings" },
-    { name: "Departments", icon: Layers, path: "/dashboard/institution-admin/departments" },
-    { name: "Programs", icon: ClipboardList, path: "/dashboard/institution-admin/programs" },
-    { name: "Sections", icon: BookOpen, path: "/dashboard/institution-admin/sections" },
-    { name: "Faculty", icon: GraduationCap, path: "/dashboard/institution-admin/faculty" },
-    { name: "Assign Courses", icon: UserCheck, path: "/dashboard/institution-admin/faculty-subjects" },
-    { name: "Students", icon: Users, path: "/dashboard/institution-admin/students" },
-    { name: "Parents", icon: Users, path: "/dashboard/institution-admin/parents" },
-    { name: "Courses", icon: BookOpen, path: "/dashboard/institution-admin/subjects" },
-    { name: "Timetable", icon: Calendar, path: "/dashboard/institution-admin/timetable" },
-    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/institution-admin/attendance" },
-    { name: "Events", icon: Calendar, path: "/dashboard/institution-admin/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/institution-admin/placements" },
-  ],
+    [ROLES.INSTITUTION_ADMIN]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/institution-admin" },
+      { name: "Admissions", icon: FileText, path: "/dashboard/institution-admin/admissions" },
+      { name: "Intake Cohorts", icon: FolderKanban, path: "/dashboard/institution-admin/intakes" },
+      { name: "Billing Desk", icon: CreditCard, path: "/dashboard/institution-admin/billing" },
+      { name: "Interventions", icon: AlertTriangle, path: "/dashboard/institution-admin/warnings" },
+      { name: t("department_plural"), icon: Layers, path: "/dashboard/institution-admin/departments" },
+      { name: t("program_plural"), icon: ClipboardList, path: "/dashboard/institution-admin/programs" },
+      { name: t("section_plural"), icon: BookOpen, path: "/dashboard/institution-admin/sections" },
+      { name: t("faculty_plural"), icon: GraduationCap, path: "/dashboard/institution-admin/faculty" },
+      { name: `Assign ${t("subject_plural")}`, icon: UserCheck, path: "/dashboard/institution-admin/faculty-subjects" },
+      { name: "Students", icon: Users, path: "/dashboard/institution-admin/students" },
+      { name: "Parents", icon: Users, path: "/dashboard/institution-admin/parents" },
+      { name: t("subject_plural"), icon: BookOpen, path: "/dashboard/institution-admin/subjects" },
+      { name: "Timetable", icon: Calendar, path: "/dashboard/institution-admin/timetable" },
+      { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/institution-admin/attendance" },
+      { name: "Events", icon: Calendar, path: "/dashboard/institution-admin/events" },
+      { name: t("placement_plural"), icon: Briefcase, path: "/dashboard/institution-admin/placements" },
+    ],
 
-  [ROLES.HOD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod" },
-    { name: "Students", icon: Users, path: "/dashboard/hod/students" },
-    { name: "Faculty", icon: GraduationCap, path: "/dashboard/hod/faculty" },
-    { name: "Sections", icon: Layers, path: "/dashboard/hod/sections" },
-    { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/hod/attendance" },
-    { name: "Events", icon: Calendar, path: "/dashboard/hod/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/hod/placements" },
-  ],
+    [ROLES.HOD]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/hod" },
+      { name: "Students", icon: Users, path: "/dashboard/hod/students" },
+      { name: t("faculty_plural"), icon: GraduationCap, path: "/dashboard/hod/faculty" },
+      { name: t("section_plural"), icon: Layers, path: "/dashboard/hod/sections" },
+      { name: "Attendance", icon: ClipboardCheck, path: "/dashboard/hod/attendance" },
+      { name: "Events", icon: Calendar, path: "/dashboard/hod/events" },
+      { name: t("placement_plural"), icon: Briefcase, path: "/dashboard/hod/placements" },
+    ],
 
-  [ROLES.PROGRAM_HEAD]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head" },
-    { name: "Students", icon: Users, path: "/dashboard/program-head/students" },
-    { name: "Courses", icon: BookOpen, path: "/dashboard/program-head/courses" },
-    { name: "Sections", icon: Layers, path: "/dashboard/program-head/sections" },
-    { name: "Events", icon: Calendar, path: "/dashboard/program-head/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/program-head/placements" },
-  ],
+    [ROLES.PROGRAM_HEAD]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/program-head" },
+      { name: "Students", icon: Users, path: "/dashboard/program-head/students" },
+      { name: t("subject_plural"), icon: BookOpen, path: "/dashboard/program-head/courses" },
+      { name: t("section_plural"), icon: Layers, path: "/dashboard/program-head/sections" },
+      { name: "Events", icon: Calendar, path: "/dashboard/program-head/events" },
+      { name: t("placement_plural"), icon: Briefcase, path: "/dashboard/program-head/placements" },
+    ],
 
-  [ROLES.FACULTY]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
-    { name: "Courses", icon: BookOpen, path: "/dashboard/faculty/subjects" },
-    { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
-    { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/faculty/placements" },
-    { name: "Profile", icon: User, path: "/dashboard/faculty/profile" },
-  ],
+    [ROLES.FACULTY]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/faculty" },
+      { name: t("subject_plural"), icon: BookOpen, path: "/dashboard/faculty/subjects" },
+      { name: "Timetable", icon: Calendar, path: "/dashboard/faculty/timetable" },
+      { name: "Events", icon: Calendar, path: "/dashboard/faculty/events" },
+      { name: t("placement_plural"), icon: Briefcase, path: "/dashboard/faculty/placements" },
+      { name: "Profile", icon: User, path: "/dashboard/faculty/profile" },
+    ],
 
-  [ROLES.STUDENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
-    { name: "Attendance", icon: UserCheck, path: "/dashboard/student/attendance" },
-    { name: "Courses", icon: BookOpen, path: "/dashboard/student/subjects" },
-    { name: "To Do Lists", icon: ListTodo, path: "/dashboard/student/todo" },
-    { name: "Timetable", icon: Calendar, path: "/dashboard/student/timetable" },
-    { name: "Grades", icon: Award, path: "/dashboard/student/report-card" },
-    { name: "Admissions", icon: FileSignature, path: "/dashboard/student/admissions" },
-    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/student/billing" },
-    { name: "Events", icon: Calendar, path: "/dashboard/student/events" },
-    { name: "Placements", icon: Briefcase, path: "/dashboard/student/placements" },
-  ],
+    [ROLES.STUDENT]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/student" },
+      { name: "Attendance", icon: UserCheck, path: "/dashboard/student/attendance" },
+      { name: t("subject_plural"), icon: BookOpen, path: "/dashboard/student/subjects" },
+      { name: "To Do Lists", icon: ListTodo, path: "/dashboard/student/todo" },
+      { name: "Timetable", icon: Calendar, path: "/dashboard/student/timetable" },
+      { name: t("gradebook"), icon: Award, path: "/dashboard/student/report-card" },
+      { name: "Admissions", icon: FileSignature, path: "/dashboard/student/admissions" },
+      { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/student/billing" },
+      { name: "Events", icon: Calendar, path: "/dashboard/student/events" },
+      { name: t("placement_plural"), icon: Briefcase, path: "/dashboard/student/placements" },
+    ],
 
-  [ROLES.PARENT]: [
-    { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent" },
-    { name: "Attendance", icon: UserCheck, path: "/dashboard/parent/attendance" },
-    { name: "Timetable", icon: Calendar, path: "/dashboard/parent/timetable" },
-    { name: "Assignments", icon: ClipboardList, path: "/dashboard/parent/assignments" },
-    { name: "Grades", icon: Award, path: "/dashboard/parent/grades" },
-    { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/parent/billing" },
-    { name: "Events", icon: Calendar, path: "/dashboard/parent/events" },
-  ],
+    [ROLES.PARENT]: [
+      { name: "Overview", icon: LayoutDashboard, path: "/dashboard/parent" },
+      { name: "Attendance", icon: UserCheck, path: "/dashboard/parent/attendance" },
+      { name: "Timetable", icon: Calendar, path: "/dashboard/parent/timetable" },
+      { name: "Assignments", icon: ClipboardList, path: "/dashboard/parent/assignments" },
+      { name: t("gradebook"), icon: Award, path: "/dashboard/parent/grades" },
+      { name: "Fees & Billing", icon: CreditCard, path: "/dashboard/parent/billing" },
+      { name: "Events", icon: Calendar, path: "/dashboard/parent/events" },
+    ],
+  }
 }
 
-const roleLabels: Record<Role, string> = {
-  [ROLES.SUPER_ADMIN]: "Super Admin",
-  [ROLES.ORG_ADMIN]: "Org Admin",
-  [ROLES.INSTITUTION_ADMIN]: "Institution Admin",
-  [ROLES.HOD]: "Head of Dept",
-  [ROLES.PROGRAM_HEAD]: "Program Head",
-  [ROLES.FACULTY]: "Faculty",
-  [ROLES.STUDENT]: "Student",
-  [ROLES.PARENT]: "Parent",
+function buildRoleLabels(orgType: OrgType): Record<Role, string> {
+  const t = (key: Parameters<typeof getTerm>[1]) => getTerm(orgType, key)
+  return {
+    [ROLES.SUPER_ADMIN]: "Super Admin",
+    [ROLES.ORG_ADMIN]: "Org Admin",
+    [ROLES.INSTITUTION_ADMIN]: t("institution_admin"),
+    [ROLES.HOD]: t("hod"),
+    [ROLES.PROGRAM_HEAD]: t("program_head"),
+    [ROLES.FACULTY]: t("faculty_member"),
+    [ROLES.STUDENT]: "Student",
+    [ROLES.PARENT]: "Parent",
+  }
 }
 
 const roleAccents: Record<Role, { bg: string; color: string }> = {
@@ -162,6 +170,9 @@ export default function Sidebar({ profile: initialProfile }: { profile: Dashboar
   const pathname = usePathname()
   const router = useRouter()
   const prefetchedPaths = useRef(new Set<string>())
+  const orgType = useOrgType()
+  const roleMenus = buildRoleMenus(orgType)
+  const roleLabels = buildRoleLabels(orgType)
   const profile = initialProfile
     ? {
         name: initialProfile.name,
