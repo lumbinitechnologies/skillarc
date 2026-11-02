@@ -1,7 +1,5 @@
 "use client"
 
-type InvoicePrintData = Omit<React.ComponentProps<typeof InvoicePrintModal>, "isOpen" | "onClose">
-
 import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, CheckCircle2, ShieldCheck, Loader2, Printer } from "lucide-react"
 import { supabase } from "@/lib/supabase"

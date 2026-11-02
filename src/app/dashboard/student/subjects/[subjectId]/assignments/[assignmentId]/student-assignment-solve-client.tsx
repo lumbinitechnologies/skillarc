@@ -40,6 +40,30 @@ import {
 import { submitAssignmentAction } from "@/app/actions/assignments"
 import { supabase } from "@/lib/supabase"
 import { getPrivateStorageHref, makePrivateStorageReference, parsePrivateStoragePath } from "@/lib/private-storage"
+import type { TableRow } from "@/lib/database-row"
+
+type StudentQuizQuestion = { q: string; options: string[] }
+type AssignmentForClient = Omit<TableRow<"assignments">, "questions" | "test_cases"> & {
+  questions: StudentQuizQuestion[] | null
+  test_cases: null
+}
+type SubmissionForClient = Omit<TableRow<"submissions">, "quiz_answers"> & {
+  quiz_answers: number[] | null
+}
+type AssignmentKind = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void
+  msRequestFullscreen?: () => Promise<void> | void
+}
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  mozFullScreenElement?: Element | null
+  msFullscreenElement?: Element | null
+}
+
+function isAssignmentKind(value: string | null): value is AssignmentKind {
+  return value === "Assignment" || value === "Quiz" || value === "Coding Assignment" || value === "Material" || value === "Syllabus"
+}
 
 interface StudentAssignmentSolveClientProps {
   studentId: string
@@ -93,11 +117,23 @@ export function StudentAssignmentSolveClient({
   const router = useRouter()
   const [submission, setSubmission] = useState<SubmissionForClient | null>(initialSubmission)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null)
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => setCurrentTimeMs(Date.now()), 0)
+    const clockTimer = window.setInterval(() => setCurrentTimeMs(Date.now()), 30_000)
+    return () => {
+      window.clearTimeout(initialTimer)
+      window.clearInterval(clockTimer)
+    }
+  }, [])
 
   // A deadline is actionable only when it carries an explicit UTC offset.
   // Timezone-less legacy values are shown as unavailable and never treated as overdue.
   const deadlineInstant = parseExplicitInstant(assignment.due_date)
-  const isPastDueDate = Boolean(deadlineInstant && Date.now() - deadlineInstant.getTime() > 60000)
+  const isPastDueDate = Boolean(
+    deadlineInstant && currentTimeMs !== null && currentTimeMs - deadlineInstant.getTime() > 60000
+  )
 
   // In-app UI Toast and Confirm States
   const [toast, setToast] = useState<ToastState | null>(null)
@@ -160,7 +196,7 @@ export function StudentAssignmentSolveClient({
       if (typeof window !== "undefined" && !window.navigator.onLine) {
         showToast("Network disconnected during file upload. Please check your connection.", "error")
       } else {
-        console.warn("Storage upload failed:", err.message)
+        console.warn("Storage upload failed:", readErrorMessage(err))
         setFileUrl("")
         showToast("File upload failed. Please try again.", "error")
       }
@@ -421,7 +457,7 @@ export function StudentAssignmentSolveClient({
     showToast("🛡️ Secure Lockdown Mode activated. All tabs and external apps must remain closed.", "info")
   }
 
-  const performQuizSubmit = async (answersToSubmit: number[], isAuto = false) => {
+  async function performQuizSubmit(answersToSubmit: number[], isAuto = false) {
     if (isPastDueDate && !submission) {
       showToast("Submissions closed: The deadline for this quiz has passed.", "error")
       return
@@ -447,9 +483,9 @@ export function StudentAssignmentSolveClient({
         quiz_answers: answersToSubmit,
         code_content: null,
         language: null,
-        grade: res.grade,
+        grade: res.grade ?? null,
         feedback: null,
-        status: res.status,
+        status: res.status ?? "submitted",
         submitted_at: new Date().toISOString(),
       }
       setSubmission(newSub)
@@ -476,7 +512,7 @@ export function StudentAssignmentSolveClient({
     }
   }
 
-  const handleAutoSubmitQuiz = async () => {
+  async function handleAutoSubmitQuiz() {
     performQuizSubmit(quizAnswersRef.current, true)
   }
 

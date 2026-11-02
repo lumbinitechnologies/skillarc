@@ -95,7 +95,7 @@ export default async function StudentTodoPage() {
     .in("subject_id", subjectIds)
 
   // Student RLS has already filtered assignment rows by active enrollment or exact section.
-  const sectionAssignments = (allAssignments ?? []).filter((assignment: any) =>
+  const sectionAssignments = (allAssignments ?? []).filter((assignment) =>
     assignment.type !== "Material" && assignment.type !== "Syllabus"
   )
 

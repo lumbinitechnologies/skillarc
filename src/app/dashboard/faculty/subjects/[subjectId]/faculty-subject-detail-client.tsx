@@ -3735,7 +3735,7 @@ function CreateWorksheetModal({
       if (typeof window !== "undefined" && !window.navigator.onLine) {
         setFormError("Network disconnected during upload. Please check your connection.")
       } else {
-        console.warn("Storage upload failed:", err.message)
+        console.warn("Storage upload failed:", readErrorMessage(err))
         setFormError("File upload failed. Please try again.")
       }
     } finally {
