@@ -6,6 +6,7 @@ import { useTimetable } from "../context/timetable-context"
 import SubjectCard from "./subject-card"
 import { supabase } from "@/lib/supabase"
 import { BookOpen, Search } from "lucide-react"
+import { relationOne } from "@/lib/academic-content-types"
 
 const font = "'Plus Jakarta Sans', 'Inter', sans-serif"
 
@@ -33,9 +34,7 @@ export default function SubjectPanel() {
 
         if (active && data) {
           setSectionName(data.name ?? null)
-          if ((data as any).program?.name) {
-            setProgramName((data as any).program.name)
-          }
+          setProgramName(relationOne(data.program)?.name ?? null)
         }
       } else if (programId) {
         const { data } = await supabase

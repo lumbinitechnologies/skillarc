@@ -8,10 +8,10 @@ import { measureServer } from "@/lib/perf"
 export const dynamic = "force-dynamic"
 
 export default async function StudentReportCardPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.report-card.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
@@ -19,8 +19,8 @@ export default async function StudentReportCardPage() {
   const adminClient = createSupabaseAdminClient()
 
   // 1. Fetch student academic info, timetable slots, and student submissions concurrently in Batch 1
-  const tBatch1Start = performance.now()
-  const [studentRes, timetableRes, submissionsRes] = await Promise.all([
+
+  const [studentRes, timetableRes, submissionsRes] = await measureServer("app.dashboard.student.report-card.data", () => Promise.all([
     adminClient
       .from("students")
       .select("id, section_id, program_id, semester")
@@ -36,8 +36,8 @@ export default async function StudentReportCardPage() {
       .from("submissions")
       .select("assignment_id, status, grade, feedback, submitted_at")
       .eq("student_id", context.id),
-  ])
-  const batch1Ms = performance.now() - tBatch1Start
+  ]))
+
 
   const studentData = studentRes.data
   const profile = {
@@ -49,7 +49,7 @@ export default async function StudentReportCardPage() {
 
   const timetableRows = timetableRes.data ?? []
   let subjectIds = Array.from(
-    new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))
+    new Set((timetableRows).map((slot) => slot.subject_id).filter(Boolean))
   ) as string[]
 
   if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
@@ -64,15 +64,13 @@ export default async function StudentReportCardPage() {
     }
     const { data: programSubjects } = await subQuery
     if (programSubjects?.length) {
-      subjectIds = programSubjects.map((s: any) => s.id)
+      subjectIds = programSubjects.map((s) => s.id)
     }
   }
 
   if (!subjectIds.length) {
-    const totalMs = performance.now() - tPageStart
-    console.info(
-      `[DashboardReportCard] contextMs=${contextMs.toFixed(1)} batch1Ms=${batch1Ms.toFixed(1)} batch2Ms=0.0 totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-    )
+
+
     return (
       <div className="max-w-4xl mx-auto p-8 text-center bg-white border border-slate-100 rounded-3xl shadow-sm my-8">
         <h3 className="text-xl font-semibold text-gray-700">No Academic Records</h3>
@@ -82,7 +80,7 @@ export default async function StudentReportCardPage() {
   }
 
   // 2. Fetch subjects, assignments, grade columns, and student grade entries concurrently in Batch 2
-  const tBatch2Start = performance.now()
+
   const [subjectsResult, assignmentsResult, gradeColumnsResult, gradeEntriesResult] = await measureServer(
     "dashboard.student.report-card.data",
     () =>
@@ -104,19 +102,17 @@ export default async function StudentReportCardPage() {
           .eq("student_id", context.id),
       ])
   )
-  const batch2Ms = performance.now() - tBatch2Start
-  const totalMs = performance.now() - tPageStart
 
-  console.info(
-    `[DashboardReportCard] contextMs=${contextMs.toFixed(1)} batch1Ms=${batch1Ms.toFixed(1)} batch2Ms=${batch2Ms.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
+
+
+
 
   const subjects = subjectsResult.data ?? []
   const allAssignments = assignmentsResult.data ?? []
 
   // Filter assignments targeted at the student's section (excluding Materials and Syllabus)
   const sectionId = profile.section_id
-  const sectionAssignments = (allAssignments ?? []).filter((a: any) => {
+  const sectionAssignments = (allAssignments ?? []).filter((a) => {
     if (a.type === "Material" || a.type === "Syllabus") return false
     if (!a.section_ids || a.section_ids.length === 0) return true
     return a.section_ids.includes(sectionId)

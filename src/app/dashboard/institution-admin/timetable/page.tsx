@@ -24,7 +24,7 @@ export default async function TimetablePage() {
     redirect("/dashboard")
   }
 
-  let hasAccess = [ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN, ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)
+  let hasAccess = [ROLES.SUPER_ADMIN, ROLES.ORG_ADMIN, ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)
 
   if (!hasAccess && user.id) {
     const { data: perm } = await adminClient

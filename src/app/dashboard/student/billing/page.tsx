@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import InvoicePrintModal from "@/modules/billing/components/InvoicePrintModal"
 import { useDashboardSession } from "@/components/dashboard-session-provider"
 
+type InvoicePrintData = Omit<React.ComponentProps<typeof InvoicePrintModal>, "isOpen" | "onClose">
+
 type LedgerInstallment = {
   id: string
   amount: number
@@ -27,7 +29,7 @@ export default function StudentBillingPage() {
   const [loading, setLoading] = useState(true)
   const [selectedInvoice, setSelectedInvoice] = useState<LedgerInstallment | null>(null)
   const [studentInfo, setStudentInfo] = useState({ name: "Student Account", email: "", id: "" })
-  const [printInvoiceData, setPrintInvoiceData] = useState<any | null>(null)
+  const [printInvoiceData, setPrintInvoiceData] = useState<InvoicePrintData | null>(null)
   
   // Payment Modal State
   const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "netbanking">("upi")
@@ -39,7 +41,7 @@ export default function StudentBillingPage() {
   const [selectedBank, setSelectedBank] = useState("HDFC Bank")
 
   const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentSuccess, setPaymentSuccess] = useState<{ txnId: string; amount: number } | null>(null)
+  const [paymentSuccess, setPaymentSuccess] = useState<{ txnId: string; amount: number; createdAtLabel: string } | null>(null)
 
   // Fetch or Auto-Provision active student fees from DB
   const loadFeesSchedule = useCallback(async () => {
@@ -121,7 +123,7 @@ export default function StudentBillingPage() {
         .eq("payment_plan_id", activePlan.id)
         .order("due_date", { ascending: true })
 
-      const invoices = (invoicesRes || []).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+      const invoices = (invoicesRes || []).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
 
       const paidAmt = invoices
         .filter((inv: { status: string; amount_due: number | string }) => inv.status === "PAID")
@@ -179,6 +181,7 @@ export default function StudentBillingPage() {
       setPaymentSuccess({
         txnId: refNo,
         amount: selectedInvoice.amount,
+        createdAtLabel: new Date().toLocaleString(),
       })
 
       // Refresh ledger
@@ -373,7 +376,7 @@ export default function StudentBillingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Date & Time</span>
-                    <span className="font-medium text-slate-700">{new Date().toLocaleString()}</span>
+                    <span className="font-medium text-slate-700">{paymentSuccess.createdAtLabel}</span>
                   </div>
                 </div>
 

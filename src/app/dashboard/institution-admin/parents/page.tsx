@@ -31,7 +31,7 @@ export default async function ParentsPage() {
   const studentMap = new Map(students.map(s => [s.id, s]))
   const enrichedParents = parents.map(p => {
     const linkedStudentIds = relations.filter(r => r.parent_id === p.id).map(r => r.student_id)
-    const linkedStudents = linkedStudentIds.map(sid => studentMap.get(sid)).filter(Boolean) as any[]
+    const linkedStudents = linkedStudentIds.map(sid => studentMap.get(sid)).filter((student) => student !== undefined)
     const sectionIds = [...new Set(linkedStudents.map(s => s.section_id).filter(Boolean))]
     const deptIds = [...new Set(linkedStudents.map(s => s.department_id).filter(Boolean))]
     const programIds = [...new Set(

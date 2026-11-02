@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
         .select("id")
         .eq("department_id", departmentId)
       
-      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      const programIds = (deptPrograms ?? []).map((p) => p.id)
       
       if (programIds.length > 0) {
         query = query.in("program_id", programIds)

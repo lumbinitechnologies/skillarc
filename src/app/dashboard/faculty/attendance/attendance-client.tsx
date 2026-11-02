@@ -1,5 +1,14 @@
 "use client"
 
+import { useLocalStorageValue } from "@/hooks/use-local-storage-value"
+
+
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
+
+
 import { useEffect, useMemo, useState } from "react"
 import {
   Save,
@@ -30,14 +39,16 @@ import {
   reviewLeaveApplicationAction,
 } from "./actions"
 
+const EMPTY_DEFAULT_OPTIONS: [] = []
+
 interface Props {
   facultyId: string
   institutionId: string
-  programs: any[]
-  sections: any[]
-  subjects: any[]
-  students: any[]
-  initialLeaveApplications?: any[]
+  programs: AcademicOption[]
+  sections: AcademicOption[]
+  subjects: AcademicOption[]
+  students: AttendanceStudent[]
+  initialLeaveApplications?: LeaveApplication[]
 }
 
 export default function AttendanceClient({
@@ -47,10 +58,10 @@ export default function AttendanceClient({
   sections,
   subjects,
   students,
-  initialLeaveApplications = [],
+  initialLeaveApplications = EMPTY_DEFAULT_OPTIONS,
 }: Props) {
   const [activeTab, setActiveTab] = useState<"attendance" | "leaves">("attendance")
-  const [leaveApplications, setLeaveApplications] = useState<any[]>(initialLeaveApplications)
+  const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>(initialLeaveApplications)
   const [leaveFilter, setLeaveFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "REJECTED">("PENDING")
   const [isReviewingLeaveId, setIsReviewingLeaveId] = useState<string | null>(null)
 
@@ -59,7 +70,7 @@ export default function AttendanceClient({
   const [selectedSection, setSelectedSection] = useState("")
   const [selectedSubject, setSelectedSubject] = useState("")
   const [selectedPeriod, setSelectedPeriod] = useState("")
-  const [selectedDate, setSelectedDate] = useState(
+  const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   )
   const [attendance, setAttendance] = useState<Record<string, string>>({})
@@ -68,7 +79,7 @@ export default function AttendanceClient({
   const [studentCumulativeRates, setStudentCumulativeRates] = useState<
     Record<string, { rate: number; total: number; missed: number }>
   >({})
-  const [warningModalStudent, setWarningModalStudent] = useState<any | null>(null)
+  const [warningModalStudent, setWarningModalStudent] = useState<React.ComponentProps<typeof AttendanceWarningModal>["student"]>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [sessionNotice, setSessionNotice] = useState<string | null>(null)
@@ -86,7 +97,7 @@ export default function AttendanceClient({
 
   const filteredStudents = useMemo(
     () =>
-      students.filter((student: any) => {
+      students.filter((student) => {
         const matchesProgram = !selectedProgram || student.program_id === selectedProgram
         const matchesSemester = !selectedSemester || String(student.semester) === selectedSemester
         const matchesSection = !selectedSection || student.section_id === selectedSection
@@ -104,32 +115,27 @@ export default function AttendanceClient({
   const lateCount = Object.values(attendance).filter((value) => value === "Late").length
   const approvedAbsenceCount = Object.values(attendance).filter((value) => value === "Approved Absence").length
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const savedSession = window.localStorage.getItem("faculty-attendance-session")
-    if (!savedSession) {
-      const hour = new Date().getHours()
-      const inferredPeriod = hour < 10 ? "1" : hour < 12 ? "2" : hour < 14 ? "3" : hour < 16 ? "4" : "5"
-      setSelectedPeriod((prev) => prev || inferredPeriod)
-      return
-    }
-
+  const storageKey = `faculty-attendance-session:${institutionId}:${facultyId}`
+  const savedSession = useLocalStorageValue(storageKey)
+  const [restoredKey, setRestoredKey] = useState<string | null>(null)
+  if (savedSession !== undefined && restoredKey !== storageKey) {
+    setRestoredKey(storageKey)
     try {
-      const parsed = JSON.parse(savedSession)
-      if (parsed.selectedSemester) setSelectedSemester(parsed.selectedSemester)
-      if (parsed.selectedProgram) setSelectedProgram(parsed.selectedProgram)
-      if (parsed.selectedSection) setSelectedSection(parsed.selectedSection)
-      if (parsed.selectedSubject) setSelectedSubject(parsed.selectedSubject)
-      if (parsed.selectedPeriod) setSelectedPeriod(parsed.selectedPeriod)
-      if (parsed.selectedDate) setSelectedDate(parsed.selectedDate)
-    } catch {
-      window.localStorage.removeItem("faculty-attendance-session")
-    }
-  }, [])
+      const value: unknown = savedSession ? JSON.parse(savedSession) : null
+      if (value && typeof value === "object") {
+        const parsed = value as Record<string, unknown>
+        if (typeof parsed.selectedSemester === "string") setSelectedSemester(parsed.selectedSemester)
+        if (typeof parsed.selectedProgram === "string") setSelectedProgram(parsed.selectedProgram)
+        if (typeof parsed.selectedSection === "string") setSelectedSection(parsed.selectedSection)
+        if (typeof parsed.selectedSubject === "string") setSelectedSubject(parsed.selectedSubject)
+        if (typeof parsed.selectedPeriod === "string") setSelectedPeriod(parsed.selectedPeriod)
+        if (typeof parsed.selectedDate === "string") setSelectedDate(parsed.selectedDate)
+      }
+    } catch { /* Ignore an invalid local draft; never change hosted data. */ }
+  }
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined" || restoredKey !== storageKey) return
 
     const payload = {
       selectedProgram,
@@ -140,14 +146,19 @@ export default function AttendanceClient({
       selectedDate,
     }
 
-    window.localStorage.setItem("faculty-attendance-session", JSON.stringify(payload))
-  }, [selectedDate, selectedPeriod, selectedProgram, selectedSection, selectedSemester, selectedSubject])
+    window.localStorage.setItem(storageKey, JSON.stringify(payload))
+  }, [restoredKey, storageKey, selectedDate, selectedPeriod, selectedProgram, selectedSection, selectedSemester, selectedSubject])
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [sections, selectedSemester]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     if (!selectedSemester && sections.length) {
       setSelectedSemester(String(sections[0].semester))
     }
-  }, [sections, selectedSemester])
+
+  }
 
   useEffect(() => {
     let isActive = true
@@ -242,18 +253,27 @@ export default function AttendanceClient({
     loadCumulative()
   }, [selectedSection, institutionId])
 
-  useEffect(() => {
+  const [resetInputs1, setResetInputs1] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs1 = [selectedSemester, selectedSubject, subjects]
+  if (resetInputs1 === null || nextResetInputs1.some((value, index) => !Object.is(value, resetInputs1[index]))) {
+    setResetInputs1(nextResetInputs1)
+
     const semesterSubjects = subjects.filter(
-      (subject: any) => !selectedSemester || String(subject.semester) === selectedSemester
+      (subject) => !selectedSemester || String(subject.semester) === selectedSemester
     )
 
     if (!selectedSubject && semesterSubjects.length) {
       setSelectedSubject(semesterSubjects[0].id)
     }
-  }, [selectedSemester, selectedSubject, subjects])
 
-  useEffect(() => {
-    const availableSections = sections.filter((section: any) => {
+  }
+
+  const [previousSource0, setPreviousSource0] = useState<readonly unknown[] | null>(null)
+  const nextSource0 = [sections, selectedProgram, selectedSection, selectedSemester]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
+    const availableSections = sections.filter((section) => {
       const matchesSemester = !selectedSemester || String(section.semester) === selectedSemester
       const matchesProgram = !selectedProgram || section.program_id === selectedProgram
       return matchesSemester && matchesProgram
@@ -262,7 +282,8 @@ export default function AttendanceClient({
     if (!selectedSection && availableSections.length) {
       setSelectedSection(availableSections[0].id)
     }
-  }, [sections, selectedProgram, selectedSection, selectedSemester])
+  })()
+  }
 
   const handleStatusChange = (studentId: string, status: string) => {
     setAttendance((prev) => ({
@@ -278,7 +299,8 @@ export default function AttendanceClient({
     }))
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const attendanceNow = useCurrentTime()
+  const todayIso = attendanceNow ? new Date(attendanceNow).toISOString().slice(0, 10) : ""
   const isFutureDate = selectedDate > todayIso
 
   async function performSave() {
@@ -462,7 +484,7 @@ export default function AttendanceClient({
                   <button
                     key={f.key}
                     type="button"
-                    onClick={() => setLeaveFilter(f.key as any)}
+                    onClick={() => setLeaveFilter(f.key as typeof leaveFilter)}
                     className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
                       leaveFilter === f.key
                         ? "bg-indigo-600 text-white shadow-xs"
@@ -545,7 +567,7 @@ export default function AttendanceClient({
                             Leave Duration: {leave.from_date} → {leave.to_date}
                           </span>
                           <span className="text-slate-400 text-[11px]">
-                            Applied on {new Date(leave.created_at || Date.now()).toLocaleDateString()}
+                            Applied on {leave.created_at ? new Date(leave.created_at).toLocaleDateString() : "Date unavailable"}
                           </span>
                         </div>
                         <p className="text-slate-700">
@@ -826,11 +848,11 @@ export default function AttendanceClient({
         onClose={() => setWarningModalStudent(null)}
         student={warningModalStudent}
         onIssued={async (payload) => {
-          await saveWarningLetterAction({
+          const result = await saveWarningLetterAction({
             ...payload,
             institutionId,
-            renderedHtml: "",
           })
+          if (!result.success) throw new Error(result.error || "Could not save notice")
           setFeedback("Official compliance warning notice logged for this student.")
         }}
       />

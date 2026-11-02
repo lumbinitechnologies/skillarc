@@ -36,7 +36,7 @@ export default function Roles() {
             </div>
           </div>
           <div className="bg-[#FF5500]/5 border border-[#FF5500]/20 p-3 rounded-xl text-xs text-[#FF5500] text-center font-bold">
-            // Multi-institution overview up to date
+            {"//"} Multi-institution overview up to date
           </div>
         </div>
       ),
@@ -98,7 +98,7 @@ export default function Roles() {
             ))}
           </div>
           <div className="bg-white/5 border border-white/10 p-3 rounded-xl text-xs text-white/60 text-center">
-            // Faculty assignments & schedules ready
+            {"//"} Faculty assignments & schedules ready
           </div>
         </div>
       ),
@@ -216,7 +216,7 @@ export default function Roles() {
             </div>
           </div>
           <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-xs text-white/60 text-center">
-            // Real-time notifications enabled
+            {"//"} Real-time notifications enabled
           </div>
         </div>
       ),
@@ -236,7 +236,7 @@ export default function Roles() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-16 pb-6 border-b border-white/15">
           <div>
             <div className="font-mono text-xs text-[#EAAD62] tracking-[0.2em] uppercase mb-2 flex items-center gap-2 font-bold">
-              <span className="text-[#FF5500]">//</span>
+              <span className="text-[#FF5500]">{"//"}</span>
               <span>[ ROLE-BASED WORKSPACES ]</span>
             </div>
             <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tight text-[#F4F4F0]">

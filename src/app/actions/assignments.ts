@@ -1,5 +1,8 @@
 "use server"
 
+import type { QuizQuestion, CodingTestCase } from "@/lib/academic-content-types"
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { detectAIContent } from "@/lib/ai-detector"
@@ -15,9 +18,9 @@ export async function createAssignmentAction(data: {
   due_date: string | null
   type: string
   max_score: number
-  questions: any | null
+  questions: QuizQuestion[] | null
   language: string | null
-  test_cases: any | null
+  test_cases: CodingTestCase[] | null
   section_ids: string[]
   files: string[] | null
 }) {
@@ -53,7 +56,7 @@ export async function createAssignmentAction(data: {
       if (!q.q?.trim()) {
         return { success: false, error: `Question #${i + 1} cannot be empty.` }
       }
-      if (!Array.isArray(q.options) || q.options.some((opt: any) => !String(opt || "").trim())) {
+      if (!Array.isArray(q.options) || q.options.some((opt: unknown) => !String(opt || "").trim())) {
         return { success: false, error: `All options for Question #${i + 1} must be filled out.` }
       }
     }
@@ -161,9 +164,9 @@ export async function updateAssignmentAction(
     due_date: string | null
     type: string
     max_score: number
-    questions: any | null
+    questions: QuizQuestion[] | null
     language: string | null
-    test_cases: any | null
+    test_cases: CodingTestCase[] | null
     section_ids: string[]
     files: string[] | null
   }>
@@ -193,7 +196,7 @@ export async function updateAssignmentAction(
   }
 
   // Format update payload
-  const updateData = { ...data } as any
+  const updateData = { ...data }
   if (data.title) updateData.title = data.title.trim()
   if (data.description !== undefined) updateData.description = data.description.trim()
   if (data.due_date) {
@@ -208,7 +211,7 @@ export async function updateAssignmentAction(
   }
 
   // If max_score or questions are being updated, fetch current assignment to check for changes
-  let oldAssignmentData: any = null
+  let oldAssignmentData: { type: string; max_score: number; questions: QuizQuestion[] | null } | null = null
   let oldMaxScore: number | null = null
 
   const { data: currentAss } = await supabase
@@ -382,8 +385,8 @@ export async function gradeSubmissionAction(
         .single()
 
       if (student?.id) {
-        const assignmentTitle = (sub as any).assignments?.title || "Assignment"
-        const maxScore = (sub as any).assignments?.max_score || 100
+        const assignmentTitle = (Array.isArray(sub.assignments) ? sub.assignments[0] : sub.assignments)?.title || "Assignment"
+        const maxScore = (Array.isArray(sub.assignments) ? sub.assignments[0] : sub.assignments)?.max_score || 100
         await dispatchNotification({
           userId: student.id,
           category: "grading",
@@ -406,7 +409,7 @@ export async function submitAssignmentAction(data: {
   assignment_id: string
   student_id: string
   file_url: string | null
-  quiz_answers: any | null
+  quiz_answers: Array<string | number | null> | null
   code_content: string | null
   language: string | null
   grade: number | null
@@ -507,7 +510,7 @@ export async function submitAssignmentAction(data: {
         .single()
 
       if (faculty?.user_id) {
-        const studentName = (studentUser as any)?.users?.name || "A student"
+        const studentName = (Array.isArray(studentUser?.users) ? studentUser.users[0] : studentUser?.users)?.name || "A student"
         await dispatchNotification({
           userId: faculty.user_id,
           category: "submissions",
@@ -865,7 +868,7 @@ async function extractTextFromFileReference(fileUrl: string): Promise<string> {
 async function extractSubmissionContent(payload: {
   code_content?: string | null
   feedback?: string | null
-  quiz_answers?: any
+  quiz_answers?: unknown
   file_url?: string | null
 }): Promise<string> {
   const candidates: string[] = []
@@ -875,7 +878,7 @@ async function extractSubmissionContent(payload: {
 
   if (Array.isArray(payload.quiz_answers)) {
     const flatAnswers = payload.quiz_answers
-      .map((a: any) => (typeof a === "string" ? a : String(a ?? "")))
+      .map((a: unknown) => (typeof a === "string" ? a : String(a ?? "")))
       .filter(Boolean)
       .join(" ")
     if (flatAnswers.trim()) candidates.push(flatAnswers)
@@ -1150,8 +1153,8 @@ Respond ONLY with compact JSON — no markdown fences, no explanation, just raw 
           ? `Most similar peer text matched ${matchedStudentName}.`
           : "No strong peer textual overlap found in the current submission batch.",
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Plagiarism check action error:", err)
-    return { success: false, error: err.message || String(err) }
+    return { success: false, error: readErrorMessage(err) || String(err) }
   }
 }

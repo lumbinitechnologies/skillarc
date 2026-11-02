@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { Resend } from "resend"
 
 function getResendClient() {
@@ -126,9 +127,9 @@ export async function sendInviteEmail(params: {
 
     console.log(`✅ [AuthEmail] Invite email sent to ${params.to} (ID: ${result.data?.id})`)
     return { success: true, emailId: result.data?.id }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("🔴 [AuthEmail] Exception sending invite email:", err)
-    return { success: false, error: err.message || "Failed to send email" }
+    return { success: false, error: readErrorMessage(err) || "Failed to send email" }
   }
 }
 
@@ -233,8 +234,8 @@ export async function sendPasswordResetEmail(params: {
 
     console.log(`✅ [AuthEmail] Password reset email sent to ${params.to} (ID: ${result.data?.id})`)
     return { success: true, emailId: result.data?.id }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("🔴 [AuthEmail] Exception sending reset email:", err)
-    return { success: false, error: err.message || "Failed to send email" }
+    return { success: false, error: readErrorMessage(err) || "Failed to send email" }
   }
 }

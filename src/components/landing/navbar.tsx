@@ -118,7 +118,7 @@ export default function EditorialNavbar() {
               <div className="flex-1 flex flex-col justify-center my-auto">
                 <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
                   <div className="md:col-span-3 font-mono text-xs uppercase text-[#94BAC4] tracking-widest flex items-center gap-2">
-                    <span className="text-[#EAAD62]">//</span>
+                    <span className="text-[#EAAD62]">{"//"}</span>
                     <span>[ Navigation Index ]</span>
                   </div>
 

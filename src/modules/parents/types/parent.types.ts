@@ -2,6 +2,7 @@ export type Parent = {
   id: string
   name: string
   email: string
+  phone?: string | null
   institution_id?: string | null
   organization_id?: string | null
   students?: Array<{

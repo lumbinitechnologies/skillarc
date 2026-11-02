@@ -48,7 +48,11 @@ export function CreateSectionDialog({
   })
   const { toast } = useToast()
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [section]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setFormData({
       name: section?.name || "",
       semester: section?.semester || 1,
@@ -56,7 +60,8 @@ export function CreateSectionDialog({
       institution_id: section?.institution_id || "",
       faculty_advisor_id: section?.faculty_advisor_id || "",
     })
-  }, [section])
+
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

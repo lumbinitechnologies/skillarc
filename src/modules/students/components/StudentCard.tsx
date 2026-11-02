@@ -1,8 +1,9 @@
+import type { StudentWithSection } from "../types/student.types"
 import { Button } from "@/components/ui/button"
 
 interface Props {
-  student: any
-  onEdit: (student: any) => void
+  student: StudentWithSection
+  onEdit: (student: StudentWithSection) => void
   onDelete: (id: string) => void
 }
 

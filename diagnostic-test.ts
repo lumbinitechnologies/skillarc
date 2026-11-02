@@ -1,6 +1,3 @@
-// @ts-nocheck
-import ws from "ws"
-global.WebSocket = ws as any
 import { createSupabaseAdminClient } from "./src/lib/supabase-admin"
 
 async function run() {

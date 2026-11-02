@@ -1,3 +1,4 @@
+import type { AcademicStudent } from "@/lib/academic-content-types"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
@@ -22,7 +23,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   const { subjectId } = await params
   const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
-  if (![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(context.role as any)) redirect("/dashboard")
+  if (![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === context.role)) redirect("/dashboard")
 
   const supabase = await createSupabaseServerClient()
   const profile = context
@@ -42,7 +43,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   // 2. Fetch Sections taught by this faculty for this subject
   const slots = slotsResult.data
 
-  const sectionIds = Array.from(new Set((slots ?? []).map((s: any) => s.section_id).filter(Boolean))) as string[]
+  const sectionIds = Array.from(new Set((slots ?? []).map((s) => s.section_id).filter(Boolean))) as string[]
 
   // Fetch sections details
   const { data: sections = [] } = sectionIds.length
@@ -54,7 +55,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
 
   const assignments = assignmentsResult.data ?? []
 
-  const assignmentIds = (assignments ?? []).map((a: any) => a.id)
+  const assignmentIds = (assignments ?? []).map((a) => a.id)
 
   // 4. Fetch Submissions for these assignments
   const { data: submissionsRaw = [] } = assignmentIds.length
@@ -65,7 +66,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
     : { data: [] }
 
   // Fetch plagiarism & AI verification details
-  const subIds = (submissionsRaw || []).map((s: any) => s.id)
+  const subIds = (submissionsRaw || []).map((s) => s.id)
   const { data: verifications = [] } = subIds.length
     ? await supabase
         .from("submission_verifications")
@@ -73,8 +74,8 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
         .in("submission_id", subIds)
     : { data: [] }
 
-  const submissions = (submissionsRaw || []).map((s: any) => {
-    const v = (verifications || []).find((ver: any) => ver.submission_id === s.id)
+  const submissions = (submissionsRaw || []).map((s) => {
+    const v = (verifications || []).find((ver) => ver.submission_id === s.id)
     return {
       ...s,
       plagiarism_rate: v ? Number(v.plagiarism_rate) : null,
@@ -84,7 +85,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   })
 
   // 5. Fetch Students enrolled in the sections taught
-  let students: any[] = []
+  let students: AcademicStudent[] = []
   if (sectionIds.length) {
     const { data: studentRecords } = await supabase
       .from("students")
@@ -92,15 +93,15 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
       .in("section_id", sectionIds)
 
     if (studentRecords?.length) {
-      const sIds = studentRecords.map((s: any) => s.id)
+      const sIds = studentRecords.map((s) => s.id)
       const { data: userRecords } = await supabase
         .from("users")
         .select("id, name, email, profile_image_url")
         .in("id", sIds)
         .order("name")
 
-      students = (studentRecords || []).map((st: any) => {
-        const u = (userRecords || []).find((usr: any) => usr.id === st.id)
+      students = (studentRecords || []).map((st) => {
+        const u = (userRecords || []).find((usr) => usr.id === st.id)
         return {
           id: st.id,
           name: u?.name || "Unknown",

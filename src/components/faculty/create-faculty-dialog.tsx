@@ -15,7 +15,10 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { GraduationCap, ShieldAlert } from "lucide-react"
 import type { FacultyWithStats, CreateFacultyInput, UpdateFacultyInput } from "@/modules/faculty/types/faculty.types"
+import type { UserRole } from "@/constants/roles"
 import { useTerms } from "@/lib/org-type-context"
+
+const EMPTY_DEPARTMENTS: Array<{ id: string; name: string }> = []
 
 interface CreateFacultyDialogProps {
   open: boolean
@@ -31,31 +34,36 @@ export function CreateFacultyDialog({
   onOpenChange,
   onSubmit,
   faculty,
-  departments = [],
+  departments = EMPTY_DEPARTMENTS,
   isLoading = false,
 }: CreateFacultyDialogProps) {
   const [formData, setFormData] = useState({
     name: faculty?.name || "",
     email: faculty?.email || "",
     department_id: faculty?.department_id || "",
-    role: (faculty?.role || "FACULTY") as any,
+    role: (faculty?.role || "FACULTY"),
     is_timetable_builder: faculty?.is_timetable_builder || false,
     phone: faculty?.phone || "",
     employee_id: faculty?.employee_id || "",
   })
   const { toast } = useToast()
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [faculty, departments]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setFormData({
       name: faculty?.name || "",
       email: faculty?.email || "",
       department_id: faculty?.department_id || (departments.length === 1 ? departments[0].id : ""),
-      role: (faculty?.role || "FACULTY") as any,
+      role: (faculty?.role || "FACULTY"),
       is_timetable_builder: faculty?.is_timetable_builder || false,
       phone: faculty?.phone || "",
       employee_id: faculty?.employee_id || "",
     })
-  }, [faculty, departments])
+
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -201,7 +209,7 @@ export function CreateFacultyDialog({
             <select
               id="role"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
               className="w-full h-11 px-4 border border-slate-200/80 bg-white/50 text-slate-800 text-sm rounded-2xl focus:outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100 hover:border-slate-300 hover:shadow-sm cursor-pointer transition-all duration-300"
             >
               <option value="FACULTY">{t.faculty_member}</option>

@@ -54,7 +54,7 @@ export async function getFacultyByDepartment(
     throw new Error(`Failed to fetch department faculty: ${error.message}`)
   }
 
-  const faculty = data?.flatMap((row: any) => row.users ?? []) ?? []
+  const faculty = data?.flatMap((row) => row.users ?? []) ?? []
 
   return faculty as Faculty[]
 }
@@ -179,8 +179,8 @@ export async function getFacultyWithStats(
     .from("users")
     .select(`
       *,
-      subjects:subjects(count).faculty_id,
-      sections:sections(count).faculty_advisor_id
+      subjects(count),
+      sections(count)
     `)
     .eq("institution_id", institutionId)
     .eq("role", ROLES.FACULTY)
@@ -188,7 +188,7 @@ export async function getFacultyWithStats(
 
   if (error) throw new Error(`Failed to fetch faculty with stats: ${error.message}`)
 
-  const rows = (data ?? []) as any[]
+  const rows = data ?? []
 
   return rows.map((faculty) => ({
     ...(faculty as Faculty),

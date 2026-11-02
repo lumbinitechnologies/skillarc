@@ -1,3 +1,4 @@
+import { measureServer } from "@/lib/perf"
 import { redirect } from "next/navigation"
 import { BookOpen, GraduationCap, UserRound, ArrowRight } from "lucide-react"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -8,18 +9,18 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 export const dynamic = "force-dynamic"
 
 export default async function StudentSubjectsPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.subjects.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const adminClient = createSupabaseAdminClient()
 
-  const tBatchStart = performance.now()
-  const [studentRes, timetableRes, subjectsRes, facultySubjectsRes] = await Promise.all([
+
+  const [studentRes, timetableRes, subjectsRes, facultySubjectsRes] = await measureServer("app.dashboard.student.subjects.data", () => Promise.all([
     adminClient
       .from("students")
       .select("id, section_id, program_id, semester")
@@ -43,17 +44,17 @@ export default async function StudentSubjectsPage() {
           .select("subject_id, faculty_id, section_id, users:faculty_id(id, name)")
           .eq("institution_id", context.institution_id)
       : Promise.resolve({ data: [] }),
-  ])
-  const batchMs = performance.now() - tBatchStart
+  ]))
+
 
   const studentData = studentRes.data
-  const allSlots = (timetableRes.data ?? []) as any[]
-  const allSubjects = (subjectsRes.data ?? []) as any[]
-  const allFacultySubjects = (facultySubjectsRes.data ?? []) as any[]
+  const allSlots = (timetableRes.data ?? [])
+  const allSubjects = (subjectsRes.data ?? [])
+  const allFacultySubjects = (facultySubjectsRes.data ?? [])
 
   // Build faculty map from faculty_subjects (official course allocation)
   const fsMap = new Map<string, string>()
-  allFacultySubjects.forEach((fs: any) => {
+  allFacultySubjects.forEach((fs) => {
     const u = Array.isArray(fs.users) ? fs.users[0] : fs.users
     if (fs.subject_id && u?.name) {
       if (fs.section_id === studentData?.section_id) {
@@ -66,12 +67,12 @@ export default async function StudentSubjectsPage() {
 
   // Filter slots for student's section
   const sectionSlots = studentData?.section_id
-    ? allSlots.filter((slot: any) => slot.section_id === studentData.section_id)
+    ? allSlots.filter((slot) => slot.section_id === studentData.section_id)
     : []
 
   // Build slot faculty map
   const slotFacultyMap = new Map<string, string>()
-  sectionSlots.forEach((slot: any) => {
+  sectionSlots.forEach((slot) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
     if (sub?.id && fac?.name && !slotFacultyMap.has(sub.id)) {
@@ -82,7 +83,7 @@ export default async function StudentSubjectsPage() {
   const subjectMap = new Map<string, { id: string; name: string; code: string; subjectType: string; facultyName: string }>()
 
   // 1. First add subjects from student's section timetable slots
-  sectionSlots.forEach((slot: any) => {
+  sectionSlots.forEach((slot) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     if (sub?.id && !subjectMap.has(sub.id)) {
       const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
@@ -98,12 +99,12 @@ export default async function StudentSubjectsPage() {
 
   // 2. Also ensure all curriculum subjects for the student's program and semester are included
   if (studentData?.program_id) {
-    const progSubs = allSubjects.filter((s: any) => {
+    const progSubs = allSubjects.filter((s) => {
       const matchProg = s.program_id === studentData.program_id
       const matchSem = !studentData.semester || !s.semester || s.semester === studentData.semester
       return matchProg && matchSem
     })
-    progSubs.forEach((sub: any) => {
+    progSubs.forEach((sub) => {
       if (!subjectMap.has(sub.id)) {
         const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
         subjectMap.set(sub.id, {
@@ -118,11 +119,9 @@ export default async function StudentSubjectsPage() {
   }
 
   const subjects = Array.from(subjectMap.values())
-  const totalMs = performance.now() - tPageStart
 
-  console.info(
-    `[DashboardStudentSubjects] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
+
+
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">

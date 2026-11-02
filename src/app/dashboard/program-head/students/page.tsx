@@ -23,9 +23,9 @@ export default async function PHStudentsPage() {
       .eq("institution_id", institutionId),
   ])
 
-  const users = (usersRes.data ?? []) as any[]
-  const studentRecords = (studentRecordsRes.data ?? []) as any[]
-  const sections = (sectionsRes.data ?? []) as any[]
+  const users = (usersRes.data ?? [])
+  const studentRecords = (studentRecordsRes.data ?? [])
+  const sections = (sectionsRes.data ?? [])
 
   const students = users.map((u) => {
     const rec = studentRecords.find((r) => r.id === u.id)

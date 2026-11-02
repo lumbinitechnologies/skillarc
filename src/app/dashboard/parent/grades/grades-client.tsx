@@ -68,15 +68,15 @@ function gradeLetter(pct: number | null): string {
 
 export default function ParentGradesClient({
   parentName,
-  children,
+  students,
 }: {
   parentName: string
-  children: ChildWithGrades[]
+  students: ChildWithGrades[]
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null)
 
-  const child = children[selectedIdx] ?? null
+  const child = students[selectedIdx] ?? null
 
   return (
     <PageShell>
@@ -86,13 +86,13 @@ export default function ParentGradesClient({
         title="Grades & Report"
         subtitle="View grades and performance across all subjects."
         actions={
-          children.length > 1 ? (
+          students.length > 1 ? (
             <select
               value={selectedIdx}
               onChange={(e) => setSelectedIdx(Number(e.target.value))}
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[var(--primary)] transition"
             >
-              {children.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
+              {students.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
             </select>
           ) : undefined
         }

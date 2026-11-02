@@ -148,7 +148,7 @@ export default function StudentAdmissionsPage() {
               </div>
               <div>
                 <h3 className="font-bold text-slate-800 text-sm">{status === "ENROLLED" ? "Enrolment confirmed" : status === "OFFER_ACCEPTED" ? "Offer accepted" : "Admission status"}</h3>
-                <p className="text-[10px] text-slate-400 mt-1">GDM enrollment contract confirmed on {new Date().toLocaleDateString()}</p>
+                <p className="text-[10px] text-slate-400 mt-1">Enrolment contract status: {status === "ENROLLED" ? "Confirmed" : "Awaiting confirmation"}</p>
               </div>
             </div>
           )}

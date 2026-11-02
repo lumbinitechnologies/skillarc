@@ -1,5 +1,11 @@
 "use client"
 
+function isCategory(value: unknown): value is Category {
+  return Boolean(value && typeof value === "object" && "key" in value && typeof value.key === "string" && "label" in value && typeof value.label === "string" && "description" in value && typeof value.description === "string" && "group" in value && (value.group === "academic" || value.group === "course" || value.group === "admin") && "email_enabled" in value && typeof value.email_enabled === "boolean" && "push_enabled" in value && typeof value.push_enabled === "boolean")
+}
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useEffect, useState, useTransition } from "react"
 import {
   Loader2, Mail, Smartphone, Bell, CheckCircle2,
@@ -164,8 +170,8 @@ export function NotificationsFormClient() {
         throw new Error(data.error || "Failed to dispatch test notification")
       }
       setTestResult(data)
-    } catch (err: any) {
-      setError(err?.message || "Failed to send test notification")
+    } catch (err: unknown) {
+      setError(readErrorMessage(err) || "Failed to send test notification")
     } finally {
       setTestingNotif(false)
     }
@@ -178,9 +184,11 @@ export function NotificationsFormClient() {
         const res = await fetch("/api/account/notifications")
         if (res.ok) {
           const json = await res.json()
-          if (isMounted && Array.isArray(json.categories) && json.categories.length > 0) {
+          const responseData: unknown = json
+          const responseCategories = responseData && typeof responseData === "object" && "categories" in responseData && Array.isArray(responseData.categories) ? responseData.categories : []
+          if (isMounted && responseCategories.length > 0) {
             // Merge with local group metadata
-            const merged = json.categories.map((c: any) => {
+            const merged = responseCategories.filter(isCategory).map((c) => {
               const def = DEFAULT_CATEGORIES.find((d) => d.key === c.key)
               return {
                 ...c,

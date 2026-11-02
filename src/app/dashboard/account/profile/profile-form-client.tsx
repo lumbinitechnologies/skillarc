@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useEffect, useState, useRef } from "react"
 import {
   Loader2,
@@ -138,8 +140,8 @@ export function ProfileFormClient() {
       setData((prev) => (prev ? { ...prev, profile_image_url: json.profile_image_url } : null))
       setStatusMessage("Profile picture cropped and updated successfully!")
       setTimeout(() => setStatusMessage(null), 3000)
-    } catch (err: any) {
-      setError(err?.message || "Failed to upload picture. Please try again.")
+    } catch (err: unknown) {
+      setError(readErrorMessage(err) || "Failed to upload picture. Please try again.")
     } finally {
       setUploadingAvatar(false)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -165,8 +167,8 @@ export function ProfileFormClient() {
       setShowPresets(false)
       setStatusMessage("Avatar preset applied!")
       setTimeout(() => setStatusMessage(null), 3000)
-    } catch (err: any) {
-      setError(err?.message || "Failed to set preset avatar.")
+    } catch (err: unknown) {
+      setError(readErrorMessage(err) || "Failed to set preset avatar.")
     } finally {
       setUploadingAvatar(false)
     }
@@ -187,8 +189,8 @@ export function ProfileFormClient() {
       setData((prev) => (prev ? { ...prev, profile_image_url: null } : null))
       setStatusMessage("Profile picture removed.")
       setTimeout(() => setStatusMessage(null), 3000)
-    } catch (err: any) {
-      setError(err?.message || "Failed to remove avatar.")
+    } catch (err: unknown) {
+      setError(readErrorMessage(err) || "Failed to remove avatar.")
     } finally {
       setUploadingAvatar(false)
     }
@@ -218,8 +220,8 @@ export function ProfileFormClient() {
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
-    } catch (err: any) {
-      setError(err?.message || "Couldn't save your changes. Please try again.")
+    } catch (err: unknown) {
+      setError(readErrorMessage(err) || "Couldn't save your changes. Please try again.")
     } finally {
       setSaving(false)
     }

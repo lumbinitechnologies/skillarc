@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(data)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Timetable settings fetch error:", error)
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -75,8 +76,8 @@ export async function POST(request: NextRequest) {
     if (error) throw error
 
     return NextResponse.json(data?.[0] || {})
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Timetable settings save error:", error)
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }

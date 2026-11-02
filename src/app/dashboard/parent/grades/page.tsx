@@ -4,9 +4,9 @@ import ParentGradesClient from "./grades-client"
 export const dynamic = "force-dynamic"
 
 export default async function ParentGradesPage() {
-  const { profile, children, admin } = await getParentContext()
+  const { profile, children: students, admin } = await getParentContext()
 
-  const studentIds = children.map((c) => c.id)
+  const studentIds = students.map((c) => c.id)
 
   const submissionsRes = studentIds.length
     ? await admin
@@ -22,9 +22,9 @@ export default async function ParentGradesPage() {
         .not("grade", "is", null)
     : { data: [] }
 
-  const raw = (submissionsRes.data ?? []) as any[]
+  const raw = (submissionsRes.data ?? [])
 
-  const childGrades = children.map((child) => {
+  const childGrades = students.map((child) => {
     const records = raw
       .filter((s) => s.student_id === child.id)
       .map((s) => {
@@ -66,7 +66,7 @@ export default async function ParentGradesPage() {
   return (
     <ParentGradesClient
       parentName={profile.name ?? "Parent"}
-      children={childGrades}
+      students={childGrades}
     />
   )
 }

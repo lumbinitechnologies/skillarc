@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -149,10 +150,10 @@ export async function POST(request: NextRequest) {
 
     revalidateTag(`dashboard:user-profile:${user.id}`, "max")
     return NextResponse.json({ success: true, profile_image_url: publicUrl })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Avatar upload handler error:", err)
     return NextResponse.json(
-      { error: err?.message || "Internal server error during avatar upload" },
+      { error: readErrorMessage(err) || "Internal server error during avatar upload" },
       { status: 500 }
     )
   }
@@ -198,10 +199,10 @@ export async function DELETE() {
 
     revalidateTag(`dashboard:user-profile:${user.id}`, "max")
     return NextResponse.json({ success: true, profile_image_url: null })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Avatar delete handler error:", err)
     return NextResponse.json(
-      { error: err?.message || "Internal server error" },
+      { error: readErrorMessage(err) || "Internal server error" },
       { status: 500 }
     )
   }

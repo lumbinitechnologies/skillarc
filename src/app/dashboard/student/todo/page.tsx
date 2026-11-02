@@ -78,7 +78,7 @@ export default async function StudentTodoPage() {
         .eq("section_id", profile.section_id)
     : { data: [] }
 
-  let subjectIds = Array.from(new Set((timetableRows as Array<any>).map((slot) => slot.subject_id).filter(Boolean))) as string[]
+  let subjectIds = Array.from(new Set((timetableRows ?? []).map((slot) => slot.subject_id).filter(Boolean))) as string[]
 
   if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
     let subQuery = supabase
@@ -94,7 +94,7 @@ export default async function StudentTodoPage() {
     }
     const { data: programSubjects } = await subQuery
     if (programSubjects?.length) {
-      subjectIds = programSubjects.map((s: any) => s.id)
+      subjectIds = programSubjects.map((s) => s.id)
     }
   }
 
@@ -124,7 +124,7 @@ export default async function StudentTodoPage() {
 
   // Filter assignments targeted at the student's section
   const sectionId = profile.section_id
-  const sectionAssignments = (allAssignments ?? []).filter((a: any) => {
+  const sectionAssignments = (allAssignments ?? []).filter((a) => {
     if (a.type === "Material") return false // Materials are not Todo items
     if (!a.section_ids || a.section_ids.length === 0) return true
     return a.section_ids.includes(sectionId)

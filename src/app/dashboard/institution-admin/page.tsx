@@ -1,3 +1,5 @@
+import { getServerTime } from "@/lib/server-time"
+import { measureServer } from "@/lib/perf"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import InstitutionAdminDashboardClient from "./institution-admin-dashboard-client"
@@ -5,10 +7,10 @@ import { ROLES } from "@/constants/roles"
 import { getCurrentUserContext } from "@/lib/user-context"
 
 export default async function InstitutionAdminPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentUserContext()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.institution-admin.context", () => getCurrentUserContext())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/auth/login")
@@ -17,9 +19,9 @@ export default async function InstitutionAdminPage() {
   const supabase = await createSupabaseServerClient()
 
   // 2. Fetch counts, timetable, periods, logs, and attendance concurrently in ONE single parallel batch
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = (await getServerTime()).toISOString().split("T")[0]
 
-  const tBatchStart = performance.now()
+
   const [
     institutionRes,
     facultyCountRes,
@@ -39,7 +41,7 @@ export default async function InstitutionAdminPage() {
     eventsRes,
     auditLogsRes,
     attendanceRecordsRes,
-  ] = await Promise.all([
+  ] = await measureServer("app.dashboard.institution-admin.data", () => Promise.all([
     // Institution Details
     supabase.from("institutions").select("id, name, domain").eq("id", profile.institution_id).maybeSingle(),
 
@@ -91,18 +93,16 @@ export default async function InstitutionAdminPage() {
 
     // Today's Attendance Records
     supabase.from("attendance_records").select("status, attendance_sessions!inner(attendance_date, section:section_id!inner(institution_id))").eq("attendance_sessions.section.institution_id", profile.institution_id).eq("attendance_sessions.attendance_date", todayStr),
-  ])
-  const batchMs = performance.now() - tBatchStart
-  const totalMs = performance.now() - tPageStart
+  ]))
 
-  console.info(
-    `[DashboardInstitutionAdmin] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} institutionId=${profile.institution_id}`
-  )
+
+
+
 
   const institution = institutionRes.data
 
   // Filter audit logs by institution (audit_logs has no institution_id, so filter via joined user)
-  const rawAuditLogs = (auditLogsRes.data ?? []) as any[]
+  const rawAuditLogs = (auditLogsRes.data ?? [])
   const auditLogs = rawAuditLogs
     .filter(log => {
       const user = Array.isArray(log.user) ? log.user[0] : log.user
@@ -122,7 +122,7 @@ export default async function InstitutionAdminPage() {
     })
 
   // Map events to expected shape (event_date → start_time, venue → location)
-  const rawEvents = (eventsRes.data ?? []) as any[]
+  const rawEvents = (eventsRes.data ?? [])
   const mappedEvents = rawEvents.map(e => ({
     id: e.id,
     title: e.title,
@@ -152,7 +152,7 @@ export default async function InstitutionAdminPage() {
   const pendingInvites = pendingInvitesRes.data ?? []
 
   // Format timetable slots to prevent array types issues
-  const rawSlots = (timetableSlotsRes.data ?? []) as any[]
+  const rawSlots = (timetableSlotsRes.data ?? [])
   const formattedSlots = rawSlots.map(s => {
     const subjectVal = Array.isArray(s.subject) ? s.subject[0] : s.subject
     const facultyVal = Array.isArray(s.faculty) ? s.faculty[0] : s.faculty

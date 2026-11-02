@@ -1,5 +1,9 @@
 "use client"
 
+import type { ComponentProps } from "react"
+import type { CatalogSubject, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
@@ -58,8 +62,8 @@ interface Props {
   initialStudents: StudentWithSection[]
   initialTotalStudents: number
   allFacultyAdvisors: Array<{ id: string; name: string; email: string }>
-  initialSubjects: any[]
-  initialAssignments: any[]
+  initialSubjects: CatalogSubject[]
+  initialAssignments: Awaited<ReturnType<typeof facultySubjectService.getFacultyAssignments>>
   departments: Array<{ id: string; name: string }>
   institutionId: string
   organizationId: string
@@ -88,8 +92,8 @@ export function DepartmentDetailClient({
   const [sections, setSections] = useState<SectionWithFacultyAdvisor[]>(initialSections)
   const [faculty, setFaculty] = useState<FacultyWithStats[]>(initialFaculty)
   const [students, setStudents] = useState<StudentWithSection[]>(initialStudents)
-  const [subjects, setSubjects] = useState<any[]>(initialSubjects)
-  const [assignments, setAssignments] = useState<any[]>(initialAssignments)
+  const [subjects, setSubjects] = useState<CatalogSubject[]>(initialSubjects)
+  const [assignments, setAssignments] = useState(initialAssignments)
   const [parents, setParents] = useState<Parent[]>([])
 
   // --- Pagination & Filters for Students ---
@@ -119,7 +123,7 @@ export function DepartmentDetailClient({
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
 
   const [isSubjectOpen, setIsSubjectOpen] = useState(false)
-  const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  const [selectedSubject, setSelectedSubject] = useState<CatalogSubject | null>(null)
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("")
 
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -248,7 +252,7 @@ export function DepartmentDetailClient({
 
   const loadStudents = useCallback(
     async (targetPage = studentPage, targetLimit = studentLimit) => {
-      setIsLoading(true)
+
       try {
         const params = new URLSearchParams({
           institution_id: institutionId,
@@ -275,7 +279,7 @@ export function DepartmentDetailClient({
   )
 
   const loadParents = async () => {
-    setIsLoading(true)
+
     try {
       const res = await fetch(`/api/parents?institution_id=${institutionId}&department_id=${department.id}`)
       if (!res.ok) throw new Error("Failed to load parents")
@@ -293,7 +297,7 @@ export function DepartmentDetailClient({
   }
 
   const loadSubjects = async () => {
-    setIsLoading(true)
+
     try {
       const res = await fetch(`/api/subjects?institution_id=${institutionId}&department_id=${department.id}`)
       if (!res.ok) throw new Error("Failed to load subjects")
@@ -311,17 +315,24 @@ export function DepartmentDetailClient({
   }
 
   const loadAssignments = async () => {
-    setIsLoading(true)
+
     try {
       const data = await facultySubjectService.getFacultyAssignments(institutionId)
       const deptSubjectIds = subjects.map((s) => s.id)
-      const filtered = (data || []).filter((rel: any) => deptSubjectIds.includes(rel.subject_id))
+      const filtered = (data || []).filter((rel) => deptSubjectIds.includes(rel.subject_id))
       setAssignments(filtered)
     } catch (error) {
       console.error("Failed to load assignments", error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const [loadingInputs, setLoadingInputs] = useState<readonly unknown[] | null>(null)
+  const nextLoadingInputs = [studentPage, studentLimit, activeTab, institutionId, department.id]
+  if (loadingInputs === null || nextLoadingInputs.some((value, index) => !Object.is(value, loadingInputs[index]))) {
+    setLoadingInputs(nextLoadingInputs)
+    setIsLoading(true)
   }
 
   // Load students when pagination updates
@@ -343,7 +354,7 @@ export function DepartmentDetailClient({
   // --- CRUD Handlers ---
 
   // 1. Programs CRUD
-  const handleCreateOrUpdateProgram = async (data: any) => {
+  const handleCreateOrUpdateProgram = async (data: Parameters<ComponentProps<typeof CreateProgramDialog>["onSubmit"]>[0]) => {
     setIsLoading(true)
     try {
       const method = selectedProgram ? "PUT" : "POST"
@@ -392,7 +403,7 @@ export function DepartmentDetailClient({
   }
 
   // 2. Sections CRUD
-  const handleCreateOrUpdateSection = async (data: any) => {
+  const handleCreateOrUpdateSection = async (data: Parameters<ComponentProps<typeof CreateSectionDialog>["onSubmit"]>[0]) => {
     setIsLoading(true)
     try {
       const method = selectedSection ? "PUT" : "POST"
@@ -444,7 +455,7 @@ export function DepartmentDetailClient({
   }
 
   // 3. Faculty CRUD
-  const handleCreateOrUpdateFaculty = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateFaculty = async (data: Parameters<ComponentProps<typeof CreateFacultyDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -496,7 +507,7 @@ export function DepartmentDetailClient({
   }
 
   // 4. Students CRUD
-  const handleCreateOrUpdateStudent = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateStudent = async (data: Parameters<ComponentProps<typeof CreateStudentDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -547,7 +558,7 @@ export function DepartmentDetailClient({
   }
 
   // 5. Parents CRUD
-  const handleCreateOrUpdateParent = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateParent = async (data: Parameters<ComponentProps<typeof CreateParentDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -596,7 +607,7 @@ export function DepartmentDetailClient({
   }
 
   // 6. Courses CRUD
-  const handleCreateOrUpdateSubject = async (data: any) => {
+  const handleCreateOrUpdateSubject = async (data: SubjectFormValues) => {
     setIsLoading(true)
     const isEdit = !!selectedSubject
     try {
@@ -618,7 +629,7 @@ export function DepartmentDetailClient({
       const result = await res.json()
       
       if (isEdit) {
-        const selectedProgram = programs.find((p: any) => p.id === result.program_id)
+        const selectedProgram = programs.find((p) => p.id === result.program_id)
         const formatted = {
           ...result,
           program: selectedProgram ? {
@@ -630,12 +641,12 @@ export function DepartmentDetailClient({
             } : null
           } : null
         }
-        setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+        setSubjects((prev) => prev.map((s) => s.id === selectedSubject.id ? formatted : s))
         setSelectedSubject(null)
       } else {
         const createdArray = Array.isArray(result) ? result : [result]
-        const formattedSubjects = createdArray.map((subject: any) => {
-          const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+        const formattedSubjects = createdArray.map((subject) => {
+          const selectedProgram = programs.find((p) => p.id === subject.program_id)
           return {
             ...subject,
             program: selectedProgram ? {
@@ -648,7 +659,7 @@ export function DepartmentDetailClient({
             } : null
           }
         })
-        setSubjects((prev: any) => [...prev, ...formattedSubjects])
+        setSubjects((prev) => [...prev, ...formattedSubjects])
       }
 
       setIsSubjectOpen(false)
@@ -677,7 +688,7 @@ export function DepartmentDetailClient({
 
       if (!res.ok) throw new Error("Failed to delete subject")
 
-      setSubjects((prev: any) => prev.filter((s: any) => s.id !== id))
+      setSubjects((prev) => prev.filter((s) => s.id !== id))
       toast({
         title: "Deleted",
         description: "Subject removed successfully",
@@ -708,7 +719,7 @@ export function DepartmentDetailClient({
   })
 
   // --- Subject Filtering Logic ---
-  const filteredSubjects = subjects.filter((s: any) => {
+  const filteredSubjects = subjects.filter((s) => {
     const nameMatch = s.name?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
     const codeMatch = s.code?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
     const progMatch = s.program?.name?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
@@ -941,7 +952,7 @@ export function DepartmentDetailClient({
               <SubjectsList
                 subjects={filteredSubjects}
                 onDelete={(id: string) => triggerDelete(id, "subject")}
-                onEdit={(s: any) => {
+                onEdit={(s) => {
                   setSelectedSubject(s)
                   setIsSubjectOpen(true)
                 }}
@@ -958,7 +969,7 @@ export function DepartmentDetailClient({
             </div>
             <FacultySubjectsClientPage
               faculty={facultyForAssignment}
-              subjects={subjects}
+              subjects={subjects.filter((subject): subject is typeof subject & { name: string; code: string; semester: number } => typeof subject.name === "string" && typeof subject.code === "string" && typeof subject.semester === "number").map(subject => ({ ...subject, credits: subject.credits ?? undefined, subject_type: subject.subject_type ?? undefined }))}
               assignments={assignments}
               departments={[]}
             />

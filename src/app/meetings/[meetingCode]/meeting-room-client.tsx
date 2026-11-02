@@ -44,11 +44,67 @@ import Whiteboard from "@/components/video-meeting/whiteboard"
 import VirtualBackgrounds, { VirtualBg } from "@/components/video-meeting/virtual-backgrounds"
 import BreakoutRooms from "@/components/video-meeting/breakout-rooms"
 import FloatingReactions, { ReactionItem } from "@/components/video-meeting/floating-reactions"
+import type { TableRow } from "@/lib/database-row"
+
+type JitsiEvent = {
+  muted?: boolean
+  on?: boolean
+  handRaised?: boolean
+  displayName?: string
+}
+interface JitsiApi {
+  addEventListener(event: string, listener: (payload: JitsiEvent) => void): void
+  executeCommand(command: string, ...args: unknown[]): void
+  dispose(): void
+}
+interface JitsiConstructor {
+  new(domain: string, options: Record<string, unknown>): JitsiApi
+}
+type Meeting = TableRow<"meetings"> & {
+  subject?: { name: string | null; code: string | null } | null
+  section?: { name: string | null } | null
+}
+type MeetingMessage = TableRow<"meeting_messages">
+type ParticipantUser = { name: string | null; email: string | null; role: string | null }
+type MeetingParticipant = TableRow<"meeting_participants"> & { user: ParticipantUser | null }
+interface MeetingSummaryParticipant {
+  id: string
+  name: string
+  email: string
+  role: string
+  joinedAt: string | null
+  leftAt: string | null
+  durationSeconds: number
+  isPresent: boolean
+}
+interface MeetingSummary {
+  totalParticipants: number
+  presentCount: number
+  averageDurationSeconds: number
+  totalDurationSeconds: number
+  participants: MeetingSummaryParticipant[]
+}
+
+function readMeetingMessage(value: unknown): MeetingMessage | null {
+  if (!value || typeof value !== "object") return null
+  const message = value as Record<string, unknown>
+  if (typeof message.id !== "string" || typeof message.meeting_id !== "string" || typeof message.institution_id !== "string" || typeof message.message !== "string" || typeof message.sender_id !== "string" || typeof message.sender_name !== "string") return null
+  return {
+    id: message.id,
+    meeting_id: message.meeting_id,
+    institution_id: message.institution_id,
+    message: message.message,
+    sender_id: message.sender_id,
+    sender_name: message.sender_name,
+    created_at: typeof message.created_at === "string" ? message.created_at : null,
+    is_deleted: typeof message.is_deleted === "boolean" ? message.is_deleted : null,
+  }
+}
 
 // Extend window interface for Jitsi Meet external script
 declare global {
   interface Window {
-    JitsiMeetExternalAPI: any
+    JitsiMeetExternalAPI?: JitsiConstructor
   }
 }
 
@@ -62,7 +118,7 @@ interface UserSession {
 
 interface MeetingRoomClientProps {
   user: UserSession
-  meeting: any
+  meeting: Meeting
 }
 
 const JAAS_APP_ID = process.env.NEXT_PUBLIC_JAAS_APP_ID || "vpaas-magic-cookie-d08c4a10b6d548079ff833f1e0db5ffc"
@@ -78,7 +134,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
   const [isHandRaised, setIsHandRaised] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   
-  const jitsiApiRef = useRef<any>(null)
+  const jitsiApiRef = useRef<JitsiApi | null>(null)
   const [duration, setDuration] = useState(0)
 
   // Side panels toggles
@@ -89,21 +145,21 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
   const [showMobileReactions, setShowMobileReactions] = useState(false)
 
   // Synchronized chat feed
-  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatMessages, setChatMessages] = useState<MeetingMessage[]>([])
   const [messageInput, setMessageInput] = useState("")
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Synchronized participant list
-  const [activeParticipants, setActiveParticipants] = useState<any[]>([])
+  const [activeParticipants, setActiveParticipants] = useState<MeetingParticipant[]>([])
   const [participantSearch, setParticipantSearch] = useState("")
 
   // Floating reactions emitter
   const [reactions, setReactions] = useState<ReactionItem[]>([])
-  const channelRef = useRef<any>(null)
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   // Notifications
   const [toast, setToast] = useState<{ message: string; type: "info" | "success" | "warning" | "error" } | null>(null)
-  const [meetingSummary, setMeetingSummary] = useState<any | null>(null)
+  const [meetingSummary, setMeetingSummary] = useState<MeetingSummary | null>(null)
   const [showMeetingSummary, setShowMeetingSummary] = useState(false)
   const joinRecordedRef = useRef(false)
   const leaveRecordedRef = useRef(false)
@@ -114,6 +170,106 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
   }
 
   // 1. Load 8x8 JaaS external script and initialize room
+  const buildMeetingSummary = async (): Promise<MeetingSummary | null> => {
+    if (!meeting.id) return null
+
+    try {
+      const [leaveResult, analyticsResult] = await Promise.all([
+        recordLeaveMeetingAction(meeting.id, user.id),
+        getMeetingAnalyticsAction(meeting.id),
+      ])
+
+      if (!leaveResult.success && !leaveRecordedRef.current) {
+        leaveRecordedRef.current = true
+      }
+
+      if (!analyticsResult.success || !Array.isArray(analyticsResult.logs)) {
+        return null
+      }
+
+      const logs = analyticsResult.logs
+      const participants = logs.map((log) => {
+        const joinedAt = log.joined_at ? new Date(log.joined_at).getTime() : null
+        const leftAt = log.left_at ? new Date(log.left_at).getTime() : null
+        const durationSeconds = joinedAt && leftAt ? Math.max(0, Math.round((leftAt - joinedAt) / 1000)) : 0
+
+        return {
+          id: log.user_id,
+          name: log.user?.name || "Unknown",
+          email: log.user?.email || "",
+          role: log.user?.role || "student",
+          joinedAt: log.joined_at,
+          leftAt: log.left_at,
+          durationSeconds,
+          isPresent: log.is_present !== false,
+        }
+      })
+
+      const totalDurationSeconds = participants.reduce((sum, participant) => sum + participant.durationSeconds, 0)
+      const averageDurationSeconds = participants.length > 0 ? Math.round(totalDurationSeconds / participants.length) : 0
+      const presentCount = participants.filter((participant) => participant.isPresent).length
+
+      return {
+        totalParticipants: participants.length,
+        presentCount,
+        averageDurationSeconds,
+        totalDurationSeconds,
+        participants,
+      }
+    } catch (error) {
+      console.error("Error building meeting summary:", error)
+      return null
+    }
+  }
+
+  async function refreshParticipants() {
+    if (!meeting?.id) return
+    const res = await getMeetingAnalyticsAction(meeting.id)
+    if (res.success && Array.isArray(res.logs)) {
+      setActiveParticipants(res.logs)
+    }
+  }
+
+  async function handleEndCall() {
+    if (leaveRecordedRef.current) {
+      setShowMeetingSummary(true)
+      return
+    }
+
+    leaveRecordedRef.current = true
+    await recordLeaveMeetingAction(meeting.id, user.id)
+
+    if (user.role === "faculty" && meeting.subject_id) {
+      await endMeetingAction(meeting.id, meeting.subject_id)
+    }
+
+    const summary = await buildMeetingSummary()
+    setMeetingSummary(summary)
+    setShowMeetingSummary(true)
+
+    if (jitsiApiRef.current) {
+      try { jitsiApiRef.current.dispose() } catch (e) {}
+    }
+
+    window.setTimeout(() => {
+      router.push(meeting.subject_id ? `/dashboard/${user.role}/subjects/${meeting.subject_id}` : `/dashboard/${user.role}/subjects`)
+    }, 1400)
+  }
+
+  function handleEmitReaction(emoji: string) {
+    const rid = crypto.randomUUID()
+    const randomX = 20 + (Number.parseInt(rid.slice(0, 2), 16) % 60)
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "reaction",
+        payload: { emoji, x: randomX }
+      })
+    }
+    setReactions(prev => [...prev, { id: rid, emoji, x: randomX }])
+    setTimeout(() => setReactions(prev => prev.filter(r => r.id !== rid)), 4000)
+  }
+
   useEffect(() => {
     let isDisposed = false
     const scriptSrc = `https://${JAAS_DOMAIN}/${JAAS_APP_ID}/external_api.js`
@@ -158,19 +314,19 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
       try {
         const api = new window.JitsiMeetExternalAPI(JAAS_DOMAIN, options)
 
-        api.addEventListener("videoMuteStatusChanged", (e: any) => {
-          setIsVideoOn(!e.muted)
+        api.addEventListener("videoMuteStatusChanged", (e) => {
+          setIsVideoOn(e.muted === false)
         })
-        api.addEventListener("audioMuteStatusChanged", (e: any) => {
-          setIsMuted(e.muted)
+        api.addEventListener("audioMuteStatusChanged", (e) => {
+          setIsMuted(e.muted === true)
         })
-        api.addEventListener("screenSharingStatusChanged", (e: any) => {
-          setIsScreenSharing(e.on)
+        api.addEventListener("screenSharingStatusChanged", (e) => {
+          setIsScreenSharing(e.on === true)
         })
-        api.addEventListener("raiseHandUpdated", (e: any) => {
+        api.addEventListener("raiseHandUpdated", (e) => {
           setIsHandRaised(Boolean(e?.handRaised))
         })
-        api.addEventListener("participantJoined", (e: any) => {
+        api.addEventListener("participantJoined", (e) => {
           addToast(`${e.displayName || "A participant"} joined the lecture`, "info")
           refreshParticipants()
         })
@@ -245,7 +401,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     const nextHand = !isHandRaised
     setIsHandRaised(nextHand)
     if (nextHand) {
-      emitReaction("✋")
+      handleEmitReaction("✋")
       addToast("Hand raised", "info")
     }
   }
@@ -260,13 +416,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     addToast(`Selected background: ${bg.name}`, "info")
   }
 
-  const refreshParticipants = async () => {
-    if (!meeting?.id) return
-    const res = await getMeetingAnalyticsAction(meeting.id)
-    if (res.success && Array.isArray(res.logs)) {
-      setActiveParticipants(res.logs)
-    }
-  }
+
 
   useEffect(() => {
     const registerJoin = async () => {
@@ -310,7 +460,8 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
           filter: `meeting_id=eq.${meeting.id}`,
         },
         (payload) => {
-          const newMsg = payload.new as any
+          const newMsg = readMeetingMessage(payload.new)
+          if (!newMsg) return
           setChatMessages((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev
             return [...prev, newMsg]
@@ -337,19 +488,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
   }, [chatMessages])
 
   // Emit Reaction to all peers
-  const emitReaction = (emoji: string) => {
-    const randomX = Math.floor(Math.random() * 60) + 20
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: "broadcast",
-        event: "reaction",
-        payload: { emoji, x: randomX }
-      })
-    }
-    const rid = `reaction-${Date.now()}-${Math.random()}`
-    setReactions(prev => [...prev, { id: rid, emoji, x: randomX }])
-    setTimeout(() => setReactions(prev => prev.filter(r => r.id !== rid)), 4000)
-  }
+
 
   // Send message
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -383,84 +522,10 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
   }
 
-  const buildMeetingSummary = async () => {
-    if (!meeting?.id) return
 
-    try {
-      const [leaveResult, analyticsResult] = await Promise.all([
-        recordLeaveMeetingAction(meeting.id, user.id),
-        getMeetingAnalyticsAction(meeting.id),
-      ])
-
-      if (!leaveResult.success && !leaveRecordedRef.current) {
-        leaveRecordedRef.current = true
-      }
-
-      if (!analyticsResult.success || !Array.isArray(analyticsResult.logs)) {
-        return null
-      }
-
-      const logs = analyticsResult.logs as any[]
-      const participants = logs.map((log) => {
-        const joinedAt = log.joined_at ? new Date(log.joined_at).getTime() : null
-        const leftAt = log.left_at ? new Date(log.left_at).getTime() : null
-        const durationSeconds = joinedAt && leftAt ? Math.max(0, Math.round((leftAt - joinedAt) / 1000)) : 0
-
-        return {
-          id: log.user_id,
-          name: log.user?.name || "Unknown",
-          email: log.user?.email || "",
-          role: log.user?.role || "student",
-          joinedAt: log.joined_at,
-          leftAt: log.left_at,
-          durationSeconds,
-          isPresent: log.is_present !== false,
-        }
-      })
-
-      const totalDurationSeconds = participants.reduce((sum, participant) => sum + participant.durationSeconds, 0)
-      const averageDurationSeconds = participants.length > 0 ? Math.round(totalDurationSeconds / participants.length) : 0
-      const presentCount = participants.filter((participant) => participant.isPresent).length
-
-      return {
-        totalParticipants: participants.length,
-        presentCount,
-        averageDurationSeconds,
-        totalDurationSeconds,
-        participants,
-      }
-    } catch (error) {
-      console.error("Error building meeting summary:", error)
-      return null
-    }
-  }
 
   // End / Leave call
-  const handleEndCall = async () => {
-    if (leaveRecordedRef.current) {
-      setShowMeetingSummary(true)
-      return
-    }
 
-    leaveRecordedRef.current = true
-    await recordLeaveMeetingAction(meeting.id, user.id)
-
-    if (user.role === "faculty") {
-      await endMeetingAction(meeting.id, meeting.subject_id)
-    }
-
-    const summary = await buildMeetingSummary()
-    setMeetingSummary(summary)
-    setShowMeetingSummary(true)
-
-    if (jitsiApiRef.current) {
-      try { jitsiApiRef.current.dispose() } catch (e) {}
-    }
-
-    window.setTimeout(() => {
-      router.push(`/dashboard/${user.role}/subjects/${meeting.subject_id}`)
-    }, 1400)
-  }
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(meeting.meeting_code)
@@ -554,7 +619,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
               <div className="max-h-56 overflow-y-auto rounded-2xl border border-white/10 bg-slate-950/70 p-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Participants</p>
                 <div className="space-y-2">
-                  {meetingSummary.participants.map((participant: any) => (
+                  {meetingSummary.participants.map((participant) => (
                     <div key={participant.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-900/70 px-3 py-2 text-xs sm:text-sm">
                       <div>
                         <p className="font-semibold text-white">{participant.name}</p>
@@ -794,7 +859,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
                 <button
                   key={emoji}
                   onClick={() => {
-                    emitReaction(emoji)
+                    handleEmitReaction(emoji)
                     setShowMobileMoreMenu(false)
                   }}
                   className="text-2xl p-1.5 hover:scale-125 transition-transform active:scale-95"
@@ -908,7 +973,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
             <button
               key={emoji}
               onClick={() => {
-                emitReaction(emoji)
+                handleEmitReaction(emoji)
                 setShowMobileReactions(false)
               }}
               className="text-2xl p-1 hover:scale-125 transition-transform active:scale-95"
@@ -1005,7 +1070,7 @@ export function MeetingRoomClient({ user, meeting }: MeetingRoomClientProps) {
             {["👍", "👏", "❤️", "🎉", "💡"].map((emoji) => (
               <button
                 key={emoji}
-                onClick={() => emitReaction(emoji)}
+                onClick={() => handleEmitReaction(emoji)}
                 className="p-1.5 hover:bg-white/10 rounded-xl transition-all text-lg cursor-pointer hover:scale-110 active:scale-95"
                 title={`React ${emoji}`}
               >

@@ -25,7 +25,7 @@ export async function getSubjectAnnouncementsAction(subjectId: string) {
     return []
   }
 
-  const announcementIds = announcements.map((announcement: any) => announcement.id)
+  const announcementIds = announcements.map((announcement) => announcement.id)
   const { data: replies, error: repliesError } = await supabase
     .from("announcement_replies")
     .select(`
@@ -37,17 +37,17 @@ export async function getSubjectAnnouncementsAction(subjectId: string) {
 
   if (repliesError) {
     console.error("Failed to load announcement replies:", JSON.stringify(repliesError))
-    return announcements.map((announcement: any) => ({ ...announcement, replies: [] }))
+    return announcements.map((announcement) => ({ ...announcement, replies: [] }))
   }
 
-  const repliesByAnnouncement = new Map<string, any[]>()
-  ;(replies || []).forEach((reply: any) => {
+  const repliesByAnnouncement = new Map<string, NonNullable<typeof replies>>()
+  ;(replies || []).forEach((reply) => {
     const list = repliesByAnnouncement.get(reply.post_id) || []
     list.push(reply)
     repliesByAnnouncement.set(reply.post_id, list)
   })
 
-  return announcements.map((announcement: any) => ({
+  return announcements.map((announcement) => ({
     ...announcement,
     replies: repliesByAnnouncement.get(announcement.id) || [],
   }))
@@ -91,7 +91,7 @@ export async function createSubjectAnnouncementAction(data: {
       .in("section_id", data.section_ids || [])
 
     if (studentsList && studentsList.length > 0) {
-      const studentIds = studentsList.map((st: any) => st.id)
+      const studentIds = studentsList.map((st) => st.id)
       await dispatchBatchNotifications(
         studentIds,
         "announcements",

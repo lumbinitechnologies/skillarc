@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import React, { useState } from "react"
 import {
   AlertTriangle,
@@ -23,7 +26,7 @@ interface AttendanceWarningModalProps {
     id: string
     name: string
     email?: string
-    registration_number?: string
+    registration_number?: string | null
     program_name?: string
     section_name?: string
     attendanceRate?: number
@@ -32,7 +35,7 @@ interface AttendanceWarningModalProps {
   } | null
   institutionName?: string
   institutionDomain?: string
-  onIssued?: (warning: any) => void
+  onIssued?: (warning: { studentId: string; warningLevel: string; attendancePercentage: number; totalSessions: number; missedSessions: number; interventionDate: string; notes: string; renderedHtml: string }) => void | Promise<void>
 }
 
 export default function AttendanceWarningModal({
@@ -43,19 +46,22 @@ export default function AttendanceWarningModal({
   institutionDomain = "skillarc.edu.au",
   onIssued,
 }: AttendanceWarningModalProps) {
+  const currentTime = useCurrentTime()
   const [warningLevel, setWarningLevel] = useState<"FIRST_WARNING" | "SECOND_WARNING" | "FINAL_BREACH_NOTICE">("FIRST_WARNING")
-  const [meetingDate, setMeetingDate] = useState(
+  const [meetingDate, setMeetingDate] = useState(() =>
     new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   )
   const [additionalNotes, setAdditionalNotes] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [issuedSuccess, setIssuedSuccess] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
 
   if (!isOpen || !student) return null
 
-  const attendanceRate = student.attendanceRate ?? 68
-  const missedCount = student.missedSessions ?? 5
-  const totalCount = student.totalSessions ?? 16
+  const hasAttendanceTotals = student.attendanceRate != null && student.missedSessions != null && student.totalSessions != null
+  const attendanceRate = student.attendanceRate ?? 0
+  const missedCount = student.missedSessions ?? 0
+  const totalCount = student.totalSessions ?? 0
 
   const warningTitles = {
     FIRST_WARNING: "FIRST ATTENDANCE WARNING NOTICE (70% – 79%)",
@@ -77,21 +83,24 @@ export default function AttendanceWarningModal({
   }
 
   async function handleIssueWarning() {
+    if (!student || !hasAttendanceTotals || !onIssued) return
+    setIssueError(null)
     setIsSaving(true)
     try {
       // Create warning letter record via API or callback
       const warningPayload = {
-        student_id: student?.id,
-        warning_level: warningLevel,
-        attendance_percentage: attendanceRate,
-        total_sessions: totalCount,
-        missed_sessions: missedCount,
-        intervention_date: meetingDate,
+        studentId: student.id,
+        warningLevel,
+        attendancePercentage: attendanceRate,
+        totalSessions: totalCount,
+        missedSessions: missedCount,
+        interventionDate: meetingDate,
         notes: additionalNotes,
+        renderedHtml: document.getElementById("printable-warning-letter")?.outerHTML ?? "",
       }
 
       if (onIssued) {
-        onIssued(warningPayload)
+        await onIssued(warningPayload)
       }
 
       setIssuedSuccess(true)
@@ -99,16 +108,18 @@ export default function AttendanceWarningModal({
         setIssuedSuccess(false)
         onClose()
       }, 2000)
+    } catch {
+      setIssueError("Could not save this notice. Please retry.")
     } finally {
       setIsSaving(false)
     }
   }
 
-  const todayStr = new Date().toLocaleDateString("en-US", {
+  const todayStr = currentTime ? new Date(currentTime).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
-  })
+  }) : "Date unavailable"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -147,7 +158,7 @@ export default function AttendanceWarningModal({
             <label className="font-bold text-slate-700 block mb-1">Warning Notice Level</label>
             <select
               value={warningLevel}
-              onChange={(e) => setWarningLevel(e.target.value as any)}
+              onChange={(e) => setWarningLevel(e.target.value as typeof warningLevel)}
               className="w-full rounded-xl border border-slate-200 bg-white p-2 font-semibold text-slate-900 outline-none focus:border-amber-500"
             >
               <option value="FIRST_WARNING">1st Warning Notice (70-79%)</option>
@@ -179,6 +190,7 @@ export default function AttendanceWarningModal({
         </div>
 
         {/* Printable Official Warning Notice Body */}
+        {(issueError || !hasAttendanceTotals) && <p role="alert" className="px-8 py-3 text-sm text-red-700">{issueError || "Attendance totals are unavailable. Refresh attendance before issuing a notice."}</p>}
         <div className="p-8 overflow-y-auto print:p-0 print:overflow-visible font-serif space-y-6 text-slate-900" id="printable-warning-letter">
           {/* Header */}
           <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-start">

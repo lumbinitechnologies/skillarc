@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 /**
@@ -9,7 +10,7 @@ async function safeUpdateByEq(
   table: string,
   column: string,
   value: string,
-  updates: Record<string, any>
+  updates: Record<string, unknown>
 ) {
   try {
     await client.from(table).update(updates).eq(column, value)
@@ -21,7 +22,7 @@ async function safeUpdateByIn(
   table: string,
   column: string,
   values: string[],
-  updates: Record<string, any>
+  updates: Record<string, unknown>
 ) {
   if (!values || values.length === 0) return
   try {
@@ -84,19 +85,19 @@ async function fallbackCascadeDeleteInstitution(
       adminClient.from("job_posts").select("id").eq("institution_id", institutionId),
     ])
 
-    const userIds        = (usersRes.data    || []).map((u: any) => u.id)
-    const studentIds     = Array.from(new Set([...(studentsRes.data || []).map((s: any) => s.id), ...userIds]))
-    const programIds     = (programsRes.data || []).map((p: any) => p.id)
-    const departmentIds  = (deptsRes.data    || []).map((d: any) => d.id)
-    const subjectIds     = (subjectsRes.data || []).map((s: any) => s.id)
-    const sectionIds     = (sectionsRes.data || []).map((s: any) => s.id)
-    const admissionsAppIds = (appsRes.data   || []).map((a: any) => a.id)
-    const enrolmentIds   = (enrolmentsRes.data || []).map((e: any) => e.id)
-    const paymentPlanIds = (plansRes.data    || []).map((p: any) => p.id)
-    const meetingIds     = (meetingsRes.data || []).map((m: any) => m.id)
-    const onlineSessionIds = (onlineRes.data || []).map((s: any) => s.id)
-    const eventIds       = (eventsRes.data   || []).map((e: any) => e.id)
-    const jobPostIds     = (jobsRes.data     || []).map((j: any) => j.id)
+    const userIds        = (usersRes.data    || []).map((u) => u.id)
+    const studentIds     = Array.from(new Set([...(studentsRes.data || []).map((s) => s.id), ...userIds]))
+    const programIds     = (programsRes.data || []).map((p) => p.id)
+    const departmentIds  = (deptsRes.data    || []).map((d) => d.id)
+    const subjectIds     = (subjectsRes.data || []).map((s) => s.id)
+    const sectionIds     = (sectionsRes.data || []).map((s) => s.id)
+    const admissionsAppIds = (appsRes.data   || []).map((a) => a.id)
+    const enrolmentIds   = (enrolmentsRes.data || []).map((e) => e.id)
+    const paymentPlanIds = (plansRes.data    || []).map((p) => p.id)
+    const meetingIds     = (meetingsRes.data || []).map((m) => m.id)
+    const onlineSessionIds = (onlineRes.data || []).map((s) => s.id)
+    const eventIds       = (eventsRes.data   || []).map((e) => e.id)
+    const jobPostIds     = (jobsRes.data     || []).map((j) => j.id)
 
     // Second-tier IDs
     const [enrolUnitsRes, assignsRes, invoicesRes, projsRes] = await Promise.all([
@@ -114,10 +115,10 @@ async function fallbackCascadeDeleteInstitution(
         : Promise.resolve({ data: [] }),
     ])
 
-    const enrolmentUnitIds = (enrolUnitsRes.data || []).map((u: any) => u.id)
-    const assignmentIds    = (assignsRes.data    || []).map((a: any) => a.id)
-    const invoiceIds       = (invoicesRes.data   || []).map((i: any) => i.id)
-    const projectIds       = (projsRes.data      || []).map((p: any) => p.id)
+    const enrolmentUnitIds = (enrolUnitsRes.data || []).map((u) => u.id)
+    const assignmentIds    = (assignsRes.data    || []).map((a) => a.id)
+    const invoiceIds       = (invoicesRes.data   || []).map((i) => i.id)
+    const projectIds       = (projsRes.data      || []).map((p) => p.id)
 
     // Third-tier IDs
     const [subsRes, projGroupsRes] = await Promise.all([
@@ -129,8 +130,8 @@ async function fallbackCascadeDeleteInstitution(
         : Promise.resolve({ data: [] }),
     ])
 
-    const submissionIds = (subsRes.data      || []).map((s: any) => s.id)
-    const projGroupIds  = (projGroupsRes.data || []).map((g: any) => g.id)
+    const submissionIds = (subsRes.data      || []).map((s) => s.id)
+    const projGroupIds  = (projGroupsRes.data || []).map((g) => g.id)
 
     // ── 2. Nullify self-referential / circular FK columns ────────────────────
     await Promise.all([
@@ -378,8 +379,8 @@ async function fallbackCascadeDeleteInstitution(
     }
 
     return { success: true }
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Failed to delete institution" }
+  } catch (err: unknown) {
+    return { success: false, error: readErrorMessage(err) || "Failed to delete institution" }
   }
 }
 
@@ -397,7 +398,7 @@ export async function cascadeDeleteInstitution(
       .from("users")
       .select("id")
       .eq("institution_id", institutionId)
-    const userIds: string[] = (users || []).map((u: any) => u.id)
+    const userIds: string[] = (users || []).map((u) => u.id)
 
     // 2. Try atomic Postgres RPC for instantaneous database-level cascade
     let rpcSuccess = false
@@ -430,9 +431,9 @@ export async function cascadeDeleteInstitution(
     }
 
     return { success: true }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[cascade-delete] fatal error deleting institution:", err)
-    return { success: false, error: err?.message || "Failed to delete institution and dependent records" }
+    return { success: false, error: readErrorMessage(err) || "Failed to delete institution and dependent records" }
   }
 }
 
@@ -449,7 +450,7 @@ export async function cascadeDeleteOrganization(
       .from("users")
       .select("id")
       .eq("organization_id", organizationId)
-    const orgUserIds: string[] = (orgUsers || []).map((u: any) => u.id)
+    const orgUserIds: string[] = (orgUsers || []).map((u) => u.id)
 
     // 2. Try atomic Postgres RPC
     let rpcSuccess = false
@@ -514,8 +515,8 @@ export async function cascadeDeleteOrganization(
     }
 
     return { success: true }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[cascade-delete] fatal error deleting organization:", err)
-    return { success: false, error: err?.message || "Failed to delete organization" }
+    return { success: false, error: readErrorMessage(err) || "Failed to delete organization" }
   }
 }

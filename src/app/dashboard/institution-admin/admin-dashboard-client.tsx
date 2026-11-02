@@ -1,5 +1,10 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -53,8 +58,8 @@ export default function AdminDashboardClient({
       setInviteStatus("success")
       setInviteEmail("")
       setTimeout(() => { setInviteStatus("idle"); router.refresh() }, 2000)
-    } catch (err: any) {
-      setInviteError(err.message)
+    } catch (err: unknown) {
+      setInviteError(readErrorMessage(err))
       setInviteStatus("error")
     }
   }
@@ -82,7 +87,8 @@ export default function AdminDashboardClient({
     institution_admin: { bg: "#fee2e2", text: "#991b1b" },
   }
 
-  const hour = new Date().getHours()
+  const currentTime = useCurrentTime()
+  const hour = new Date(currentTime).getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
   return (

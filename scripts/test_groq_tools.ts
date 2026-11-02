@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { groq } from "@ai-sdk/groq"
 import { streamText, tool } from "ai"
 import { z } from "zod"

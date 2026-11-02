@@ -15,7 +15,7 @@ export default async function FacultySubjectsPage() {
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)) redirect("/dashboard")
 
   const [assignmentRows, subjectResult, timetableResult, sectionsResult] = await measureServer("dashboard.faculty.subjects.data", () => Promise.all([
     supabase
@@ -41,16 +41,16 @@ export default async function FacultySubjectsPage() {
   ]))
 
   const assignedSubjectIds = new Set(
-    (assignmentRows.data ?? []).map((row: any) => row.subject_id).filter(Boolean)
+    (assignmentRows.data ?? []).map((row) => row.subject_id).filter(Boolean)
   )
 
   const subjectRows = assignedSubjectIds.size > 0
-    ? ((subjectResult.data ?? []) as any[]).filter((s: any) => assignedSubjectIds.has(s.id))
+    ? ((subjectResult.data ?? [])).filter((s) => assignedSubjectIds.has(s.id))
     : (Array.isArray(subjectResult.data) ? subjectResult.data : [])
-  const timetableRows: any[] = (timetableResult.data ?? []) as any[]
+  const timetableRows = (timetableResult.data ?? [])
 
   const sectionMap = new Map(
-    (Array.isArray(sectionsResult.data) ? sectionsResult.data : []).map((section: any) => [section.id, section.name])
+    (Array.isArray(sectionsResult.data) ? sectionsResult.data : []).map((section) => [section.id, section.name])
   )
 
   const subjectMetaMap = new Map<string, { sectionNames: string[]; semester?: number }>()
@@ -74,7 +74,7 @@ export default async function FacultySubjectsPage() {
     subjectMetaMap.set(subjectId, existing)
   }
 
-  const subjects = (subjectRows as Array<any>).map((subject) => {
+  const subjects = (subjectRows).map((subject) => {
     const meta = subjectMetaMap.get(subject.id)
 
     return {

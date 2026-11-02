@@ -381,7 +381,7 @@ async function studentContext(
     lines.push(
       "\nCourses/Subjects:",
       ...subjects.map(
-        (s: any) =>
+        (s) =>
           `- ${clip(s.name, 70)} (${clip(s.code || "No Code", 20)}) [Credits: ${s.credits || 0}]`,
       ),
     );
@@ -389,7 +389,7 @@ async function studentContext(
     lines.push(
       "\nTimetable:",
       ...slots.map(
-        (s: any) =>
+        (s) =>
           `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Free Period", 70)}${s.faculty?.name ? ` taught by ${clip(s.faculty.name, 60)}` : ""}`,
       ),
     );
@@ -397,7 +397,7 @@ async function studentContext(
     lines.push(
       "\nAttendance (last 180 days):",
       ...attendance.map(
-        (v: any) =>
+        (v) =>
           `- ${clip(v.subject_name, 70)} (${clip(v.subject_code || "", 20)}): ${v.total_count ? ((v.present_count / v.total_count) * 100).toFixed(1) : "0"}% (${v.present_count}/${v.total_count})`,
       ),
     );
@@ -405,7 +405,7 @@ async function studentContext(
     lines.push(
       "\nGraded Assignments:",
       ...grades.map(
-        (s: any) =>
+        (s) =>
           `- ${clip(s.assignment?.title, 80)} (${clip(s.assignment?.subjects?.name || "Unknown subject", 60)}): ${s.grade}/${s.assignment?.max_score}${s.feedback ? ` — ${clip(s.feedback, 120)}` : ""}`,
       ),
     );
@@ -413,12 +413,12 @@ async function studentContext(
     const submitted = new Set(
       (submissions || []).map((s: any) => s.assignment_id),
     );
-    const pending = assignments.filter((a: any) => !submitted.has(a.id));
+    const pending = assignments.filter((a) => !submitted.has(a.id));
     if (pending.length)
       lines.push(
         "\nPending Assignments:",
         ...pending.map(
-          (a: any) =>
+          (a) =>
             `- ${clip(a.title, 80)} (${clip(a.subjects?.name || "Unknown subject", 60)}) — Due: ${a.due_date ? new Date(a.due_date).toISOString() : "No due date"}${a.due_date && new Date(a.due_date) < new Date() ? " [OVERDUE]" : ""}`,
         ),
       );
@@ -501,7 +501,7 @@ async function facultyContext(
     lines.push(
       "\nSubjects Taught:",
       ...taught.map(
-        (s: any) =>
+        (s) =>
           `- ${clip(s.subject?.name, 70)} (${clip(s.subject?.code || "", 20)})`,
       ),
     );
@@ -509,7 +509,7 @@ async function facultyContext(
     lines.push(
       "\nTeaching Schedule:",
       ...slots.map(
-        (s: any) =>
+        (s) =>
           `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Class", 70)}${s.section?.name ? ` for ${clip(s.section.name, 50)}` : ""}`,
       ),
     );
@@ -517,7 +517,7 @@ async function facultyContext(
     lines.push(
       "\nAssignments:",
       ...assignments.map(
-        (a: any) =>
+        (a) =>
           `- ${clip(a.title, 80)} (${clip(a.subjects?.name || "Unknown subject", 60)})`,
       ),
     );
@@ -525,7 +525,7 @@ async function facultyContext(
     lines.push(
       "\nAttendance Overview (last 180 days):",
       ...attendance.map(
-        (v: any) =>
+        (v) =>
           `- ${clip(v.subject_name, 70)}: ${v.total_count ? ((v.present_count / v.total_count) * 100).toFixed(1) : "0"}% (${v.present_count}/${v.total_count})`,
       ),
     );
@@ -669,12 +669,12 @@ async function adminContext(
 
   // Departments list
   if (includesScope(scope, "program_subjects") && Array.isArray(departments) && departments.length) {
-    lines.push("\nDepartments:", ...departments.map((d: any) => `- ${clip(d.name, 80)}`));
+    lines.push("\nDepartments:", ...departments.map((d) => `- ${clip(d.name, 80)}`));
   }
 
   // Programs list
   if (includesScope(scope, "program_subjects") && Array.isArray(programs) && programs.length) {
-    lines.push("\nPrograms:", ...programs.map((p: any) => {
+    lines.push("\nPrograms:", ...programs.map((p) => {
       const dept = p.department && typeof p.department === "object" ? p.department : {};
       return `- ${clip(p.name, 70)}${dept.name ? ` (Dept: ${clip(dept.name, 40)})` : ""}`;
     }));
@@ -682,7 +682,7 @@ async function adminContext(
 
   // Sections list
   if (includesScope(scope, "program_subjects") && Array.isArray(sections) && sections.length) {
-    lines.push("\nSections:", ...sections.map((s: any) => {
+    lines.push("\nSections:", ...sections.map((s) => {
       const prog = s.program && typeof s.program === "object" ? s.program : {};
       return `- ${clip(s.name, 50)} — Sem ${s.semester ?? "N/A"}${prog.name ? ` (${clip(prog.name, 40)})` : ""}`;
     }));
@@ -690,7 +690,7 @@ async function adminContext(
 
   // Subjects list
   if (includesScope(scope, "program_subjects") && Array.isArray(subjects) && subjects.length) {
-    lines.push("\nSubjects:", ...subjects.map((s: any) => {
+    lines.push("\nSubjects:", ...subjects.map((s) => {
       const prog = s.program && typeof s.program === "object" ? s.program : {};
       return `- ${clip(s.name, 60)} (${clip(s.code || "No code", 15)}) [Credits: ${s.credits ?? "N/A"}, Type: ${s.subject_type ?? "N/A"}]${prog.name ? ` — ${clip(prog.name, 30)}` : ""}`;
     }));
@@ -698,7 +698,7 @@ async function adminContext(
 
   // Faculty list
   if (includesScope(scope, "faculty_sections") && Array.isArray(recentFaculty) && recentFaculty.length) {
-    lines.push("\nFaculty Members:", ...recentFaculty.map((f: any) => {
+    lines.push("\nFaculty Members:", ...recentFaculty.map((f) => {
       const dept = f.department && typeof f.department === "object" ? f.department : {};
       return `- ${clip(f.name, 60)} (${clip(f.email, 50)}) — Role: ${f.role}${dept.name ? `, Dept: ${clip(dept.name, 30)}` : ""}`;
     }));
@@ -706,21 +706,21 @@ async function adminContext(
 
   // Recent students
   if (includesScope(scope, "program_subjects") && Array.isArray(recentStudents) && recentStudents.length) {
-    lines.push("\nRecent Students:", ...recentStudents.map((s: any) =>
+    lines.push("\nRecent Students:", ...recentStudents.map((s) =>
       `- ${clip(s.name, 60)} (${clip(s.email, 50)})`
     ));
   }
 
   // Timetable sample
   if (includesScope(scope, "timetable") && Array.isArray(slots) && slots.length) {
-    lines.push("\nTimetable (sample):", ...slots.map((s: any) =>
+    lines.push("\nTimetable (sample):", ...slots.map((s) =>
       `- ${clip(s.day, 15)}, Period ${s.period}: ${clip(s.subjects?.name || "Free", 60)}${s.section?.name ? ` [${clip(s.section.name, 30)}]` : ""}${s.faculty?.name ? ` — ${clip(s.faculty.name, 40)}` : ""}`
     ));
   }
 
   // Attendance rate today
   if (includesScope(scope, "attendance") && Array.isArray(attendanceToday) && attendanceToday.length) {
-    const present = attendanceToday.filter((r: any) => r.status === "PRESENT" || r.status === "LATE").length;
+    const present = attendanceToday.filter((r) => r.status === "PRESENT" || r.status === "LATE").length;
     const total = attendanceToday.length;
     const rate = total > 0 ? ((present / total) * 100).toFixed(1) : "0";
     lines.push(`\nToday's Attendance: ${rate}% (${present}/${total} records)`);
@@ -728,7 +728,7 @@ async function adminContext(
 
   // Announcements
   if (includesScope(scope, "announcements_events") && Array.isArray(recentAnnouncements) && recentAnnouncements.length) {
-    lines.push("\nRecent Announcements:", ...recentAnnouncements.map((a: any) =>
+    lines.push("\nRecent Announcements:", ...recentAnnouncements.map((a) =>
       `- ${clip(a.title, 80)}: ${clip(a.description, 150)}${a.subjects?.name ? ` [${clip(a.subjects.name, 50)}]` : ""}`
     ));
   }
@@ -1048,7 +1048,7 @@ async function announcements(
   return [
     "\nRecent Notices:",
     ...rows.map(
-      (a: any) =>
+      (a) =>
         `- ${clip(a.title, 80)}: ${clip(a.description, 220)}${a.subjects?.name ? ` [${clip(a.subjects.name, 60)}]` : ""} (${new Date(a.created_at).toISOString().slice(0, 10)})`,
     ),
   ];

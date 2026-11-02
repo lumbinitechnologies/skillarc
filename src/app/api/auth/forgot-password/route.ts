@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { resolveAppOrigin } from "@/lib/invite-user"
@@ -53,8 +54,8 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "If an account exists for this email, a reset link has been sent.",
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Forgot Password] Unexpected error:", error)
-    return NextResponse.json({ error: error.message || "An unexpected error occurred." }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "An unexpected error occurred." }, { status: 500 })
   }
 }

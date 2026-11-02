@@ -47,7 +47,7 @@ export function SecuritySection() {
             </div>
             <div>
               <h4 className="text-lg font-bold text-white font-sans">Access matched to your role</h4>
-              <p className="text-xs font-mono text-[#38BDF8]">// ROLE-BASED WORKSPACE ACCESS</p>
+              <p className="text-xs font-mono text-[#38BDF8]">{"//"} ROLE-BASED WORKSPACE ACCESS</p>
             </div>
           </div>
 
@@ -116,7 +116,7 @@ export function MultiInstitutionSection() {
           {/* Footer Callout */}
           <div className="text-center pt-6 border-t border-white/5">
             <span className="text-xs font-bold text-[#38BDF8] font-mono uppercase tracking-widest">
-              // ONE SHARED VIEW, LOCAL CONTROL
+              {"//"} ONE SHARED VIEW, LOCAL CONTROL
             </span>
           </div>
 
@@ -134,7 +134,7 @@ export function InfrastructureSection() {
         {/* Left Copy */}
         <div className="space-y-4 lg:col-span-5">
           <span className="text-xs font-mono tracking-[0.25em] text-white/40 uppercase block">
-            // TELEMETRY INFRASTRUCTURE
+            {"//"} TELEMETRY INFRASTRUCTURE
           </span>
           <h3 className="text-3xl sm:text-4xl font-extrabold uppercase text-white font-sans tracking-tight">
             A dependable workspace for the way universities work.

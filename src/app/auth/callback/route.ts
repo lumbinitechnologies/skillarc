@@ -78,7 +78,7 @@ export async function GET(request: Request) {
   if (tokenHash && type) {
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: type as any,
+      type: type,
     })
 
     if (!error && data?.session) {

@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Pencil, Trash2, X, Check, Plus, Building2 } from "lucide-react"
@@ -45,8 +47,8 @@ export default function OrgAdminPage({
       setDomain("")
       setAdminEmail("")
       startTransition(() => router.refresh())
-    } catch (err: any) {
-      setErrorMsg(err?.message || "Something went wrong.")
+    } catch (err: unknown) {
+      setErrorMsg(readErrorMessage(err) || "Something went wrong.")
       setCreateStatus("error")
     }
   }
@@ -60,8 +62,8 @@ export default function OrgAdminPage({
         setDeletingId(null)
         startTransition(() => router.refresh())
       }
-    } catch (err: any) {
-      alert(err?.message || "Failed to delete institution")
+    } catch (err: unknown) {
+      alert(readErrorMessage(err) || "Failed to delete institution")
     }
   }
 
@@ -70,8 +72,8 @@ export default function OrgAdminPage({
       await updateInstitution(id, { name: editName, domain: editDomain || undefined })
       setEditingId(null)
       startTransition(() => router.refresh())
-    } catch (err: any) {
-      alert(err?.message)
+    } catch (err: unknown) {
+      alert(readErrorMessage(err))
     }
   }
 

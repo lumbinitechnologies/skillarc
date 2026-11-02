@@ -82,7 +82,7 @@ export default function InstitutionsPage({ institutions: initial = [], onDeleteI
         }),
       })
       if (res.ok) {
-        window.location.href = "/dashboard"
+        window.location.assign("/dashboard")
       } else {
         alert("Failed to enter institution")
       }
@@ -403,7 +403,7 @@ export default function InstitutionsPage({ institutions: initial = [], onDeleteI
         >
           <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 16px", marginBottom:20 }}>
             <p style={{ margin:0, fontSize:14, color:"#991b1b", fontWeight:600 }}>
-              Are you sure you want to delete "{deleteTarget.name}"?
+              Are you sure you want to delete &quot;{deleteTarget.name}&quot;?
             </p>
             <p style={{ margin:"8px 0 0", fontSize:12, color:"#b91c1c", lineHeight:"1.4" }}>
               This will permanently delete this institution along with all its departments, courses, faculty, students, timetables, admissions, and academic records.

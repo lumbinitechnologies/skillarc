@@ -174,7 +174,7 @@ export default function Analytics() {
             <div className="flex justify-between items-center pb-4 border-b border-[#3A6DAF]/20">
               <div className="space-y-1">
                 <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Progress at a glance</h3>
-                <p className="text-xs font-mono text-[#94BAC4]">// UNDERSTAND THE STUDENT PICTURE</p>
+                <p className="text-xs font-mono text-[#94BAC4]">{"//"} UNDERSTAND THE STUDENT PICTURE</p>
               </div>
               <div className="flex items-center gap-2 text-xs font-mono text-[#E57D37] bg-[#E57D37]/10 border border-[#E57D37]/30 px-3 py-1.5 rounded-full">
                 <ArrowUpRight size={14} />
@@ -227,7 +227,7 @@ export default function Analytics() {
             <div className="flex justify-between items-center pb-4 border-b border-[#3A6DAF]/20">
               <div className="space-y-1">
                 <h3 className="text-lg font-bold font-sans text-[#ECDFCB]">Attendance overview</h3>
-                <p className="text-xs font-mono text-[#94BAC4]">// WHERE TO FOLLOW UP</p>
+                <p className="text-xs font-mono text-[#94BAC4]">{"//"} WHERE TO FOLLOW UP</p>
               </div>
               <span className="text-xs font-mono text-[#EAAD62] bg-[#EAAD62]/10 border border-[#EAAD62]/30 px-3 py-1.5 rounded-full">
                 92% AVG

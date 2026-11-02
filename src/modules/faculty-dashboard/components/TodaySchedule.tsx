@@ -48,7 +48,7 @@ export default function TodaySchedule({
             margin: 0,
           }}
         >
-          Today's Schedule
+          Today&apos;s Schedule
         </h3>
       </div>
 

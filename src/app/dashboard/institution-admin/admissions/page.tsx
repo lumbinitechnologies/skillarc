@@ -1,5 +1,8 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
+
 import React, { FormEvent, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -51,7 +54,7 @@ type Application = {
   visa_type?: string | null
   visa_expiry?: string | null
   english_evidence?: string | null
-  application_data?: Record<string, any> | null
+  application_data?: Record<string, unknown> | null
   status: "APPLIED" | "UNDER_REVIEW" | "APPROVED" | "OFFER_SENT" | "OFFER_ACCEPTED" | "DECLINED" | "REJECTED" | "ENROLLED"
   program_id?: string
   intake_id?: string
@@ -298,14 +301,14 @@ export default function AdmissionsPage() {
 
       const app = data.application
       const intake = Array.isArray(app.intakes) ? app.intakes[0] : app.intakes
-      const start = app.course_start_date || intake?.start_date || new Date().toISOString().split("T")[0]
-      const end = app.course_end_date || intake?.end_date || new Date().toISOString().split("T")[0]
+      const start = app.course_start_date || intake?.start_date || ""
+      const end = app.course_end_date || intake?.end_date || ""
 
       setEnrolment(data)
 
       // Prepopulate sequential dates for each unit
       const subjects = data.subjects || []
-      const unitDrafts: UnitDraft[] = subjects.map((sub: any, idx: number) => {
+      const unitDrafts: UnitDraft[] = subjects.map((sub: { id: string; name: string; code?: string }, idx: number) => {
         // Divide course term into equal sequential blocks for units
         const startDateObj = new Date(start)
         const endDateObj = new Date(end)
@@ -331,8 +334,8 @@ export default function AdmissionsPage() {
         units: unitDrafts,
         timetable: [],
       })
-    } catch (err: any) {
-      setEnrolmentError(err.message || "Failed to open enrolment dialog.")
+    } catch (err: unknown) {
+      setEnrolmentError(readErrorMessage(err) || "Failed to open enrolment dialog.")
     } finally {
       setBusy(false)
     }
@@ -381,8 +384,8 @@ export default function AdmissionsPage() {
       setEnrolment(null)
       setSelectedApp(null)
       await loadData()
-    } catch (err: any) {
-      setEnrolmentError(err.message || "Failed to finalize qualification enrolment.")
+    } catch (err: unknown) {
+      setEnrolmentError(readErrorMessage(err) || "Failed to finalize qualification enrolment.")
     } finally {
       setBusy(false)
     }
@@ -460,7 +463,7 @@ export default function AdmissionsPage() {
             Direct Application Link for {institution?.name || "Your Institution"}
           </h3>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Embed this link on your official website’s <span className="font-semibold text-slate-700">"Apply Now"</span> button or marketing brochures. Prospective students who click this link are routed directly into your institution's admissions flow.
+            Embed this link on your official website’s <span className="font-semibold text-slate-700">&quot;Apply Now&quot;</span> button or marketing brochures. Prospective students who click this link are routed directly into your institution&apos;s admissions flow.
           </p>
         </div>
 
@@ -745,23 +748,24 @@ export default function AdmissionsPage() {
 
               {/* 2. Applicant Profile & Compliance */}
               {(() => {
-                const appDob = selectedApp.date_of_birth || selectedApp.application_data?.date_of_birth || selectedApp.application_data?.dob || "—"
-                const appGender = selectedApp.gender || selectedApp.application_data?.gender || "—"
-                const appNationality = selectedApp.nationality || selectedApp.application_data?.nationality || "—"
-                const appCountryOfBirth = selectedApp.country_of_birth || selectedApp.application_data?.country_of_birth || selectedApp.application_data?.countryOfBirth || "—"
-                const appAddress = selectedApp.address || selectedApp.application_data?.address || "—"
-                const appUsi = selectedApp.usi || selectedApp.application_data?.usi || "—"
-                const appPassport = selectedApp.passport_number || selectedApp.application_data?.passport_number || "—"
-                const appVisa = selectedApp.visa_type || selectedApp.application_data?.visa_type || "—"
-                const appEnglish = selectedApp.english_evidence || selectedApp.application_data?.english_evidence || selectedApp.application_data?.englishEvidence || "—"
+                const profileValue = (...values: unknown[]) => values.find((value): value is string => typeof value === "string" && value.length > 0) ?? "—"
+                const appDob = profileValue(selectedApp.date_of_birth, selectedApp.application_data?.date_of_birth, selectedApp.application_data?.dob)
+                const appGender = profileValue(selectedApp.gender, selectedApp.application_data?.gender)
+                const appNationality = profileValue(selectedApp.nationality, selectedApp.application_data?.nationality)
+                const appCountryOfBirth = profileValue(selectedApp.country_of_birth, selectedApp.application_data?.country_of_birth, selectedApp.application_data?.countryOfBirth)
+                const appAddress = profileValue(selectedApp.address, selectedApp.application_data?.address)
+                const appUsi = profileValue(selectedApp.usi, selectedApp.application_data?.usi)
+                const appPassport = profileValue(selectedApp.passport_number, selectedApp.application_data?.passport_number)
+                const appVisa = profileValue(selectedApp.visa_type, selectedApp.application_data?.visa_type)
+                const appEnglish = profileValue(selectedApp.english_evidence, selectedApp.application_data?.english_evidence, selectedApp.application_data?.englishEvidence)
 
                 const allDocs = (selectedApp.admission_documents && selectedApp.admission_documents.length > 0)
                   ? selectedApp.admission_documents
-                  : (selectedApp.application_data?.documents && Array.isArray(selectedApp.application_data.documents))
-                  ? selectedApp.application_data.documents.map((d: any, idx: number) => ({
+                  : (Array.isArray(selectedApp.application_data?.documents))
+                  ? selectedApp.application_data.documents.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object").map((doc, idx) => ({
                       id: `doc-${idx}`,
-                      document_name: d.name || d.file_name || d.document_type || "Supporting Document",
-                      file_url: d.file_url || d.url || null,
+                      document_name: profileValue(doc.name, doc.file_name, doc.document_type),
+                      file_url: profileValue(doc.file_url, doc.url),
                       status: "UPLOADED",
                     }))
                   : []
@@ -834,7 +838,7 @@ export default function AdmissionsPage() {
                         <p className="text-xs text-slate-400 italic py-2">No verification files attached to this application record.</p>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {allDocs.map((doc: any) => (
+                          {allDocs.map((doc) => (
                             <div
                               key={doc.id}
                               className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50/60 text-xs"
