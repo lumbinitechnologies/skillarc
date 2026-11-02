@@ -30,19 +30,19 @@ Only `supabase/migrations` is deployment input. Legacy files are historical refe
 
 Commit `a05e7a6` intentionally expanded the assistant limits to 20 queries/5,000 characters and added faculty navigation destinations. The tests still expected the older limits/routes. Updated assertions retain the large-fixture budget checks and role-denial tests; the linked faculty pages exist on current main.
 
-## Local verification
+## Current local verification (2026-11-02)
 
-- Full canonical replay in a disposable PostgreSQL 17 Supabase database, without seeds.
-- Database lint: no errors after repairs.
-- pgTAP: 22 assertions passed, including partial-index inference, denied administrative execution, unknown/inactive actors, cross-tenant conversion denial, constrained organization types and owned notification cascades.
-- All 21 discovered server test files passed with model smoke enabled (run directly with Node 24 and tsx, not a wrapper that counts files without individual tests).
-- TypeScript check passed.
-- Root ESLint remains failing: 1,035 errors and 383 warnings across 200 files after safe `prefer-const` fixes and correcting the malformed Tailwind theme object. The largest groups are 781 explicit `any` annotations and React lifecycle/purity violations. Existing lint rules remain enabled. Nested local worktrees/runtime state are excluded, not application source.
-- The broader security-readiness checks remain incomplete. Detailed audit evidence is retained locally; authorization-specific repairs and regression evidence are required before readiness can be claimed.
+- A fresh replay of all 18 canonical migrations and synthetic seed data completed in a disposable local Supabase database.
+- Strict database lint (`--fail-on warning`) passed after the function cleanup and pgvector schema move.
+- The #70 reconciliation pgTAP suite has 22 passing assertions. On the same local database, the #72 authorization suite passed all 56 synthetic positive/negative checks.
+- All 22 discovered server tests passed with knowledge-model smoke enabled on the #71 branch; all 24 discovered tests passed on the #72 branch.
+- TypeScript checks pass on both branches. The #72 focused ESLint checks and production build pass; the root build also passes with the existing `unpdf` dynamic-import warning.
+- `npm run lint` passes with 0 errors and 409 warnings. No lint rule was disabled and no application source was excluded.
+- Supabase security advisors report no warning-level findings. Remaining information-level results concern private server-only tables that are intentionally inaccessible to client roles.
 
-Passing the targeted repairs does not meet the full #67 release gate. #68/#65 must be validated on their actual merged trees; staging activation and client onboarding remain blocked until required checks, review and environment configuration are complete.
+These checks used local synthetic data only. No hosted schema, storage objects, accounts, or records were changed. PRs #70 and #74 are ready for independent review; #75 remains a draft until its base includes #71. GitHub Actions test and release workflows remain in PR #68, so current GitHub checks are Vercel preview checks rather than the required test gate. Staging and production activation remain disabled.
 
-## Integrated PR candidates (2026-11-01)
+## Earlier integrated PR candidates (2026-11-01)
 
 Both PR branches were updated to main `28f6dd6`. Testing their combined trees with repair commit `24f15b5` produced:
 
@@ -52,6 +52,4 @@ Both PR branches were updated to main `28f6dd6`. Testing their combined trees wi
 | #65 plus main and repairs | 23 discovered test files pass; typecheck and isolated PostgreSQL timezone assertions pass. |
 | #68 harness with all three migration sets | 18 canonical migrations replayed without seeds; 22 pgTAP assertions, deterministic fixture replay/collision rejection, and database lint pass. |
 
-These are local integration results, not passing GitHub checks for the unmerged repair or hosted staging evidence. #68 checks the stable staging alias's project and exact deployment ID before and after smoke and requires fresh independent review. The trusted-base policy workflow still has a bootstrap dependency: its policy script is not yet on main.
-
-Staging/policy environment credential listings were empty on 2026-11-01. No activation flags were enabled. Full root lint and broader readiness work remain required.
+These were local integration results, not passing GitHub checks or hosted staging evidence. Re-run #65/#68 against the final merged #67 tree before enabling staging. #68 still needs fresh independent review after its earlier review was dismissed; its test and production-release workflows are not yet active on `main`.
