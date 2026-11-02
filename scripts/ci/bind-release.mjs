@@ -1,0 +1,11 @@
+import { readFileSync, readdirSync, writeFileSync, appendFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { validateReleaseRecord } from './release-record.mjs';
+const mobile=JSON.parse(readFileSync('mobile-candidate.json','utf8'));
+const migrations=readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort().map(name=>({name,sha256:createHash('sha256').update(readFileSync(`supabase/migrations/${name}`)).digest('hex')}));
+const record={...mobile,serverSha:process.env.RELEASE_SHA,mobileRunId:process.env.MOBILE_RUN_ID,websiteUrl:process.env.DEPLOYMENT_URL,stagingEvidence:process.env.STAGING_EVIDENCE,migrationVersions:migrations.map(m=>m.name.slice(0,14)),migrationDigest:createHash('sha256').update(JSON.stringify(migrations)).digest('hex')};
+const digest=validateReleaseRecord(record);
+if(process.env.EXPECTED_RELEASE_DIGEST && digest!==process.env.EXPECTED_RELEASE_DIGEST) throw new Error('Release candidate changed after owner approval');
+writeFileSync('release-record.json',JSON.stringify({...record,digest},null,2)+'\n');
+if(process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT,`digest=${digest}\n`);
+if(process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,`## Exact release candidate\n\nServer: ${record.serverSha}\n\nMobile: ${record.mobileSha}\n\nWebsite: ${record.websiteUrl}\n\nAndroid build: ${record.androidBuildId}\n\nAPK SHA256: ${record.apkSha256}\n\nMigration digest: ${record.migrationDigest}\n\n[Android evidence](${record.androidEvidence}) · [Staging evidence](${record.stagingEvidence})\n\nApproval binding: ${digest}\n\nSource and APK remain in the private mobile repository. This record does not authorize distribution until the production release job succeeds.\n`);
