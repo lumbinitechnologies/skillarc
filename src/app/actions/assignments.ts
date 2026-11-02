@@ -9,6 +9,26 @@ import { detectAIContent } from "@/lib/ai-detector"
 import { dispatchNotification, dispatchBatchNotifications } from "@/lib/notification-service"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { syncAssignmentKnowledge, archiveAssignmentKnowledge } from "@/lib/knowledge/assignment"
+import { canManageAcademicSubject, getActiveActorProfile, getManagedAssignment } from "@/lib/assignment-authorization"
+import { parsePrivateStoragePath } from "@/lib/private-storage"
+
+function parseExplicitInstant(value: string | null | undefined): Date | null {
+  if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function parseCorrectAnswers(value: unknown): Array<{ answer: number }> | null {
+  if (!Array.isArray(value)) return null
+  const answers: Array<{ answer: number }> = []
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null
+    const answer = (item as Record<string, unknown>).answer
+    if (typeof answer !== "number" || !Number.isInteger(answer)) return null
+    answers.push({ answer })
+  }
+  return answers
+}
 
 export async function createAssignmentAction(data: {
   subject_id: string
@@ -32,6 +52,20 @@ export async function createAssignmentAction(data: {
 
   if (!data.section_ids || data.section_ids.length === 0) {
     return { success: false, error: "At least one target section must be selected." }
+  }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const actor = user ? await getActiveActorProfile(user.id) : null
+  const admin = createSupabaseAdminClient()
+  const [{ data: subject }, selectedFaculty] = await Promise.all([
+    admin.from("subjects").select("id, institution_id").eq("id", data.subject_id).maybeSingle(),
+    getActiveActorProfile(data.faculty_id),
+  ])
+  if (!user || !actor || !subject || !selectedFaculty || selectedFaculty.role !== "FACULTY"
+    || selectedFaculty.institution_id !== subject.institution_id
+    || (actor.role === "FACULTY" && data.faculty_id !== user.id)
+    || !await canManageAcademicSubject(user.id, data.subject_id, data.section_ids)) {
+    return { success: false, error: "You are not authorized to create an assignment for this course and section." }
   }
 
   // Enforce mandatory/optional rules for content & attachments (ASG-003)
@@ -64,9 +98,9 @@ export async function createAssignmentAction(data: {
 
   // Prevent past due dates (ASG-005)
   if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
-    const dueDate = new Date(data.due_date)
-    if (isNaN(dueDate.getTime())) {
-      return { success: false, error: "Invalid due date format." }
+    const dueDate = parseExplicitInstant(data.due_date)
+    if (!dueDate) {
+      return { success: false, error: "Enter a deadline with an explicit timezone." }
     }
     if (dueDate.getTime() < Date.now() - 60000) {
       return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
@@ -172,6 +206,11 @@ export async function updateAssignmentAction(
   }>
 ) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Please sign in again before editing this assignment." }
+
+  const currentAss = await getManagedAssignment(id, user.id, subjectId, true)
+  if (!currentAss) return { success: false, error: "You are not assigned to manage this course assignment." }
 
   if (data.title !== undefined && !data.title.trim()) {
     return { success: false, error: "Assignment title cannot be empty." }
@@ -186,9 +225,9 @@ export async function updateAssignmentAction(
   }
 
   if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
-    const dueDate = new Date(data.due_date)
-    if (isNaN(dueDate.getTime())) {
-      return { success: false, error: "Invalid due date format." }
+    const dueDate = parseExplicitInstant(data.due_date)
+    if (!dueDate) {
+      return { success: false, error: "Enter a deadline with an explicit timezone." }
     }
     if (dueDate.getTime() < Date.now() - 60000) {
       return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
@@ -200,7 +239,7 @@ export async function updateAssignmentAction(
   if (data.title) updateData.title = data.title.trim()
   if (data.description !== undefined) updateData.description = data.description.trim()
   if (data.due_date) {
-    updateData.due_date = new Date(data.due_date).toISOString()
+    updateData.due_date = parseExplicitInstant(data.due_date)?.toISOString() ?? null
   } else if (data.due_date === null) {
     updateData.due_date = null
   }
@@ -211,20 +250,16 @@ export async function updateAssignmentAction(
   }
 
   // If max_score or questions are being updated, fetch current assignment to check for changes
-  let oldAssignmentData: { type: string; max_score: number; questions: QuizQuestion[] | null } | null = null
+  let oldAssignmentData: { type: string; max_score: number; questions: Array<{ answer: number }> | null } | null = null
   let oldMaxScore: number | null = null
 
-  const { data: currentAss } = await supabase
-    .from("assignments")
-    .select("type, max_score, questions")
-    .eq("id", id)
-    .maybeSingle()
-
   if (currentAss) {
-    oldAssignmentData = currentAss
-    if (currentAss.max_score) {
-      oldMaxScore = Number(currentAss.max_score)
+    oldAssignmentData = {
+      type: currentAss.type ?? "",
+      max_score: currentAss.max_score ?? 0,
+      questions: parseCorrectAnswers(currentAss.questions),
     }
+    if (currentAss.max_score) oldMaxScore = Number(currentAss.max_score)
   }
 
   const { error } = await supabase
@@ -245,7 +280,8 @@ export async function updateAssignmentAction(
       const activeMaxScore = data.max_score !== undefined ? data.max_score : (oldAssignmentData?.max_score || 100)
 
       if (Array.isArray(activeQuestions) && activeQuestions.length > 0) {
-        const { data: quizSubs } = await supabase
+        const admin = createSupabaseAdminClient()
+        const { data: quizSubs } = await admin
           .from("submissions")
           .select("id, quiz_answers")
           .eq("assignment_id", id)
@@ -258,7 +294,7 @@ export async function updateAssignmentAction(
                 if (ans === activeQuestions[idx]?.answer) correct++
               })
               const regradedScore = Number(((correct / activeQuestions.length) * activeMaxScore).toFixed(1))
-              await supabase
+              await admin
                 .from("submissions")
                 .update({
                   grade: regradedScore,
@@ -282,7 +318,8 @@ export async function updateAssignmentAction(
   ) {
     // If max_score was updated and changed for non-quiz, proportionally rescale all existing graded submissions (ASG-074)
     try {
-      const { data: gradedSubs } = await supabase
+      const admin = createSupabaseAdminClient()
+      const { data: gradedSubs } = await admin
         .from("submissions")
         .select("id, grade")
         .eq("assignment_id", id)
@@ -296,7 +333,7 @@ export async function updateAssignmentAction(
             const roundedGrade = Number((Math.round(scaled * 10) / 10).toFixed(1))
             const finalGrade = Math.min(newMax, Math.max(0, roundedGrade))
 
-            await supabase
+            await admin
               .from("submissions")
               .update({ grade: finalGrade })
               .eq("id", sub.id)
@@ -317,9 +354,15 @@ export async function updateAssignmentAction(
 
 export async function deleteAssignmentAction(id: string, subjectId: string) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || !await getManagedAssignment(id, user.id, subjectId, true)) {
+    return { success: false, error: "You are not assigned to manage this course assignment." }
+  }
 
-  // First delete dependent submissions
-  const { error: subError } = await supabase
+  // Delete dependent submissions through the service role only after the
+  // assignment and actor relationship have been verified above.
+  const admin = createSupabaseAdminClient()
+  const { error: subError } = await admin
     .from("submissions")
     .delete()
     .eq("assignment_id", id)
@@ -353,6 +396,8 @@ export async function gradeSubmissionAction(
   subjectId: string
 ) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: "Please sign in again before grading." }
 
   // Retrieve submission, assignment details, and student user ID
   const { data: sub } = await supabase
@@ -361,7 +406,17 @@ export async function gradeSubmissionAction(
     .eq("id", submissionId)
     .single()
 
-  const { error } = await supabase
+  if (!sub || !await getManagedAssignment(sub.assignment_id, user.id, subjectId)) {
+    return { success: false, error: "You are not assigned to grade this course submission." }
+  }
+
+  const profile = await getActiveActorProfile(user.id)
+  const maximumScore = Number((Array.isArray(sub.assignments) ? sub.assignments[0] : sub.assignments)?.max_score ?? 0)
+  if (!profile || !Number.isFinite(grade) || grade < 0 || grade > maximumScore) {
+    return { success: false, error: "Enter a valid grade within the assignment score range." }
+  }
+
+  const { error } = await createSupabaseAdminClient()
     .from("submissions")
     .update({
       grade,
@@ -412,32 +467,84 @@ export async function submitAssignmentAction(data: {
   quiz_answers: Array<string | number | null> | null
   code_content: string | null
   language: string | null
-  grade: number | null
-  feedback: string | null
-  status: string
   subject_id: string
 }) {
   const supabase = await createSupabaseServerClient()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user) return { success: false, error: "Please sign in again before submitting." }
+  if (data.student_id !== user.id) return { success: false, error: "You can only submit work for your own account." }
 
-  // 1. Fetch assignment details to enforce due date and fetch faculty info
-  const { data: assignment } = await supabase
-    .from("assignments")
-    .select("id, title, faculty_id, due_date")
-    .eq("id", data.assignment_id)
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role, is_active")
+    .eq("id", user.id)
     .maybeSingle()
-
-  // 2. Strict due date validation: block submissions if deadline has passed (with 2-minute latency buffer to guarantee on-time submittal acceptance)
-  if (assignment?.due_date) {
-    const dueDate = new Date(assignment.due_date)
-    if (!isNaN(dueDate.getTime()) && Date.now() - dueDate.getTime() > 120000) {
-      return {
-        success: false,
-        error: "Submissions closed: The deadline for this assignment/quiz has passed.",
-      }
-    }
+  if (profileError || profile?.role !== "STUDENT" || profile.is_active !== true) {
+    return { success: false, error: "Only an active student can submit course work." }
   }
 
-  // Upsert or insert submission
+  // Query through the verified session. RLS confirms this student has access
+  // through an eligible enrollment or their validated current section.
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select("id, title, faculty_id, due_date, subject_id, type, max_score")
+    .eq("id", data.assignment_id)
+    .maybeSingle()
+  if (!assignment || assignment.subject_id !== data.subject_id) {
+    return { success: false, error: "This assignment is unavailable for your account." }
+  }
+  const dueInstant = parseExplicitInstant(assignment.due_date)
+  if (dueInstant && Date.now() - dueInstant.getTime() > 60_000) {
+    return { success: false, error: "Submissions are closed for this assignment." }
+  }
+  if (typeof data.code_content === "string" && data.code_content.length > 100_000) {
+    return { success: false, error: "The submitted response is too large." }
+  }
+  if (data.file_url) {
+    const filePath = parsePrivateStoragePath(data.file_url, "assignments")
+    if (!filePath || filePath.split("/")[0] !== user.id) {
+      return { success: false, error: "Choose a file uploaded to your own assignment folder." }
+    }
+  }
+  if (assignment.type === "Quiz" && !Array.isArray(data.quiz_answers)) {
+    return { success: false, error: "Quiz answers are required." }
+  }
+  if (assignment.type !== "Quiz" && data.quiz_answers !== null) {
+    return { success: false, error: "Quiz answers are not accepted for this assignment." }
+  }
+
+  let quizQuestions: unknown[] | null = null
+  let quizMaximumScore: number | null = null
+  if (assignment.type === "Quiz") {
+    const { data: securedQuiz, error: quizError } = await createSupabaseAdminClient()
+      .from("assignments")
+      .select("questions, max_score")
+      .eq("id", assignment.id)
+      .maybeSingle()
+    const questions: unknown[] = Array.isArray(securedQuiz?.questions) ? securedQuiz.questions : []
+    const answers: unknown[] = Array.isArray(data.quiz_answers) ? data.quiz_answers : []
+    const validQuestions = questions.length > 0 && questions.every((question) => {
+      if (!question || typeof question !== "object" || Array.isArray(question)) return false
+      const record = question as Record<string, unknown>
+      return typeof record.q === "string" && typeof record.answer === "number"
+        && Number.isInteger(record.answer) && Array.isArray(record.options)
+        && record.options.every((option) => typeof option === "string")
+    })
+    const validAnswers = answers.length === questions.length && answers.every((answer, index) => {
+      if (typeof answer !== "number" || !Number.isInteger(answer)) return false
+      const question = questions[index] as Record<string, unknown> | undefined
+      const options = question?.options
+      return answer === -1 || (Array.isArray(options) && answer >= 0 && answer < options.length)
+    })
+    if (quizError || !validQuestions || !validAnswers) {
+      return { success: false, error: "Quiz answers could not be validated safely." }
+    }
+    quizQuestions = questions as unknown as QuizQuestion[]
+    quizMaximumScore = Number(securedQuiz?.max_score ?? 0)
+  }
+
+  // Accept only student-authored work fields. Grade, feedback, and status are
+  // derived on the server or left pending; never trust client-supplied results.
   const { data: existing } = await supabase
     .from("submissions")
     .select("id")
@@ -448,20 +555,21 @@ export async function submitAssignmentAction(data: {
   let submissionId = existing?.id
   let error
   if (existing) {
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from("submissions")
       .update({
         file_url: data.file_url,
         quiz_answers: data.quiz_answers,
         code_content: data.code_content,
         language: data.language,
-        grade: data.grade,
-        feedback: data.feedback,
-        status: data.status,
+        status: "pending",
         submitted_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
+      .select("id")
+      .maybeSingle()
     error = updateError
+    submissionId = updated?.id
   } else {
     const { data: inserted, error: insertError } = await supabase
       .from("submissions")
@@ -472,9 +580,7 @@ export async function submitAssignmentAction(data: {
         quiz_answers: data.quiz_answers,
         code_content: data.code_content,
         language: data.language,
-        grade: data.grade,
-        feedback: data.feedback,
-        status: data.status,
+        status: "pending",
         submitted_at: new Date().toISOString(),
       })
       .select("id")
@@ -486,6 +592,36 @@ export async function submitAssignmentAction(data: {
   if (error) {
     console.error("Error submitting assignment:", error)
     return { success: false, error: error.message }
+  }
+
+  let grade: number | null = null
+  let status = "pending"
+  if (assignment.type === "Quiz") {
+    const questions = quizQuestions ?? []
+    const answers = Array.isArray(data.quiz_answers) ? data.quiz_answers : []
+    if (!submissionId) {
+      return { success: false, error: "The quiz could not be saved safely. Contact your instructor." }
+    }
+
+    let correctCount = 0
+    questions.forEach((question, index) => {
+      const record = question as Record<string, unknown>
+      if (answers[index] === record.answer) correctCount += 1
+    })
+    const maxScore = quizMaximumScore ?? 0
+    grade = maxScore > 0 ? Number(((correctCount / questions.length) * maxScore).toFixed(1)) : null
+    status = "graded"
+    const feedback = `Auto-graded quiz: ${correctCount}/${questions.length} correct.`
+    const { error: gradeError } = await createSupabaseAdminClient()
+      .from("submissions")
+      .update({ grade, feedback, status })
+      .eq("id", submissionId)
+      .eq("student_id", user.id)
+
+    if (gradeError) {
+      console.error("Failed to store server-calculated quiz grade:", gradeError)
+      return { success: false, error: "Your quiz was submitted but the score could not be saved. Contact your instructor." }
+    }
   }
 
   // Insert notification for the faculty member
@@ -506,7 +642,7 @@ export async function submitAssignmentAction(data: {
       const { data: studentUser } = await supabase
         .from("students")
         .select("users(name)")
-        .eq("id", data.student_id)
+        .eq("id", user.id)
         .single()
 
       if (faculty?.user_id) {
@@ -526,7 +662,7 @@ export async function submitAssignmentAction(data: {
 
   revalidatePath(`/dashboard/faculty/subjects/${data.subject_id}`)
   revalidatePath(`/dashboard/student/subjects/${data.subject_id}`)
-  return { success: true, submissionId }
+  return { success: true, submissionId, grade, status }
 }
 
 // ---------------------------------------------------------------------------

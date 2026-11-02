@@ -10,6 +10,8 @@ import {
   getGradeEntriesBySubjectAction,
 } from "@/app/actions/gradebook"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { canManageAcademicSubject } from "@/lib/assignment-authorization"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 
 export const dynamic = "force-dynamic"
 
@@ -28,10 +30,9 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  const [subjectResult, slotsResult, assignmentsResult, announcementItems] = await Promise.all([
+  const [subjectResult, slotsResult, announcementItems] = await Promise.all([
     supabase.from("subjects").select("id, name, code").eq("id", subjectId).single(),
     supabase.from("timetable_slots").select("section_id, semester").eq("faculty_id", context.id).eq("subject_id", subjectId),
-    supabase.from("assignments").select("*").eq("subject_id", subjectId).order("created_at", { ascending: false }),
     getSubjectAnnouncementsAction(subjectId),
   ])
   const subject = subjectResult.data
@@ -39,6 +40,16 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
   if (!subject) {
     redirect("/dashboard/faculty/subjects")
   }
+
+  if (!await canManageAcademicSubject(context.id, subjectId)) {
+    redirect("/dashboard/faculty/subjects")
+  }
+
+  const { data: assignmentsResult = [] } = await createSupabaseAdminClient()
+    .from("assignments")
+    .select("*")
+    .eq("subject_id", subjectId)
+    .order("created_at", { ascending: false })
 
   // 2. Fetch Sections taught by this faculty for this subject
   const slots = slotsResult.data
@@ -53,7 +64,7 @@ export default async function FacultySubjectDetailPage({ params }: PageProps) {
         .in("id", sectionIds)
     : { data: [] }
 
-  const assignments = assignmentsResult.data ?? []
+  const assignments = assignmentsResult ?? []
 
   const assignmentIds = (assignments ?? []).map((a) => a.id)
 

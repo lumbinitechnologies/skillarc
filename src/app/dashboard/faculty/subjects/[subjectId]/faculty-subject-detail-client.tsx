@@ -87,6 +87,7 @@ import {
 } from "@/app/actions/project-groups"
 import { detectAIContent } from "@/lib/ai-detector"
 import { supabase } from "@/lib/supabase"
+import { getPrivateStorageHref, makePrivateStorageReference } from "@/lib/private-storage"
 import {
   getExistingAttendanceAction,
   saveAttendanceAction
@@ -1747,9 +1748,9 @@ export function FacultySubjectDetailClient({
                               <div className="border border-slate-200 p-6 rounded-2xl text-center bg-slate-50">
                                 <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-bounce" />
                                 <h4 className="font-bold text-slate-800">Submitted Document</h4>
-                                <p className="text-xs text-slate-400 mt-1 truncate max-w-sm mx-auto">{currentSub.file_url}</p>
+                                <p className="text-xs text-slate-400 mt-1 truncate max-w-sm mx-auto">{currentSub.file_url.split("/").pop()?.replace(/^\d+_/, "") ?? "Attached file"}</p>
                                 <a
-                                  href={currentSub.file_url}
+                                  href={getPrivateStorageHref(currentSub.file_url, "assignments") ?? undefined}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-block mt-4 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 font-bold rounded-xl text-xs"
@@ -3728,16 +3729,14 @@ function CreateWorksheetModal({
         throw error
       }
 
-      const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath)
-      setUploadedFiles(prev => [...prev, publicData.publicUrl])
+      setUploadedFiles(prev => [...prev, makePrivateStorageReference("assignments", filePath)])
       setFormError(null)
     } catch (err: unknown) {
       if (typeof window !== "undefined" && !window.navigator.onLine) {
         setFormError("Network disconnected during upload. Please check your connection.")
       } else {
-        console.warn("Storage upload failed, falling back to mock storage URL:", readErrorMessage(err))
-        setUploadedFiles(prev => [...prev, `https://mock-lms-storage.local/faculty-${facultyId}/${now}_${file.name}`])
-        setFormError(null)
+        console.warn("Storage upload failed:", readErrorMessage(err))
+        setFormError("File upload failed. Please try again.")
       }
     } finally {
       setIsUploadingFile(false)
@@ -4221,9 +4220,7 @@ function CreateWorksheetModal({
                       <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
                         <FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                         <span className="text-xs text-indigo-800 font-semibold flex-1 truncate">
-                          {url.startsWith("https://mock-lms-storage.local/")
-                            ? url.substring(url.lastIndexOf("/") + 1)
-                            : url}
+                          {url.split("/").pop()?.replace(/^\d+_/, "") || "Attached file"}
                         </span>
                         <button
                           type="button"
@@ -4307,9 +4304,7 @@ function CreateWorksheetModal({
                       <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
                         <FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                         <span className="text-xs text-indigo-800 font-semibold flex-1 truncate">
-                          {url.startsWith("https://mock-lms-storage.local/")
-                            ? url.substring(url.lastIndexOf("/") + 1)
-                            : url}
+                          {url.split("/").pop()?.replace(/^\d+_/, "") || "Attached file"}
                         </span>
                         <button
                           type="button"

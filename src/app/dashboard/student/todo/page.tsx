@@ -42,7 +42,13 @@ const TYPE_CONFIG = {
 
 function getDueDateStatus(dueDate: string | null) {
   if (!dueDate) return null
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(dueDate)) {
+    return { label: "Deadline unavailable", color: "text-slate-600 bg-slate-50 border border-slate-200" }
+  }
   const due = new Date(dueDate)
+  if (Number.isNaN(due.getTime())) {
+    return { label: "Deadline unavailable", color: "text-slate-600 bg-slate-50 border border-slate-200" }
+  }
   const now = new Date()
   const diffMs = due.getTime() - now.getTime()
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
@@ -61,74 +67,37 @@ export default async function StudentTodoPage() {
   const supabase = await createSupabaseServerClient()
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  const { data: studentData } = await supabase
-    .from("students")
-    .select("id, section_id, program_id, semester")
-    .eq("id", context.id)
-    .single()
-
-  const profile = { ...context, ...studentData }
-
-  // 1. Fetch enrolled subjects to filter assignments
-  const { data: timetableRows = [] } = profile.section_id
-    ? await supabase
-        .from("timetable_slots")
-        .select("subject_id")
-        .eq("institution_id", profile.institution_id)
-        .eq("section_id", profile.section_id)
-    : { data: [] }
-
-  let subjectIds = Array.from(new Set((timetableRows ?? []).map((slot) => slot.subject_id).filter(Boolean))) as string[]
-
-  if (subjectIds.length === 0 && (profile.program_id || profile.institution_id)) {
-    let subQuery = supabase
-      .from("subjects")
-      .select("id")
-    if (profile.program_id) {
-      subQuery = subQuery.eq("program_id", profile.program_id)
-    } else if (profile.institution_id) {
-      subQuery = subQuery.eq("institution_id", profile.institution_id)
-    }
-    if (profile.semester) {
-      subQuery = subQuery.eq("semester", profile.semester)
-    }
-    const { data: programSubjects } = await subQuery
-    if (programSubjects?.length) {
-      subjectIds = programSubjects.map((s) => s.id)
-    }
-  }
+  // RLS returns formal active courses or exact current-section course relationships.
+  const { data: eligibleSubjectData } = await supabase
+    .from("subjects")
+    .select("id, name, code")
+    .order("name")
+  const eligibleSubjects = eligibleSubjectData ?? []
+  const subjectIds = eligibleSubjects.map((subject) => subject.id)
 
   if (!subjectIds.length) {
     return (
       <div className="max-w-4xl mx-auto p-8 text-center bg-white border rounded-3xl shadow-sm">
         <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
         <h3 className="text-xl font-semibold text-gray-700">All caught up!</h3>
-        <p className="text-gray-400 mt-2">No subjects are assigned to your section.</p>
+        <p className="text-gray-400 mt-2">No courses are available for your enrollment or current section.</p>
       </div>
     )
   }
 
   // Fetch subject names mapping
-  const { data: subjects = [] } = await supabase
-    .from("subjects")
-    .select("id, name, code")
-    .in("id", subjectIds)
-
-  const subjectMap = new Map((subjects ?? []).map(s => [s.id, s]))
+  const subjectMap = new Map(eligibleSubjects.map((subject) => [subject.id, subject]))
 
   // 2. Fetch all assignments for these subjects
   const { data: allAssignments = [] } = await supabase
     .from("assignments")
-    .select("*")
+    .select("id, subject_id, faculty_id, title, description, due_date, created_at, updated_at, type, max_score, language, section_ids, files")
     .in("subject_id", subjectIds)
 
-  // Filter assignments targeted at the student's section
-  const sectionId = profile.section_id
-  const sectionAssignments = (allAssignments ?? []).filter((a) => {
-    if (a.type === "Material") return false // Materials are not Todo items
-    if (!a.section_ids || a.section_ids.length === 0) return true
-    return a.section_ids.includes(sectionId)
-  })
+  // Student RLS has already filtered assignment rows by active enrollment or exact section.
+  const sectionAssignments = (allAssignments ?? []).filter((assignment) =>
+    assignment.type !== "Material" && assignment.type !== "Syllabus"
+  )
 
   // 3. Fetch submissions by this student
   const { data: submissions = [] } = await supabase
@@ -199,9 +168,17 @@ export default async function StudentTodoPage() {
                 <div className="divide-y divide-slate-100">
                   {items
                     .sort((a, b) => {
-                      if (!a.due_date) return 1
-                      if (!b.due_date) return -1
-                      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+                      const parseDeadline = (value: string | null) => {
+                        if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null
+                        const parsed = new Date(value)
+                        return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
+                      }
+                      const aDeadline = parseDeadline(a.due_date)
+                      const bDeadline = parseDeadline(b.due_date)
+                      if (aDeadline === null && bDeadline !== null) return 1
+                      if (aDeadline !== null && bDeadline === null) return -1
+                      if (aDeadline === null || bDeadline === null) return 0
+                      return aDeadline - bDeadline
                     })
                     .map(item => {
                       const subjectInfo = subjectMap.get(item.subject_id)
