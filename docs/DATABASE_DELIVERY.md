@@ -21,12 +21,19 @@ GitHub Actions is the sole orchestrator. `vercel.json` disables competing Git de
 
 ## Implemented bootstrap and remaining activation gates
 
-- Git staging branches created at current main in both repositories. Server main/staging owner review and admin enforcement configured; linear-history restriction removed to permit promotion merges. Required CI contexts are not armed until bootstrap workflows are merged, registered and passing.
-- #68 remains a main-targeted bootstrap PR. After independent review/merge, open a reviewed bootstrap PR bringing main into staging. Subsequent feature PRs target staging. Never silently fast-forward a protected staging branch around review.
-- Private mobile branch protection is explicitly deferred by the owner (17 October). Keep mobile private; no GitHub upgrade or visibility change. Workflow checks remain evidence, not enforceable protection against administrators. #50 records that gap.
-- Infrastructure deployment stays disabled pending CEO approval for Vercel Pro/staging compute, scoped CI credentials, #67 remediation, full fixture/preview/browser/Android evidence and independent review. Existing legacy Vercel check named `Migrate staging` must be removed/replaced during cutover; it targets production incorrectly under the old design. Do not mistake it for migration ordering.
-- New `skillarc-candidates` environment is main-only, has Vercel build/deploy credentials but no database-write token; it stages the production website before human release approval. `skillarc-production` remains main-only, owner reviewer only, prevent self review, no admin bypass.
+### Current branch and hosting state — verified 2026-11-02
 
+- Server `main` is `28f6dd6`; server `staging` is `59763db` from the merged #63 contract proposal and is an ancestor of `main`, not current with it. After the server repair/bootstrap changes merge, synchronize server `staging` from the resulting `main` through a reviewed PR before staging releases.
+- GitHub reports server `main` and `staging` as protected, but required status checks are off with no required contexts. This connection cannot read the detailed protection rules, so required reviews, admin bypass and environment reviewers still need owner verification. Do not treat branch protection or green checks as enforced until verified.
+- Mobile `main` is `f2ecd96`; mobile `staging` is `c23d76e`, containing merged PR #56. Mobile staging protection remains deferred by the owner; keep the repository private and do not purchase an upgrade.
+- The clean Supabase parent `fvkvfcsqetdxtoosmizq` is healthy and has no branches. No persistent staging database branch, PR preview database, hosted migration or production record change exists. `staging.projectRef` and all deployment activation flags remain unset/false.
+- PR #68 sets `git.deploymentEnabled: false` in the existing Vercel project. If merged, this pauses new automatic Git deployments on every branch, including PR previews and production pushes, while the currently serving deployment remains live. The Actions staging, PR-preview and production paths also remain disabled until their targets, scoped credentials, protections and evidence are verified. This is an intentional deployment freeze during cutover; no staging release is implied.
+
+### Remaining activation gates
+
+- #68 remains a main-targeted bootstrap PR. After independent review/merge, open a reviewed bootstrap PR bringing current `main` into `staging`. Subsequent feature PRs target staging. Never silently fast-forward the server staging branch around review.
+- Infrastructure stays disabled pending independent review/merge of #70, #74, #75 and #68; verified environment protections and scoped credentials; a provisioned isolated staging branch; approval for any outstanding Vercel/staging costs; and complete fixture, preview, browser and Android evidence. Existing legacy Vercel check named `Migrate staging` must be removed/replaced during cutover; it targets production incorrectly under the old design.
+- GitHub environment names are referenced by the workflows, but their current protection rules, reviewers and secret values are not verified by this connection. The owner must verify them directly before any activation.
 ## CI and release order
 
 Feature PRs and pushes to main/staging run full root lint/typecheck/tests plus immutable migration history checks, fresh local replay and fixture SQL replay. Existing #67 failures stay visible. No automatic repair, hosted reset, `--include-seed` or seed on production.
@@ -80,4 +87,4 @@ If migration fails, leave existing aliases/APK authorization unchanged; investig
 
 [Editable CEO proposal](proposals/SkillArc-delivery-approval.docx) and [PDF](proposals/SkillArc-delivery-approval.pdf). One Vercel paid deploying seat ($20/month list, including usage credit) and free viewers; viewers cannot deploy. Further deploying seats cost extra. Server is currently public/personally owned; don't conflate that with private organization repository rules. Account checkout/taxes require owner confirmation before purchase. GitHub upgrade is deferred. Retained legacy compute continues to cost money; branch expiry is not a hard spend cap.
 
-Official references: [Supabase branches](https://supabase.com/docs/guides/deployment/branching), [compute](https://supabase.com/docs/guides/platform/manage-your-usage/compute), [Vercel Pro](https://vercel.com/docs/plans/pro-plan), [Vercel Git collaboration](https://vercel.com/docs/git), [GitHub environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+Official references: [Supabase branches](https://supabase.com/docs/guides/deployment/branching), [compute](https://supabase.com/docs/guides/platform/manage-your-usage/compute), [Vercel Pro](https://vercel.com/docs/plans/pro-plan), [Vercel Git collaboration](https://vercel.com/docs/git), [Vercel Git deployment configuration](https://vercel.com/docs/project-configuration/git-configuration), [GitHub environments](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
