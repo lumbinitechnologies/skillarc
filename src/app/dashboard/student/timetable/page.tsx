@@ -73,14 +73,10 @@ export default async function StudentTimetablePage() {
   const allWeeks = (weeksRes.data ?? [])
   const academicEvents = eventsRes.data ?? []
 
-  // Filter slots & weeks for student's section
-  const timetableRows = studentData?.section_id
-    ? allSlots.filter((slot) => !slot.section_id || slot.section_id === studentData.section_id)
-    : allSlots
-
-  const weeks = studentData?.section_id
-    ? allWeeks.filter((w) => !w.section_id || w.section_id === studentData.section_id)
-    : allWeeks
+  // Session RLS already returns the student's current validated section or
+  // sections covered by active formal enrollment. Do not narrow by a stale profile section.
+  const timetableRows = allSlots
+  const weeks = allWeeks
 
   const subjectObj: Record<string, { name: string; code: string }> = {}
   const facultyObj: Record<string, string> = {}

@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 import { useDashboardSession } from "@/components/dashboard-session-provider";
 import { useDashboardCache } from "@/components/dashboard-data-provider";
 import { startClientTiming } from "@/lib/client-perf";
+import { getPrivateStorageHref, makePrivateStorageReference, parsePrivateStoragePath } from "@/lib/private-storage";
 import {
   Users, Building2, TrendingUp, DollarSign, Award, Search, Plus, X, Video, VideoOff,
   RotateCcw, AlertTriangle, Mic, MicOff, MessageSquare, Sparkles, GraduationCap, Percent, Briefcase
@@ -341,14 +342,14 @@ function StudentPortalView({
   const [resumeName, setResumeName] = useState<string>("");
   const [isUploadingResume, setIsUploadingResume] = useState(false);
 
-  const savedResumeUrl = useLocalStorageValue(userId ? `student_resume_${userId}` : null);
-  const savedResumeName = useLocalStorageValue(userId ? `student_resume_name_${userId}` : null);
-  const [restoredUserId, setRestoredUserId] = useState<string | null | undefined>(undefined);
-  if (savedResumeUrl !== undefined && savedResumeName !== undefined && restoredUserId !== (userId ?? null)) {
-    setRestoredUserId(userId ?? null);
-    setResumeUrl(savedResumeUrl || "");
-    setResumeName(savedResumeName || "");
-  }
+  useEffect(() => {
+    if (userId && typeof window !== "undefined") {
+      const storedResume = localStorage.getItem(`student_resume_${userId}`) || "";
+      const path = parsePrivateStoragePath(storedResume, "resumes");
+      setResumeUrl(path ? makePrivateStorageReference("resumes", path) : "");
+      setResumeName(localStorage.getItem(`student_resume_name_${userId}`) || "");
+    }
+  }, [userId]);
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -363,23 +364,19 @@ function StudentPortalView({
         .from(bucketName)
         .upload(filePath, file);
 
-      let publicUrl = "";
       if (error) {
-        console.warn("Storage upload failed, falling back to mock storage URL:", error.message);
-        publicUrl = `https://mock-lms-storage.local/resumes/${userId}/${Date.now()}_${file.name}`;
-      } else {
-        const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-        publicUrl = publicData.publicUrl;
+        throw error;
       }
 
-      localStorage.setItem(`student_resume_${userId}`, publicUrl);
+      const privateReference = makePrivateStorageReference("resumes", filePath);
+      localStorage.setItem(`student_resume_${userId}`, privateReference);
       localStorage.setItem(`student_resume_name_${userId}`, file.name);
-      setResumeUrl(publicUrl);
+      setResumeUrl(privateReference);
       setResumeName(file.name);
       alert("Resume uploaded successfully and linked to your profile!");
     } catch (err: unknown) {
       console.error("Resume upload error:", err);
-      alert("Failed to upload resume.");
+      alert("Resume upload failed. Please try again.");
     } finally {
       setIsUploadingResume(false);
     }
@@ -510,7 +507,7 @@ function StudentPortalView({
             <div className="flex items-center gap-2">
               {resumeUrl && (
                 <a
-                  href={resumeUrl}
+                  href={getPrivateStorageHref(resumeUrl, "resumes") ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 border border-slate-200 bg-white text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-50 transition-all"
