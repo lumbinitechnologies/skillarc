@@ -7,7 +7,6 @@ CREATE OR REPLACE FUNCTION "public"."admissions_convert_to_enrolment"("p_applica
 DECLARE
   a public.admissions_applications;
   actor public.users;
-  student public.students;
   existing_user public.users;
   program public.programs;
   intake public.intakes;
@@ -18,7 +17,6 @@ DECLARE
   e public.enrolments;
   pp public.payment_plans;
   unit jsonb;
-  assignment jsonb;
   subject public.subjects;
   slot public.timetable_slots;
   eu public.enrolment_units;
@@ -26,7 +24,7 @@ DECLARE
   supplied_count integer;
   assignment_count integer;
   installment_amount numeric;
-  i integer;
+  matched_subject_count integer;
   requested_program uuid;
   requested_intake uuid;
   requested_section uuid;
@@ -88,11 +86,11 @@ BEGIN
   SELECT count(*) INTO required_count FROM public.subjects WHERE program_id=requested_program AND institution_id=a.institution_id;
   SELECT count(DISTINCT (value->>'subject_id')::uuid) INTO supplied_count
     FROM jsonb_array_elements(COALESCE(p_payload->'units','[]'::jsonb)) value;
-  SELECT count(*) INTO i FROM public.subjects s
+  SELECT count(*) INTO matched_subject_count FROM public.subjects s
     WHERE s.program_id=requested_program AND s.institution_id=a.institution_id
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(p_payload->'units','[]'::jsonb)) value
                   WHERE (value->>'subject_id')::uuid=s.id);
-  IF required_count = 0 OR supplied_count <> required_count OR i <> required_count THEN
+  IF required_count = 0 OR supplied_count <> required_count OR matched_subject_count <> required_count THEN
     RAISE EXCEPTION 'The complete program unit catalog is required' USING ERRCODE='22023';
   END IF;
   SELECT count(*) INTO assignment_count FROM jsonb_array_elements(COALESCE(p_payload->'timetable','[]'::jsonb));
@@ -102,8 +100,8 @@ BEGIN
   IF v_student_id IS NULL THEN
     SELECT * INTO existing_user FROM public.users WHERE institution_id=a.institution_id AND lower(email)=lower(a.email) FOR UPDATE;
     IF existing_user.id IS NOT NULL THEN
-      SELECT count(*) INTO i FROM public.users WHERE institution_id=a.institution_id AND lower(email)=lower(a.email);
-      IF i > 1 THEN RAISE EXCEPTION 'Multiple student matches exist for this email' USING ERRCODE='23505'; END IF;
+      SELECT count(*) INTO matched_subject_count FROM public.users WHERE institution_id=a.institution_id AND lower(email)=lower(a.email);
+      IF matched_subject_count > 1 THEN RAISE EXCEPTION 'Multiple student matches exist for this email' USING ERRCODE='23505'; END IF;
       v_student_id := existing_user.id;
     ELSE
       v_student_id := gen_random_uuid();
@@ -140,9 +138,9 @@ BEGIN
     ON CONFLICT (source_application_id) WHERE source_application_id IS NOT NULL DO UPDATE SET total_amount=EXCLUDED.total_amount RETURNING * INTO pp;
   IF pp.id IS NULL THEN SELECT * INTO pp FROM public.payment_plans WHERE source_application_id=a.id; END IF;
   installment_amount := round((fee.amount/3)::numeric,2);
-  FOR i IN 1..3 LOOP
+  FOR installment_index IN 1..3 LOOP
     INSERT INTO public.invoices(payment_plan_id,amount_due,due_date,status,source_application_id,installment_no)
-      VALUES(pp.id,CASE WHEN i=3 THEN fee.amount-installment_amount*2 ELSE installment_amount END,start_date + ((i-1)*30),'UNPAID',a.id,i)
+      VALUES(pp.id,CASE WHEN installment_index=3 THEN fee.amount-installment_amount*2 ELSE installment_amount END,start_date + ((installment_index-1)*30),'UNPAID',a.id,installment_index)
       ON CONFLICT (source_application_id,installment_no) WHERE source_application_id IS NOT NULL AND installment_no IS NOT NULL DO NOTHING;
   END LOOP;
   UPDATE public.admission_documents d SET student_id=v_student_id WHERE d.application_id=a.id AND d.student_id IS NULL;
@@ -156,6 +154,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION "public"."delete_institution_cascade"("p_institution_id" "uuid") RETURNS "void"
     LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'pg_catalog', 'public'
     AS $$
 DECLARE
   v_user_ids uuid[];
@@ -166,7 +165,6 @@ DECLARE
   v_section_ids uuid[];
   v_app_ids uuid[];
   v_enrolment_ids uuid[];
-  v_enrolment_unit_ids uuid[];
   v_assignment_ids uuid[];
   v_submission_ids uuid[];
   v_grade_col_ids uuid[];
@@ -207,11 +205,6 @@ BEGIN
 
   SELECT COALESCE(array_agg(id), ARRAY[]::uuid[]) INTO v_enrolment_ids
   FROM public.enrolments WHERE institution_id = p_institution_id OR student_id = ANY(v_student_ids);
-
-  IF array_length(v_enrolment_ids, 1) > 0 THEN
-    SELECT COALESCE(array_agg(id), ARRAY[]::uuid[]) INTO v_enrolment_unit_ids
-    FROM public.enrolment_units WHERE enrolment_id = ANY(v_enrolment_ids);
-  END IF;
 
   IF array_length(v_subject_ids, 1) > 0 THEN
     SELECT COALESCE(array_agg(id), ARRAY[]::uuid[]) INTO v_assignment_ids
@@ -467,10 +460,16 @@ END;
 $$;
 -- These administrative functions are called only by verified server routes using
 -- the service role. Preserve that boundary instead of inheriting PUBLIC execute.
+ALTER FUNCTION public.delete_organization_cascade(uuid) SET search_path TO 'pg_catalog', 'public';
 REVOKE ALL ON FUNCTION public.delete_institution_cascade(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_institution_cascade(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.delete_organization_cascade(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.delete_organization_cascade(uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.admissions_convert_to_enrolment(uuid, uuid, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.admissions_convert_to_enrolment(uuid, uuid, jsonb) TO service_role;
+
+-- Keep pgvector's types and operators outside the exposed public schema. Existing
+-- columns and function signatures retain their dependency on the extension OIDs.
+CREATE SCHEMA IF NOT EXISTS extensions;
+ALTER EXTENSION vector SET SCHEMA extensions;
 COMMIT;
