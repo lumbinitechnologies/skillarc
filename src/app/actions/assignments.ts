@@ -18,6 +18,18 @@ function parseExplicitInstant(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+function parseCorrectAnswers(value: unknown): Array<{ answer: number }> | null {
+  if (!Array.isArray(value)) return null
+  const answers: Array<{ answer: number }> = []
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null
+    const answer = (item as Record<string, unknown>).answer
+    if (typeof answer !== "number" || !Number.isInteger(answer)) return null
+    answers.push({ answer })
+  }
+  return answers
+}
+
 export async function createAssignmentAction(data: {
   subject_id: string
   faculty_id: string
@@ -238,14 +250,14 @@ export async function updateAssignmentAction(
   }
 
   // If max_score or questions are being updated, fetch current assignment to check for changes
-  let oldAssignmentData: { type: string; max_score: number; questions: QuizQuestion[] | null } | null = null
+  let oldAssignmentData: { type: string; max_score: number; questions: Array<{ answer: number }> | null } | null = null
   let oldMaxScore: number | null = null
 
   if (currentAss) {
     oldAssignmentData = {
       type: currentAss.type ?? "",
       max_score: currentAss.max_score ?? 0,
-        questions: currentAss.questions as Array<{ answer: number }> | null,
+      questions: parseCorrectAnswers(currentAss.questions),
     }
     if (currentAss.max_score) oldMaxScore = Number(currentAss.max_score)
   }
@@ -509,16 +521,17 @@ export async function submitAssignmentAction(data: {
       .select("questions, max_score")
       .eq("id", assignment.id)
       .maybeSingle()
-    const questions = Array.isArray(securedQuiz?.questions) ? securedQuiz.questions : []
-    const answers = Array.isArray(data.quiz_answers) ? data.quiz_answers : []
+    const questions: unknown[] = Array.isArray(securedQuiz?.questions) ? securedQuiz.questions : []
+    const answers: unknown[] = Array.isArray(data.quiz_answers) ? data.quiz_answers : []
     const validQuestions = questions.length > 0 && questions.every((question) => {
       if (!question || typeof question !== "object" || Array.isArray(question)) return false
       const record = question as Record<string, unknown>
-      return Number.isInteger(record.answer) && Array.isArray(record.options)
+      return typeof record.q === "string" && typeof record.answer === "number"
+        && Number.isInteger(record.answer) && Array.isArray(record.options)
         && record.options.every((option) => typeof option === "string")
     })
     const validAnswers = answers.length === questions.length && answers.every((answer, index) => {
-      if (!Number.isInteger(answer)) return false
+      if (typeof answer !== "number" || !Number.isInteger(answer)) return false
       const question = questions[index] as Record<string, unknown> | undefined
       const options = question?.options
       return answer === -1 || (Array.isArray(options) && answer >= 0 && answer < options.length)
@@ -526,7 +539,7 @@ export async function submitAssignmentAction(data: {
     if (quizError || !validQuestions || !validAnswers) {
       return { success: false, error: "Quiz answers could not be validated safely." }
     }
-    quizQuestions = questions
+    quizQuestions = questions as unknown as QuizQuestion[]
     quizMaximumScore = Number(securedQuiz?.max_score ?? 0)
   }
 

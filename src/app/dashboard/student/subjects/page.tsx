@@ -19,14 +19,12 @@ export default async function StudentSubjectsPage() {
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const supabase = await createSupabaseServerClient()
-  const tBatchStart = performance.now()
   const [studentRes, subjectsRes, timetableRes, facultySubjectsRes] = await Promise.all([
     supabase.from("students").select("id, section_id, program_id, semester").eq("id", context.id).maybeSingle(),
     supabase.from("subjects").select("id, name, code, subject_type").order("name"),
     supabase.from("timetable_slots").select("subject_id, faculty_id, section_id").eq("institution_id", context.institution_id),
     supabase.from("faculty_subjects").select("subject_id, faculty_id, section_id").eq("institution_id", context.institution_id),
   ])
-  const batchMs = performance.now() - tBatchStart
   const studentData = studentRes.data
   const visibleSubjects = subjectsRes.data ?? []
   const visibleSubjectIds = new Set(visibleSubjects.map((subject) => subject.id))
@@ -57,11 +55,6 @@ export default async function StudentSubjectsPage() {
     subjectType: subject.subject_type || "THEORY",
     facultyName: facultyBySubject.get(subject.id) ?? "Faculty pending",
   }))
-  const totalMs = performance.now() - tPageStart
-
-
-
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
       {/* Header section identical to Attendance Center design */}

@@ -6,6 +6,7 @@ import { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
 import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import type { AcademicAssignment, AcademicStudent, AttendanceEntry } from "@/lib/academic-content-types"
 
 export const dynamic = "force-dynamic"
 
@@ -107,7 +108,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
         .select(`
           id, subject_id, faculty_id, title, description, due_date, created_at,
           updated_at, type, max_score, language, section_ids, files,
-          faculty:faculty_id(id, name)
+          faculty:faculty_id(name)
         `)
         .in("id", authorizedAssignmentIds)
         .order("created_at", { ascending: false })
@@ -118,6 +119,12 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
   // The session RLS query above has already applied formal enrollment or the
   // validated section relationship. Do not re-filter against a stale profile section.
   const activeAssignments = assignments ?? []
+  const studentAssignments: AcademicAssignment[] = activeAssignments.map((assignment) => ({
+    ...assignment,
+    questions: null,
+    test_cases: null,
+    faculty: Array.isArray(assignment.faculty) ? assignment.faculty[0] ?? null : assignment.faculty ?? null,
+  }))
 
   const assignmentIds = activeAssignments.map((a) => a.id)
 
@@ -274,7 +281,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       studentSectionId={studentSectionId}
       subject={subject}
       facultyName={facultyName}
-      assignments={activeAssignments}
+      assignments={studentAssignments}
       submissions={submissions ?? []}
       classmates={classmates ?? []}
       meetings={meetings ?? []}

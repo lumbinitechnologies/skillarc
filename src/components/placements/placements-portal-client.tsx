@@ -338,18 +338,14 @@ function StudentPortalView({
   const [subTab, setSubTab] = useState<"interview" | "predictor" | "drives">("interview");
 
   // Resume states
-  const [resumeUrl, setResumeUrl] = useState<string>("");
-  const [resumeName, setResumeName] = useState<string>("");
+  const [uploadedResume, setUploadedResume] = useState<{ userId: string; url: string; name: string } | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
-
-  useEffect(() => {
-    if (userId && typeof window !== "undefined") {
-      const storedResume = localStorage.getItem(`student_resume_${userId}`) || "";
-      const path = parsePrivateStoragePath(storedResume, "resumes");
-      setResumeUrl(path ? makePrivateStorageReference("resumes", path) : "");
-      setResumeName(localStorage.getItem(`student_resume_name_${userId}`) || "");
-    }
-  }, [userId]);
+  const savedResumeUrl = useLocalStorageValue(userId ? `student_resume_${userId}` : null);
+  const savedResumeName = useLocalStorageValue(userId ? `student_resume_name_${userId}` : null);
+  const savedResumePath = parsePrivateStoragePath(savedResumeUrl ?? "", "resumes");
+  const activeResume = uploadedResume?.userId === userId ? uploadedResume : null;
+  const resumeUrl = activeResume?.url ?? (savedResumePath ? makePrivateStorageReference("resumes", savedResumePath) : "");
+  const resumeName = activeResume?.name ?? savedResumeName ?? "";
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -371,8 +367,7 @@ function StudentPortalView({
       const privateReference = makePrivateStorageReference("resumes", filePath);
       localStorage.setItem(`student_resume_${userId}`, privateReference);
       localStorage.setItem(`student_resume_name_${userId}`, file.name);
-      setResumeUrl(privateReference);
-      setResumeName(file.name);
+      setUploadedResume({ userId, url: privateReference, name: file.name });
       alert("Resume uploaded successfully and linked to your profile!");
     } catch (err: unknown) {
       console.error("Resume upload error:", err);
@@ -390,8 +385,7 @@ function StudentPortalView({
 
     localStorage.removeItem(`student_resume_${userId}`);
     localStorage.removeItem(`student_resume_name_${userId}`);
-    setResumeUrl("");
-    setResumeName("");
+    setUploadedResume({ userId, url: "", name: "" });
     alert("Resume deleted successfully.");
   };
 

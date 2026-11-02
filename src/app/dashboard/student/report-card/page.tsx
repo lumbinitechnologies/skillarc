@@ -19,8 +19,9 @@ export default async function StudentReportCardPage() {
   const supabase = await createSupabaseServerClient()
 
   // 1. Read the student's own profile, authorized courses, and submissions.
-  const tBatch1Start = performance.now()
-  const [studentRes, subjectsRes, submissionsRes] = await Promise.all([
+  const [studentRes, subjectsRes, submissionsRes] = await measureServer(
+    "app.dashboard.student.report-card.profile",
+    () => Promise.all([
     supabase
       .from("students")
       .select("id, section_id, program_id, semester")
@@ -31,7 +32,8 @@ export default async function StudentReportCardPage() {
       .from("submissions")
       .select("assignment_id, status, grade, feedback, submitted_at")
       .eq("student_id", context.id),
-  ]))
+    ])
+  )
 
 
   const studentData = studentRes.data
@@ -88,7 +90,7 @@ export default async function StudentReportCardPage() {
   const allAssignments = assignmentsResult.data ?? []
 
   // The student session's row policies already enforce course/enrollment access.
-  const sectionAssignments = (allAssignments ?? []).filter((assignment: any) =>
+  const sectionAssignments = allAssignments.filter((assignment) =>
     assignment.type !== "Material" && assignment.type !== "Syllabus"
   )
 
