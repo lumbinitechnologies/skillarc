@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle()
 
-    const userRole = (dbUser?.role || (user.user_metadata as any)?.role || "student").toLowerCase()
+    const userRole = (dbUser?.role || (user.user_metadata)?.role || "student").toLowerCase()
     const ALLOWED_ROLES = new Set(["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"])
 
     if (!ALLOWED_ROLES.has(userRole)) {
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (currentEvent) {
-        let descObj: any = {}
+        let descObj: Record<string, unknown> = {}
         try {
           descObj = JSON.parse(currentEvent.description || "{}")
         } catch {
@@ -156,10 +157,10 @@ export async function POST(request: NextRequest) {
       url: publicUrl,
       publicUrl,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Event image upload error:", err)
     return NextResponse.json(
-      { error: err?.message || "Internal server error during image upload" },
+      { error: readErrorMessage(err) || "Internal server error during image upload" },
       { status: 500 }
     )
   }
@@ -185,7 +186,7 @@ export async function DELETE(request: NextRequest) {
       .eq("id", user.id)
       .maybeSingle()
 
-    const userRole = (dbUser?.role || (user.user_metadata as any)?.role || "student").toLowerCase()
+    const userRole = (dbUser?.role || (user.user_metadata)?.role || "student").toLowerCase()
     const ALLOWED_ROLES = new Set(["super_admin", "org_admin", "institution_admin", "hod", "program_head", "faculty"])
 
     if (!ALLOWED_ROLES.has(userRole)) {
@@ -211,17 +212,17 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
 
-    let descObj: any = {}
+    let descObj: Record<string, unknown> = {}
     try {
       descObj = JSON.parse(currentEvent.description || "{}")
     } catch {
       descObj = { description: currentEvent.description }
     }
 
-    const existingGallery: any[] = Array.isArray(currentEvent.gallery_images)
+    const existingGallery: Array<string | { url?: string }> = Array.isArray(currentEvent.gallery_images)
       ? currentEvent.gallery_images
       : Array.isArray(descObj.gallery_images)
-      ? descObj.gallery_images
+      ? descObj.gallery_images.filter((item): item is string | { url?: string } => typeof item === "string" || (item != null && typeof item === "object" && typeof item.url === "string"))
       : []
 
     const updatedGallery = existingGallery.filter((item) => (typeof item === "string" ? item : item?.url) !== image_url)
@@ -248,10 +249,10 @@ export async function DELETE(request: NextRequest) {
       gallery_images: updatedGallery,
       image_url: updatedCover,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Event image delete error:", err)
     return NextResponse.json(
-      { error: err?.message || "Internal server error during image delete" },
+      { error: readErrorMessage(err) || "Internal server error during image delete" },
       { status: 500 }
     )
   }

@@ -62,7 +62,7 @@ export default function SubjectGrid({ subjects }: SubjectGridProps) {
             lineHeight: 1.6,
           }}
         >
-          Your Institution Administrator hasn't assigned any subjects yet.
+          Your Institution Administrator hasn&apos;t assigned any subjects yet.
         </p>
       </div>
     )

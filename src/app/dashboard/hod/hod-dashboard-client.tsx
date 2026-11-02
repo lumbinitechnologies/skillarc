@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
@@ -66,8 +68,8 @@ export default function HodDashboardClient({
         setAllocationStatus("idle")
         router.refresh()
       }, 1500)
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to update allocation")
+    } catch (err: unknown) {
+      setErrorMsg(readErrorMessage(err) || "Failed to update allocation")
       setAllocationStatus("error")
     }
   }

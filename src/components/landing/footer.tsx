@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { motion } from "framer-motion"
 import { ArrowRight, ArrowUpRight } from "lucide-react"
 import Link from "next/link"
@@ -115,6 +118,7 @@ type FooterColumn = {
 }
 
 export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
+  const now = useCurrentTime()
   const styles = variantStyles[variant]
 
   const columns: FooterColumn[] = [
@@ -205,7 +209,7 @@ export function Footer({ variant = "orange" }: { variant?: FooterVariant }) {
 
       {/* Bottom Bar */}
       <div className="max-w-7xl mx-auto px-6 lg:px-8 pt-10 mt-12 border-t border-[#0B132B]/10 flex flex-col md:flex-row justify-between items-center gap-5 text-xs text-[#0B132B]/70 font-mono font-bold">
-        <p>© {new Date().getFullYear()} SkillArc. All rights reserved.</p>
+        <p>© {now ? new Date(now).getFullYear() : ""} SkillArc. All rights reserved.</p>
 
         <div className="flex items-center gap-2">
           <span>Developed by</span>

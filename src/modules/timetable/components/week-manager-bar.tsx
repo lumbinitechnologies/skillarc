@@ -1,5 +1,8 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
+
 import { useState } from "react"
 import { useTimetable } from "../context/timetable-context"
 import { timetableService } from "../services/timetableService"
@@ -101,8 +104,8 @@ export default function WeekManagerBar() {
       await reloadWeeks()
       setSelectedWeek(created)
       setShowAddModal(false)
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to create week")
+    } catch (err: unknown) {
+      setErrorMessage(readErrorMessage(err) || "Failed to create week")
     } finally {
       setIsSaving(false)
     }
@@ -126,8 +129,8 @@ export default function WeekManagerBar() {
 
       await reloadWeeks()
       setShowBatchModal(false)
-    } catch (err: any) {
-      setErrorMessage(err.message || "Failed to batch create weeks")
+    } catch (err: unknown) {
+      setErrorMessage(readErrorMessage(err) || "Failed to batch create weeks")
     } finally {
       setIsSaving(false)
     }
@@ -145,8 +148,8 @@ export default function WeekManagerBar() {
       await reloadWeeks()
       setSelectedWeek(updated)
       setIsEditingDates(false)
-    } catch (err: any) {
-      alert("Failed to update week dates: " + err.message)
+    } catch (err: unknown) {
+      alert("Failed to update week dates: " + readErrorMessage(err))
     } finally {
       setIsSaving(false)
     }
@@ -162,8 +165,8 @@ export default function WeekManagerBar() {
       setIsSaving(true)
       await timetableService.deleteWeek(selectedWeek.id)
       await reloadWeeks()
-    } catch (err: any) {
-      alert("Failed to delete week: " + err.message)
+    } catch (err: unknown) {
+      alert("Failed to delete week: " + readErrorMessage(err))
     } finally {
       setIsSaving(false)
     }
@@ -185,8 +188,8 @@ export default function WeekManagerBar() {
 
       await reloadSlots()
       setShowCopyModal(false)
-    } catch (err: any) {
-      alert("Failed to copy schedule: " + err.message)
+    } catch (err: unknown) {
+      alert("Failed to copy schedule: " + readErrorMessage(err))
     } finally {
       setIsSaving(false)
     }

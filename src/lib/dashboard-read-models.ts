@@ -148,7 +148,7 @@ function mapStudents(rows: any[], users: Map<string, PlacementUser>, application
     const user = users.get(student.id)
     const studentApplications = applications.filter((application) => application.student_id === student.id)
     const placedApplication = studentApplications.find((application) => application.status === "SELECTED")
-    const jobPost = relationValue((placedApplication as any)?.job_posts)
+    const jobPost = relationValue((placedApplication)?.job_posts)
     const company = relationValue((jobPost as any)?.companies)
     const program = relationValue(student.program)
     const companyName = company?.name
@@ -216,7 +216,7 @@ async function loadPlacementDashboardDataImpl(context: UserContext): Promise<Pla
     .find((result) => result.error)?.error
   if (firstError) throw new Error(firstError.message)
 
-  const studentsRows = (studentsResult.data ?? []) as any[]
+  const studentsRows = (studentsResult.data ?? [])
   const studentIds = studentsRows.map((student) => student.id)
   const usersResult = studentIds.length
     ? await admin.from("users").select("id, name, email").in("id", studentIds).order("name")
@@ -226,8 +226,8 @@ async function loadPlacementDashboardDataImpl(context: UserContext): Promise<Pla
 
   const applications = (applicationsResult.data ?? []) as PlacementApplicationRow[]
   const users = new Map<string, PlacementUser>((usersResult.data ?? []).map((user) => [user.id, user]))
-  const companies = mapCompanies((companiesResult.data ?? []) as any[])
-  const drives = mapDrives((postsResult.data ?? []) as any[])
+  const companies = mapCompanies((companiesResult.data ?? []))
+  const drives = mapDrives((postsResult.data ?? []))
   const students = mapStudents(studentsRows, users, applications)
   const attendance = (attendanceResult.data ?? []) as Array<{ status: string }>
   const present = attendance.filter((record) => record.status === "PRESENT" || record.status === "LATE").length
@@ -321,7 +321,7 @@ async function loadEventsRows(admin: ReturnType<typeof createSupabaseAdminClient
   if (institutionId) query = query.eq("institution_id", institutionId)
   const { data, error } = await query.order("event_date", { ascending: true })
   if (error) throw new Error(error.message)
-  return (data ?? []) as any[]
+  return (data ?? [])
 }
 
 async function loadEventsDashboardDataImpl(context: UserContext): Promise<EventsDashboardData> {

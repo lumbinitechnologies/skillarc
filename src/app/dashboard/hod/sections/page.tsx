@@ -12,18 +12,18 @@ export default async function HodSectionsPage() {
   const rawSections = await getCachedSections(institutionId)
 
   // Student counts are real-time (change constantly) — not cached
-  const sectionIds = rawSections.map((s: any) => s.id)
+  const sectionIds = rawSections.map((s) => s.id)
   const studentCountRes = sectionIds.length
     ? await admin.from("students").select("section_id").in("section_id", sectionIds)
     : { data: [] }
 
-  const studentRows = (studentCountRes.data ?? []) as any[]
+  const studentRows = (studentCountRes.data ?? [])
   const countMap: Record<string, number> = {}
   for (const r of studentRows) {
     countMap[r.section_id] = (countMap[r.section_id] ?? 0) + 1
   }
 
-  const sections = rawSections.map((s: any) => {
+  const sections = rawSections.map((s) => {
     const program = Array.isArray(s.programs) ? s.programs[0] : s.programs
     const advisor = Array.isArray(s.advisor) ? s.advisor[0] : s.advisor
     return {

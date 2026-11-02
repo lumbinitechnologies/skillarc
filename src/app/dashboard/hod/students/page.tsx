@@ -20,8 +20,8 @@ export default async function HodStudentsPage() {
       .order("name"),
   ])
 
-  const users = (studentsRes.data ?? []) as any[]
-  const sections = (sectionsRes.data ?? []) as any[]
+  const users = (studentsRes.data ?? [])
+  const sections = (sectionsRes.data ?? [])
 
   // Fetch student records to get section mapping
   const studentIds = users.map((u) => u.id)
@@ -32,7 +32,7 @@ export default async function HodStudentsPage() {
         .in("id", studentIds)
     : { data: [] }
 
-  const studentRecords = (studentRecordsRes.data ?? []) as any[]
+  const studentRecords = (studentRecordsRes.data ?? [])
 
   const students = users.map((u) => {
     const rec = studentRecords.find((r) => r.id === u.id)

@@ -53,7 +53,7 @@ export default function Organization() {
               The right information, in the right hands.
             </h2>
             <p className="text-xs font-mono text-white/50 leading-relaxed uppercase">
-              // BRING YOUR EXISTING STRUCTURE INTO ONE DEPENDABLE WORKSPACE, WITH CLEAR RESPONSIBILITIES FOR EACH TEAM.
+              {"//"} BRING YOUR EXISTING STRUCTURE INTO ONE DEPENDABLE WORKSPACE, WITH CLEAR RESPONSIBILITIES FOR EACH TEAM.
             </p>
 
             {/* Inspector Readout Card */}
@@ -71,7 +71,7 @@ export default function Organization() {
           {/* Right Interactive Tree Node Console */}
           <div className="lg:col-span-7 bg-[#0A0A0A] border border-white/15 rounded-2xl p-8 shadow-2xl relative font-mono">
             <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
-              <span className="text-xs text-white/40 uppercase">// CAMPUS_STRUCTURE</span>
+              <span className="text-xs text-white/40 uppercase">{"//"} CAMPUS_STRUCTURE</span>
               <span className="text-[9px] px-2 py-0.5 bg-[#38BDF8]/10 border border-[#38BDF8]/30 text-[#38BDF8] rounded uppercase font-bold">
                 INTERACTIVE
               </span>

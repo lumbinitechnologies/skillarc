@@ -1,5 +1,9 @@
 "use server"
 
+import { relationOne } from "@/lib/academic-content-types"
+import type { RosterStudent } from "@/lib/academic-content-types"
+
+
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -242,7 +246,7 @@ export async function getStudentProjectGroupsAction(studentId: string) {
         id,
         group_name,
         project_id,
-        projects (id, title, description, created_at, faculty_id)
+        projects (id, title, description, created_at, faculty_id, subject_id)
       )
     `)
     .eq("student_id", studentId)
@@ -254,7 +258,7 @@ export async function getStudentProjectGroupsAction(studentId: string) {
 
   const results = []
   for (const m of memberships) {
-    const group = (m as any).project_groups
+    const group = relationOne(m.project_groups)
     if (!group) continue
 
     // Load other members in this group
@@ -264,7 +268,7 @@ export async function getStudentProjectGroupsAction(studentId: string) {
       .eq("group_id", group.id)
 
     results.push({
-      project: group.projects,
+      project: relationOne(group.projects),
       group: {
         id: group.id,
         group_name: group.group_name,
@@ -295,15 +299,15 @@ export async function getSubjectStudentsAction(sectionId: string) {
     return []
   }
 
-  return (data || []).map((row: any) => ({
+  return (data || []).map((row) => ({
     id: row.id,
-    name: row.users?.name || "Student",
-    email: row.users?.email || "",
+    name: relationOne(row.users)?.name || "Student",
+    email: relationOne(row.users)?.email || "",
     section_id: row.section_id || null,
   }))
 }
 
-export async function suggestTeamsAIAction(members: any[], settings: { teamCount: number; theme: string; focus: string }) {
+export async function suggestTeamsAIAction(members: RosterStudent[], settings: { teamCount: number; theme: string; focus: string }) {
   const profile = await getCurrentUserContext()
   if (!profile || ![...PROJECT_PUBLISHER_ROLES].includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
     return { success: false, error: "You are not allowed to request project team suggestions." }
@@ -386,7 +390,7 @@ export async function getProjectsBySubjectAction(subjectId: string) {
     .select("section_id")
     .eq("subject_id", subjectId)
 
-  const sectionIds = Array.from(new Set((slots ?? []).map((s: any) => s.section_id).filter(Boolean)))
+  const sectionIds = Array.from(new Set((slots ?? []).map((s) => s.section_id).filter(Boolean)))
   if (sectionIds.length === 0) {
     return []
   }
@@ -397,12 +401,12 @@ export async function getProjectsBySubjectAction(subjectId: string) {
     .select("id")
     .in("section_id", sectionIds)
 
-  const studentIdsSet = new Set((studentRecords ?? []).map((s: any) => s.id))
+  const studentIdsSet = new Set((studentRecords ?? []).map((s) => s.id))
 
   // Filter projects in memory where at least one member is enrolled in the subject's sections
-  const filtered = (allProjects || []).filter((proj: any) => {
-    return proj.project_groups?.some((group: any) =>
-      group.group_members?.some((member: any) => studentIdsSet.has(member.student_id))
+  const filtered = (allProjects || []).filter((proj) => {
+    return proj.project_groups?.some((group) =>
+      group.group_members?.some((member) => studentIdsSet.has(member.student_id))
     )
   })
 

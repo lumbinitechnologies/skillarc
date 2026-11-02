@@ -5,6 +5,7 @@ import { StudentSubjectDetailClient } from "./student-subject-detail-client"
 import { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
 import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import type { AcademicStudent, AttendanceEntry } from "@/lib/academic-content-types"
 
 export const dynamic = "force-dynamic"
 
@@ -51,7 +52,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     .eq("subject_id", subjectId)
 
   if (fsRows && fsRows.length > 0) {
-    const secMatch = fsRows.find((r: any) => r.section_id === profile.section_id)
+    const secMatch = fsRows.find((r) => r.section_id === profile.section_id)
     const targetRow = secMatch || fsRows[0]
     const u = Array.isArray(targetRow?.users) ? targetRow?.users[0] : targetRow?.users
     if (u?.name) {
@@ -92,12 +93,12 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
   // Filter assignments targeted to this student's section (or globally assigned)
   const studentSectionId = profile.section_id
-  const activeAssignments = (assignments ?? []).filter((a: any) => {
+  const activeAssignments = (assignments ?? []).filter((a) => {
     if (!a.section_ids || a.section_ids.length === 0) return true
     return a.section_ids.includes(studentSectionId)
   })
 
-  const assignmentIds = activeAssignments.map((a: any) => a.id)
+  const assignmentIds = activeAssignments.map((a) => a.id)
 
   // 4. Fetch Student's Submissions for these assignments
   const { data: submissions = [] } = assignmentIds.length
@@ -109,21 +110,24 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     : { data: [] }
 
   // 5. Fetch Classmates in the same section
-  let classmates: any[] = []
+  let classmates: AcademicStudent[] = []
   if (studentSectionId) {
     const { data: classmateStudents } = await adminClient
       .from("students")
       .select("id")
       .eq("section_id", studentSectionId)
 
-    const classmateIds = (classmateStudents ?? []).map((s: any) => s.id)
+    const classmateIds = (classmateStudents ?? []).map((s) => s.id)
     if (classmateIds.length) {
       const { data: usersData } = await adminClient
         .from("users")
         .select("id, name, email")
         .in("id", classmateIds)
         .order("name")
-      classmates = usersData ?? []
+      classmates = (usersData ?? []).map((student) => ({
+        ...student,
+        email: student.email ?? undefined,
+      }))
     }
   }
 
@@ -136,7 +140,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     .order("created_at", { ascending: false })
 
   // 7. Fetch Attendance records for this subject + section
-  let attendanceEntries: any[] = []
+  let attendanceEntries: AttendanceEntry[] = []
   let attendanceSummary = {
     total: 0,
     present: 0,
@@ -154,7 +158,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       .order("attendance_date", { ascending: false })
       .order("period")
 
-    const sessionIds = (sessions ?? []).map((session: any) => session.id)
+    const sessionIds = (sessions ?? []).map((session) => session.id)
 
     const { data: records = [] } = sessionIds.length
       ? await adminClient
@@ -164,9 +168,9 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
           .in("session_id", sessionIds)
       : { data: [] }
 
-    const recordMap = new Map((records ?? []).map((record: any) => [record.session_id, record]))
+    const recordMap = new Map((records ?? []).map((record) => [record.session_id, record]))
 
-    const facultyIds = Array.from(new Set((sessions ?? []).map((s: any) => s.faculty_id).filter(Boolean))) as string[]
+    const facultyIds = Array.from(new Set((sessions ?? []).map((s) => s.faculty_id).filter(Boolean))) as string[]
     const facultyMap = new Map<string, string>()
     if (facultyIds.length) {
       const { data: faculties = [] } = await adminClient
@@ -174,19 +178,19 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
         .select("id, name")
         .in("id", facultyIds)
 
-      ;(faculties ?? []).forEach((fac: any) => {
+      ;(faculties ?? []).forEach((fac) => {
         facultyMap.set(fac.id, fac.name)
       })
     }
 
-    attendanceEntries = (sessions ?? []).map((session: any) => {
+    attendanceEntries = (sessions ?? []).map((session) => {
       const record = recordMap.get(session.id)
       const facName = session.faculty_id ? facultyMap.get(session.faculty_id) : undefined
 
       return {
         id: session.id,
         date: session.attendance_date,
-        period: session.period,
+        period: String(session.period),
         facultyName: facName ?? "Faculty pending",
         status: record?.status ?? "NOT_MARKED",
       }
@@ -210,10 +214,10 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
   // 8. Fetch Project Groups for this student and subject
   const studentGroupsAll = await getStudentProjectGroupsAction(context.id)
-  const projectGroups = (studentGroupsAll || []).filter((sg: any) => sg.project?.subject_id === subjectId)
+  const projectGroups = (studentGroupsAll || []).filter((sg) => sg.project?.subject_id === subjectId)
 
-  let gradeColumns: any[] = []
-  let gradeEntries: any[] = []
+  let gradeColumns = []
+  let gradeEntries = []
 
   try {
     const { data: columns, error: columnsError } = await adminClient
@@ -225,7 +229,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
     if (!columnsError && columns?.length) {
       gradeColumns = columns
-      const columnIds = columns.map((column: any) => column.id)
+      const columnIds = columns.map((column) => column.id)
 
       const { data: entries, error: entriesError } = await adminClient
         .from("grade_entries")
@@ -255,7 +259,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       meetings={meetings ?? []}
       attendanceEntries={attendanceEntries}
       attendanceSummary={attendanceSummary}
-      projectGroups={projectGroups ?? []}
+      projectGroups={projectGroups.map(allocation => ({ id: allocation.group.id, project: allocation.project, project_group: { ...allocation.group, group_members: allocation.members } }))}
       subjectAnnouncements={subjectAnnouncements ?? []}
       gradeColumns={gradeColumns}
       gradeEntries={gradeEntries}

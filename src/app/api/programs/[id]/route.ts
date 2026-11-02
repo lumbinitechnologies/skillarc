@@ -86,7 +86,7 @@ export async function PUT(
       )
     }
 
-    const updates: Record<string, any> = {}
+    const updates: Record<string, unknown> = {}
     if (name !== undefined) updates.name = name.trim()
     if (department_id !== undefined) updates.department_id = department_id || null
 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { errorMessage as readErrorMessage } from "../src/lib/error-message"
 import { groq } from "@ai-sdk/groq"
 import { streamText } from "ai"
 
@@ -22,8 +22,8 @@ async function main() {
         output += chunk
       }
       console.log(`✅ [${model}] SUCCESS:`, output.trim())
-    } catch (e: any) {
-      console.log(`❌ [${model}] FAILED:`, e.message)
+    } catch (e: unknown) {
+      console.log(`❌ [${model}] FAILED:`, readErrorMessage(e))
     }
   }
 }

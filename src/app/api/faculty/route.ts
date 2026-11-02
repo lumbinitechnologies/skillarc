@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
@@ -66,9 +67,9 @@ export async function POST(request: NextRequest) {
       ...faculty,
       employee_id: employee_id ? String(employee_id).trim() : null,
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Faculty creation error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
           .in("id", facultyIds)
       : { data: [] }
 
-    const staffMap = new Map((staffRecords || []).map((s: any) => [s.id, s.employee_id]))
+    const staffMap = new Map((staffRecords || []).map((s) => [s.id, s.employee_id]))
 
     const mapped = (data || []).map((u) => ({
       ...u,

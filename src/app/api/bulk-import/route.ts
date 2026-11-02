@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
             if (perm?.id) {
               await admin
                 .from("user_permissions")
-                .upsert({ user_id: facultyUser.id, permission_id: perm.id }, { onConflict: "user_id,permission_id" as any })
+                .upsert({ user_id: facultyUser.id, permission_id: perm.id }, { onConflict: "user_id,permission_id" })
             }
           }
 
@@ -668,7 +668,7 @@ export async function POST(request: NextRequest) {
             }
 
             const { data: matchedPrograms } = await programQuery
-            const programIds = (matchedPrograms ?? []).map((p: any) => p.id)
+            const programIds = (matchedPrograms ?? []).map((p) => p.id)
             if (programIds.length > 0) {
               sectionQuery = sectionQuery.in("program_id", programIds)
             }
@@ -787,7 +787,7 @@ export async function POST(request: NextRequest) {
             .limit(1)
           const existingSlot = existingSlots?.[0]
 
-          const slotPayload: Record<string, any> = {
+          const slotPayload: Record<string, unknown> = {
             subject_id: subject.id,
             faculty_id: facultyId,
             semester: semesterVal,

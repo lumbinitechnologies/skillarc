@@ -52,7 +52,7 @@ export function ParentList({ parents, isLoading = false, onDelete }: ParentListP
 
       <AnimatePresence initial={false}>
         {parents.map((parent, idx) => {
-          const students = (parent as any).students ?? []
+          const students = (parent).students ?? []
           const isExpanded = expanded === parent.id
           const initials = parent.name
             ?.split(" ")
@@ -94,7 +94,7 @@ export function ParentList({ parents, isLoading = false, onDelete }: ParentListP
                 {/* Phone */}
                 <div className="hidden md:flex items-center gap-2">
                   <Phone className="h-3.5 w-3.5 shrink-0 text-slate-300" />
-                  <span className="text-sm text-slate-600">{(parent as any).phone || "—"}</span>
+                  <span className="text-sm text-slate-600">{parent.phone || "—"}</span>
                 </div>
 
                 {/* Students count */}
@@ -146,7 +146,7 @@ export function ParentList({ parents, isLoading = false, onDelete }: ParentListP
                         Linked Students
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {students.map((stud: any) => (
+                        {students.map((stud) => (
                           <div
                             key={stud.id}
                             className="inline-flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-1.5 shadow-sm"

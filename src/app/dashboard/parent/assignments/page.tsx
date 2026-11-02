@@ -4,10 +4,10 @@ import ParentAssignmentsClient from "./assignments-client"
 export const dynamic = "force-dynamic"
 
 export default async function ParentAssignmentsPage() {
-  const { profile, children, admin } = await getParentContext()
+  const { profile, children: students, admin } = await getParentContext()
 
-  const studentIds = children.map((c) => c.id)
-  const sectionIds = [...new Set(children.map((c) => c.sectionId).filter(Boolean))] as string[]
+  const studentIds = students.map((c) => c.id)
+  const sectionIds = [...new Set(students.map((c) => c.sectionId).filter(Boolean))] as string[]
 
   const [assignmentsRes, submissionsRes] = await Promise.all([
     sectionIds.length
@@ -29,11 +29,11 @@ export default async function ParentAssignmentsPage() {
       : Promise.resolve({ data: [] }),
   ])
 
-  const assignments = (assignmentsRes.data ?? []) as any[]
-  const submissions = (submissionsRes.data ?? []) as any[]
+  const assignments = (assignmentsRes.data ?? [])
+  const submissions = (submissionsRes.data ?? [])
 
   // Build per-child assignment views
-  const childAssignments = children.map((child) => {
+  const childAssignments = students.map((child) => {
     const childSectionAssignments = assignments.filter((a) =>
       Array.isArray(a.section_ids)
         ? child.sectionId && a.section_ids.includes(child.sectionId)
@@ -71,7 +71,7 @@ export default async function ParentAssignmentsPage() {
   return (
     <ParentAssignmentsClient
       parentName={profile.name ?? "Parent"}
-      children={childAssignments}
+      students={childAssignments}
     />
   )
 }

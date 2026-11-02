@@ -1,5 +1,8 @@
 "use client"
 
+import type { CatalogSubject, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState, useMemo, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { X, BookMarked } from "lucide-react"
@@ -71,10 +74,10 @@ interface Program    { id: string; name: string; department_id: string }
 export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments, programs, subject }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (data: any) => Promise<void>
+  onSubmit: (data: SubjectFormValues) => Promise<void>
   departments: Department[]
   programs: Program[]
-  subject?: any
+  subject?: CatalogSubject | null
 }) {
   const defaultForm = {
     department_id: "",
@@ -93,7 +96,11 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
 
   const isEdit = !!subject
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [open, subject]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     if (open) {
       if (subject) {
         setFormData({
@@ -110,9 +117,10 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
         setFormData(defaultForm)
       }
     }
-  }, [open, subject])
 
-  function set(key: string, value: any) {
+  }
+
+  function set<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
     setFormData(prev => ({ ...prev, [key]: value }))
   }
 

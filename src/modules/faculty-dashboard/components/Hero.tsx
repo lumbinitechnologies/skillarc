@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { GraduationCap, CalendarDays, BookOpen } from "lucide-react"
 
 const font = "'Plus Jakarta Sans', 'DM Sans', sans-serif"
@@ -19,7 +22,8 @@ export default function Hero({
   subjectCount,
   todayClasses,
 }: HeroProps) {
-  const hour = new Date().getHours()
+  const currentTime = useCurrentTime()
+  const hour = new Date(currentTime).getHours()
 
   const greeting =
     hour < 12

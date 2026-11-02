@@ -1,5 +1,8 @@
 "use client"
 
+import type { CatalogSubject } from "@/lib/catalog-types"
+
+
 import { Trash2, BookMarked, GraduationCap, BookOpen, Target, Edit2, Building2, Layers } from "lucide-react"
 import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
@@ -28,7 +31,7 @@ function getProgramStyle(name: string | undefined): { text: string; bg: string }
   return palette[hash % palette.length]
 }
 
-export function SubjectsList({ subjects, onDelete, onEdit }: any) {
+export function SubjectsList({ subjects, onDelete, onEdit }: { subjects: CatalogSubject[]; onDelete: (id: string) => void; onEdit: (subject: CatalogSubject) => void }) {
   const t = useTerms()
   const isSchool = useIsSchool()
   if (!subjects?.length) {
@@ -45,8 +48,8 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {subjects.map((subject: any) => {
-        const type = typeConfig[subject.subject_type] ?? typeConfig.THEORY
+      {subjects.map((subject) => {
+        const type = typeConfig[subject.subject_type ?? "THEORY"] ?? typeConfig.THEORY
         const progStyle = getProgramStyle(subject.program?.name)
 
         return (
@@ -141,7 +144,7 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                       <div
                         key={i}
                         className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                          i < subject.credits ? "bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] scale-110 shadow-sm" : "bg-slate-200"
+                          i < (subject.credits ?? 0) ? "bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] scale-110 shadow-sm" : "bg-slate-200"
                         }`}
                       />
                     ))}

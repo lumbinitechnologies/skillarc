@@ -1,3 +1,4 @@
+import { measureServer } from "@/lib/perf"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
@@ -6,10 +7,10 @@ import { getCurrentUserContext } from "@/lib/user-context"
 import { getInstitutionAllAttendanceAnalyticsAction } from "../../faculty/attendance/actions"
 
 export default async function AttendancePage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentUserContext()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.institution-admin.attendance.context", () => getCurrentUserContext())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
@@ -19,7 +20,7 @@ export default async function AttendancePage() {
   const supabase = await createSupabaseServerClient()
 
   // Consolidated parallel batch: Fetch programs, sections, subjects, joined students, departments, and analytics in ONE single Promise.all
-  const tBatchStart = performance.now()
+
   const [
     programsRes,
     sectionsRes,
@@ -27,7 +28,7 @@ export default async function AttendancePage() {
     studentsRes,
     departmentsRes,
     statsRes,
-  ] = await Promise.all([
+  ] = await measureServer("app.dashboard.institution-admin.attendance.data", () => Promise.all([
     supabase
       .from("programs")
       .select("id, name, department_id")
@@ -64,14 +65,14 @@ export default async function AttendancePage() {
       .eq("institution_id", institutionId)
       .order("name"),
     getInstitutionAllAttendanceAnalyticsAction(institutionId),
-  ])
-  const batchMs = performance.now() - tBatchStart
-  const totalMs = performance.now() - tPageStart
+  ]))
+
+
 
   const programs = programsRes.data ?? []
   const sections = sectionsRes.data ?? []
   const subjects = subjectsRes.data ?? []
-  const rawStudents = (studentsRes.data ?? []) as any[]
+  const rawStudents = (studentsRes.data ?? [])
   const departments = departmentsRes.data ?? []
   const allStats = statsRes.success ? statsRes.stats || [] : []
 
@@ -86,9 +87,7 @@ export default async function AttendancePage() {
     }
   })
 
-  console.info(
-    `[DashboardInstitutionAdminAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)}`
-  )
+
 
   return (
     <AttendanceClient

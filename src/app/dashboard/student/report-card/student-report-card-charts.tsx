@@ -16,12 +16,12 @@ import {
 } from "recharts"
 import { TrendingUp, Star } from "lucide-react"
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: readonly { dataKey?: string | number; name?: string; value?: string | number }[]; label?: React.ReactNode }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-3 text-left">
         <p className="text-xs font-semibold text-slate-500 mb-1">{label}</p>
-        {payload.map((p: any) => (
+        {payload.map((p) => (
           <p key={p.dataKey} className="text-sm font-bold text-slate-800">
             {p.name}: {p.value}{p.name === "Performance" ? "%" : " pts"}
           </p>

@@ -107,7 +107,7 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       const { data, error } = await supabase
@@ -123,15 +123,14 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       const seen = new Set<string>()
 
       const results = (data ?? [])
-        .map((row: any) => row.faculty)
-        .filter(Boolean)
-        .filter((faculty: any) => {
+        .flatMap((row) => Array.isArray(row.faculty) ? row.faculty : row.faculty ? [row.faculty] : [])
+        .filter((faculty) => {
           if (seen.has(faculty.id)) return false
           seen.add(faculty.id)
           return true
@@ -144,7 +143,7 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       return results
@@ -216,7 +215,7 @@ export const timetableService = {
     weekId: string,
     updates: { title?: string; startDate?: string; endDate?: string; weekNumber?: number }
   ) {
-    const payload: Record<string, any> = { updated_at: new Date().toISOString() }
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (updates.title !== undefined) payload.title = updates.title
     if (updates.startDate !== undefined) payload.start_date = updates.startDate
     if (updates.endDate !== undefined) payload.end_date = updates.endDate
@@ -330,7 +329,7 @@ export const timetableService = {
 
     if (!sourceSlots || sourceSlots.length === 0) return []
 
-    const newSlots = sourceSlots.map((s: any) => ({
+    const newSlots = sourceSlots.map((s) => ({
       institution_id: institutionId,
       section_id: sectionId,
       semester,
@@ -399,19 +398,33 @@ export const timetableService = {
       )
     `
 
-    const mapRow = (s: any, useFallback = false): Slot => ({
+    type TimetableSlotRow = {
+      id: string
+      day: string | null
+      period: number | null
+      faculty_id: string | null
+      week_id: string | null
+      room?: string | null
+      delivery_mode?: string | null
+      meeting_link?: string | null
+      notes?: string | null
+      faculty: { id: string; name: string } | Array<{ id: string; name: string }> | null
+      subjects: (Subject & { faculty_name?: string | null }) | Array<Subject & { faculty_name?: string | null }> | null
+    }
+
+    const mapRow = (s: TimetableSlotRow, useFallback = false): Slot => ({
       id: s.id,
-      day: s.day,
-      period: `P${s.period}`,
+      day: s.day ?? "",
+      period: `P${s.period ?? ""}`,
       faculty_id: s.faculty_id ?? null,
-      faculty_name: s.faculty?.name ?? null,
+      faculty_name: (Array.isArray(s.faculty) ? s.faculty[0] : s.faculty)?.name ?? null,
       week_id: s.week_id ?? null,
       room: useFallback ? null : (s.room ?? null),
       delivery_mode: useFallback ? "ON_CAMPUS" : (s.delivery_mode ?? "ON_CAMPUS"),
       meeting_link: useFallback ? null : (s.meeting_link ?? null),
       notes: useFallback ? null : (s.notes ?? null),
-      subject: s.subjects
-        ? { ...s.subjects, faculty_name: s.faculty?.name ?? null }
+      subject: (Array.isArray(s.subjects) ? s.subjects[0] : s.subjects)
+        ? { ...(Array.isArray(s.subjects) ? s.subjects[0] : s.subjects)!, faculty_name: (Array.isArray(s.faculty) ? s.faculty[0] : s.faculty)?.name ?? null }
         : undefined,
     })
 
@@ -429,7 +442,7 @@ export const timetableService = {
 
       let baseSlots: Slot[] = []
       if (!baseError && baseData) {
-        baseSlots = baseData.map((s: any) => mapRow(s, false))
+        baseSlots = baseData.map((s) => mapRow(s, false))
       } else if (baseError) {
         // Fallback without extended columns
         const { data: baseFallback } = await supabase
@@ -439,7 +452,7 @@ export const timetableService = {
           .eq("section_id", sectionId)
           .eq("semester", semester)
           .is("week_id", null)
-        baseSlots = (baseFallback ?? []).map((s: any) => mapRow(s, true))
+        baseSlots = (baseFallback ?? []).map((s) => mapRow(s, true))
       }
 
       // If a specific week is selected, also fetch week-specific slots
@@ -457,7 +470,7 @@ export const timetableService = {
 
         let weekSlots: Slot[] = []
         if (!weekError && weekData) {
-          weekSlots = weekData.map((s: any) => mapRow(s, false))
+          weekSlots = weekData.map((s) => mapRow(s, false))
         } else if (weekError) {
           const { data: weekFallback } = await supabase
             .from("timetable_slots")
@@ -466,7 +479,7 @@ export const timetableService = {
             .eq("section_id", sectionId)
             .eq("semester", semester)
             .eq("week_id", weekId)
-          weekSlots = (weekFallback ?? []).map((s: any) => mapRow(s, true))
+          weekSlots = (weekFallback ?? []).map((s) => mapRow(s, true))
         }
 
         // Merge: week-specific slots override base slots for the same (day, period)
@@ -510,7 +523,7 @@ export const timetableService = {
     weekId?: string | null
   }) {
     // 1. Prepare payloads
-    const fullPayload: Record<string, any> = {
+    const fullPayload: Record<string, unknown> = {
       institution_id: institutionId,
       section_id: sectionId,
       semester,
@@ -526,7 +539,7 @@ export const timetableService = {
     if (meetingLink && meetingLink.trim()) fullPayload.meeting_link = meetingLink.trim()
     if (notes && notes.trim()) fullPayload.notes = notes.trim()
 
-    const tier2Payload: Record<string, any> = {
+    const tier2Payload: Record<string, unknown> = {
       institution_id: institutionId,
       section_id: sectionId,
       semester,

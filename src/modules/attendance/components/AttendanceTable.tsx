@@ -1,5 +1,8 @@
 "use client"
 
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
+
+
 import React, { useState, useMemo } from "react"
 import {
   UserRound,
@@ -17,13 +20,13 @@ import {
 } from "lucide-react"
 
 interface Props {
-  students: any[]
+  students: AttendanceStudent[]
   attendance: Record<string, string>
   notes?: Record<string, string>
   studentAttendanceRates?: Record<string, { rate: number; total: number; missed: number }>
   onStatusChange: (studentId: string, status: string) => void
   onNoteChange?: (studentId: string, note: string) => void
-  onIssueWarning?: (student: any) => void
+  onIssueWarning?: (student: AttendanceStudent) => void
   onPrint?: () => void
 }
 

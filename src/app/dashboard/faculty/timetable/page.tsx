@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
@@ -14,7 +15,7 @@ export default async function FacultyTimetablePage() {
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)) redirect("/dashboard")
 
   // Check organization features for multi_week_timetable
   const multiWeekEnabled = profile.features.includes("multi_week_timetable")
@@ -66,17 +67,14 @@ export default async function FacultyTimetablePage() {
   ]))
 
   // Fetch weeks if multi-week is enabled
-  let weeks: any[] = []
-  if (multiWeekEnabled) {
-    const weeksData = weeksResultData.data
-    const seen = new Set<string>()
-    weeks = (weeksData ?? []).filter((w: any) => {
-      const key = `${w.week_number}-${w.start_date}-${w.end_date}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-  }
+  const weeksData = weeksResultData.data ?? []
+  const seenWeeks = new Set<string>()
+  const weeks = multiWeekEnabled ? weeksData.filter((week) => {
+    const key = `${week.week_number}-${week.start_date}-${week.end_date}`
+    if (seenWeeks.has(key)) return false
+    seenWeeks.add(key)
+    return true
+  }) : []
 
   const academicEvents = eventsResult.data ?? []
   const settings = settingsResult.data
@@ -106,14 +104,14 @@ export default async function FacultyTimetablePage() {
     5: "2:00 – 3:00",
   }
 
-  const slots = (timetableRows as Array<any>).map((slot) => ({
+  const slots = timetableRows.map((slot) => ({
     id: slot.id,
     day: slot.day,
     period: slot.period,
-    subject: slot.subjects?.code ?? slot.subjects?.name ?? "Class",
-    subject_name: slot.subjects?.name ?? "Class",
-    subject_code: slot.subjects?.code ?? "Class",
-    section: slot.sections?.name ?? "Section",
+    subject: relationOne(slot.subjects)?.code ?? relationOne(slot.subjects)?.name ?? "Class",
+    subject_name: relationOne(slot.subjects)?.name ?? "Class",
+    subject_code: relationOne(slot.subjects)?.code ?? "Class",
+    section: relationOne(slot.sections)?.name ?? "Section",
     room: slot.room || null,
     delivery_mode: slot.delivery_mode || "ON_CAMPUS",
     meeting_link: slot.meeting_link || null,

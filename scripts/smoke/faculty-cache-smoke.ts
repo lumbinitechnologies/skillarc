@@ -1,6 +1,6 @@
 import { clearFacultyProfile, getFacultyProfile, getFacultySubjects, getFacultyTimetable } from '../../src/app/dashboard/faculty/components/faculty-cache-v2'
 
-async function runConcurrent(fn: () => Promise<any>, count: number) {
+async function runConcurrent(fn: () => Promise<unknown>, count: number) {
   const tasks = Array.from({ length: count }).map(() => fn())
   return Promise.all(tasks)
 }

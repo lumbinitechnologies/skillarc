@@ -1,5 +1,7 @@
 "use server"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { spawn } from "child_process"
 import * as fs from "fs/promises"
 import * as path from "path"
@@ -480,13 +482,13 @@ export async function verifyCodeAction(
 
       await fs.rm(tmpDir, { recursive: true, force: true })
     }
-  } catch (err: any) {
-    logs.push(`[SYSTEM ERROR] Unexpected execution failure: ${err.message}`)
+  } catch (err: unknown) {
+    logs.push(`[SYSTEM ERROR] Unexpected execution failure: ${readErrorMessage(err)}`)
     return {
       success: false,
       errorType: "runtime",
-      errorMessage: err.message || "Failed to execute code in sandbox.",
-      runtimeError: err.message,
+      errorMessage: readErrorMessage(err) || "Failed to execute code in sandbox.",
+      runtimeError: readErrorMessage(err),
       results,
       allPassed: false,
       totalPassed: results.filter(r => r.passed).length,

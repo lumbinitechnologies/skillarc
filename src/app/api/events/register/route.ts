@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -44,8 +45,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(data, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -77,7 +78,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }

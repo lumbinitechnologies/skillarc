@@ -43,14 +43,19 @@ export function CreateProgramDialog({
 
   const { toast } = useToast()
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [program, departments]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setFormData({
       name: program?.name || "",
       department_id: program?.department_id || (departments.length === 1 ? departments[0].id : ""),
       institution_id: program?.institution_id || "",
       organization_id: program?.organization_id || "",
     })
-  }, [program, departments])
+
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

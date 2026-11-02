@@ -1,5 +1,11 @@
-// src/components/placements/placements-portal-client.tsx
 "use client";
+
+import { useLocalStorageValue } from "@/hooks/use-local-storage-value"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+// src/components/placements/placements-portal-client.tsx
+
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
@@ -32,9 +38,20 @@ import {
 } from "@/lib/placements-mock";
 import { predictPlacementProbability, PredictionResult } from "@/lib/placements-predictor";
 import { PlacementsInterviewTerminal } from "@/components/placements/placements-interview-terminal";
-import type { PlacementDashboardData } from "@/lib/dashboard-read-model-types";
+import type { PlacementDashboardData, PlacementAnalytics, PlacementApplication } from "@/lib/dashboard-read-model-types";
+import type { SpeechRecognitionLike, SpeechRecognitionWindow } from "@/lib/browser-speech"
 
 type TabType = "overview" | "students" | "companies" | "drives" | "interview" | "comms" | "predictor";
+interface CommunicationMetrics {
+  wpm: number
+  fluency: number
+  clarity: number
+  fillerScore: number
+  proScore: number
+  confidence: number
+  overall: number
+  emotion: string
+}
 
 interface PlacementsPortalClientProps {
   role?: string;
@@ -58,7 +75,7 @@ export default function PlacementsPortalClient({ role: enforcedRole, defaultTab 
   const [companies, setCompanies] = useState<Company[]>(seedData?.companies ?? []);
   const [drives, setDrives] = useState<Drive[]>(seedData?.drives ?? []);
   const [students, setStudents] = useState<Student[]>(seedData?.students ?? []);
-  const [studentApplications, setStudentApplications] = useState<any[]>(seedData?.studentApplications ?? []);
+  const [studentApplications, setStudentApplications] = useState<PlacementApplication[]>(seedData?.studentApplications ?? []);
 
   // Local metric states (e.g. attendance computed from DB)
   const [dbAttendancePercent, setDbAttendancePercent] = useState<number>(seedData?.attendancePercent ?? 85.0);
@@ -313,9 +330,9 @@ function StudentPortalView({
   companies: Company[];
   drives: Drive[];
   students: Student[];
-  studentApplications: any[];
-  setStudentApplications: React.Dispatch<React.SetStateAction<any[]>>;
-  onStudentApplication: (application: any) => void;
+  studentApplications: PlacementApplication[];
+  setStudentApplications: React.Dispatch<React.SetStateAction<PlacementApplication[]>>;
+  onStudentApplication: (application: PlacementApplication) => void;
 }) {
   const [subTab, setSubTab] = useState<"interview" | "predictor" | "drives">("interview");
 
@@ -324,12 +341,14 @@ function StudentPortalView({
   const [resumeName, setResumeName] = useState<string>("");
   const [isUploadingResume, setIsUploadingResume] = useState(false);
 
-  useEffect(() => {
-    if (userId && typeof window !== "undefined") {
-      setResumeUrl(localStorage.getItem(`student_resume_${userId}`) || "");
-      setResumeName(localStorage.getItem(`student_resume_name_${userId}`) || "");
-    }
-  }, [userId]);
+  const savedResumeUrl = useLocalStorageValue(userId ? `student_resume_${userId}` : null);
+  const savedResumeName = useLocalStorageValue(userId ? `student_resume_name_${userId}` : null);
+  const [restoredUserId, setRestoredUserId] = useState<string | null | undefined>(undefined);
+  if (savedResumeUrl !== undefined && savedResumeName !== undefined && restoredUserId !== (userId ?? null)) {
+    setRestoredUserId(userId ?? null);
+    setResumeUrl(savedResumeUrl || "");
+    setResumeName(savedResumeName || "");
+  }
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -358,7 +377,7 @@ function StudentPortalView({
       setResumeUrl(publicUrl);
       setResumeName(file.name);
       alert("Resume uploaded successfully and linked to your profile!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Resume upload error:", err);
       alert("Failed to upload resume.");
     } finally {
@@ -425,9 +444,9 @@ function StudentPortalView({
       setStudentApplications((prev) => [...prev, application]);
       onStudentApplication(application);
       alert("Application submitted successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Apply error:", err);
-      alert(`Failed to submit application: ${err.message || err}`);
+      alert(`Failed to submit application: ${readErrorMessage(err) || err}`);
     }
   };
 
@@ -455,7 +474,7 @@ function StudentPortalView({
           return (
             <button
               key={tab.id}
-              onClick={() => setSubTab(tab.id as any)}
+              onClick={() => setSubTab(tab.id as typeof subTab)}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 ${
                 active
                   ? "bg-[#E57D37] text-white shadow-md shadow-[#E57D37]/20"
@@ -572,7 +591,7 @@ function StudentPortalView({
 // =============================================================================
 // TAB VIEW: OVERVIEW
 // =============================================================================
-function OverviewTabView({ analytics }: { analytics: any }) {
+function OverviewTabView({ analytics }: { analytics: PlacementAnalytics }) {
   const [aiQuery, setAiQ] = useState("");
   const [aiAnswer, setAiA] = useState("");
   const [aiLoading, setAiL] = useState(false);
@@ -595,7 +614,7 @@ function OverviewTabView({ analytics }: { analytics: any }) {
     }
   }
 
-  const branchPieData = analytics.branches.map((b: any) => ({ name: b.branch, value: b.placements }));
+  const branchPieData = analytics.branches.map((b) => ({ name: b.branch, value: b.placements }));
   const topCompanies = analytics.company_stats.slice(0, 6);
 
   return (
@@ -755,7 +774,7 @@ function CompaniesTabView({
 }: {
   companies: Company[];
   refreshData: () => Promise<void>;
-  analytics: any;
+  analytics: PlacementAnalytics;
   institutionId: string | null;
   onCompanyCreated: (company: Company) => void;
 }) {
@@ -768,7 +787,7 @@ function CompaniesTabView({
   const [aiLoad, setAiL] = useState(false);
 
   const filtered = companies.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
-  const selectedStats = analytics.company_stats.find((s: any) => s.company === selected);
+  const selectedStats = analytics.company_stats.find((s) => s.company === selected);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -873,7 +892,7 @@ function CompaniesTabView({
 
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
             {filtered.map((c) => {
-              const stats = analytics.company_stats.find((s: any) => s.company === c.name);
+              const stats = analytics.company_stats.find((s) => s.company === c.name);
               const isActive = selected === c.name;
               return (
                 <button
@@ -1098,10 +1117,10 @@ function DrivesTabView({
 function CommsTabView() {
   const [text, setText] = useState("");
   const [recording, setRec] = useState(false);
-  const [metrics, setMetrics] = useState<any | null>(null);
+  const [metrics, setMetrics] = useState<CommunicationMetrics | null>(null);
   const [aiFb, setAiFb] = useState("");
   const [aiLoad, setAiL] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   function runAnalysis() {
     if (!text.trim()) return;
@@ -1156,7 +1175,8 @@ function CommsTabView() {
   }
 
   function toggleSpeech() {
-    const Speech = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as SpeechRecognitionWindow
+    const Speech = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
     if (!Speech) {
       alert("Speech synthesis / recognition is not supported in this browser. Please type response.");
       return;
@@ -1169,8 +1189,8 @@ function CommsTabView() {
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = "en-US";
-      rec.onresult = (e: any) => {
-        const str = Array.from(e.results).map((r: any) => r[0].transcript).join(" ");
+      rec.onresult = (e) => {
+        const str = Array.from(e.results).map((result) => result[0].transcript).join(" ");
         setText(str);
       };
       rec.onend = () => setRec(false);
@@ -1269,13 +1289,22 @@ function PredictorTabView({
   const [skillsTags, setSkillsTags] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
   const [aiExplanation, setAiExplanation] = useState<string>("");
-  const [prediction, setPrediction] = useState<PredictionResult | null>(null);
+  const prediction = predictPlacementProbability(sgpa, backlogs, attendance, skillsTags.length);
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [defaultAttendance]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setAttendance(defaultAttendance);
-  }, [defaultAttendance]);
 
-  useEffect(() => {
+  }
+
+  const [previousSource0, setPreviousSource0] = useState<readonly unknown[] | null>(null)
+  const nextSource0 = [selectedStudentId, students, defaultAttendance]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     if (selectedStudentId) {
       const match = students.find(s => s.student_id === selectedStudentId);
       if (match) {
@@ -1288,17 +1317,9 @@ function PredictorTabView({
         setSkillsTags((match.skills || "").split(",").map((s: string) => s.trim()).filter(Boolean));
       }
     }
-  }, [selectedStudentId, students, defaultAttendance]);
-
-  function runPrediction() {
-    const sc = skillsTags.length;
-    const res = predictPlacementProbability(sgpa, backlogs, attendance, sc);
-    setPrediction(res);
+  })()
   }
 
-  useEffect(() => {
-    runPrediction();
-  }, [sgpa, backlogs, attendance, skillsTags]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
