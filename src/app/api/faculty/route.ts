@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     // Load timetable builder permissions
-    let { data: perm } = await supabase
+    const { data: perm } = await supabase
       .from("permissions")
       .select("id")
       .eq("name", "timetable_builder")

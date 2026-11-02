@@ -674,7 +674,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          let { data: matchedSections } = await sectionQuery.limit(1)
+          const { data: matchedSections } = await sectionQuery.limit(1)
           let section = matchedSections?.[0]
 
           // Fallback: if semester narrowed too strictly and returned nothing, try without semester constraint

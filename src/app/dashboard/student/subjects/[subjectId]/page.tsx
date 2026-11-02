@@ -167,7 +167,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     const recordMap = new Map((records ?? []).map((record: any) => [record.session_id, record]))
 
     const facultyIds = Array.from(new Set((sessions ?? []).map((s: any) => s.faculty_id).filter(Boolean))) as string[]
-    let facultyMap = new Map<string, string>()
+    const facultyMap = new Map<string, string>()
     if (facultyIds.length) {
       const { data: faculties = [] } = await adminClient
         .from("users")

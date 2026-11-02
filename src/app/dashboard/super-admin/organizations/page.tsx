@@ -18,7 +18,7 @@ export default async function OrganizationsPage() {
 
   if (orgError) console.error("Org fetch error:", orgError.message, orgError.details, orgError.hint)
 
-  let featuresMap: Record<string, string[]> = {}
+  const featuresMap: Record<string, string[]> = {}
   try {
     const { data: featuresData } = await supabase
       .from("organizations")
