@@ -29,6 +29,7 @@ import {
   saveWarningLetterAction,
   reviewLeaveApplicationAction,
 } from "./actions"
+import { supabase } from "@/lib/supabase"
 
 interface Props {
   facultyId: string
@@ -83,6 +84,9 @@ export default function AttendanceClient({
   const [isOverwriteModalOpen, setIsOverwriteModalOpen] = useState(false)
   const [isSetupCollapsed, setIsSetupCollapsed] = useState(false)
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
+
+  // Timetable slots for the selected subject+section (used to show Regular vs Extra periods)
+  const [timetableSlots, setTimetableSlots] = useState<{ day: string; period: number }[]>([])
 
   const filteredStudents = useMemo(
     () =>
@@ -148,6 +152,27 @@ export default function AttendanceClient({
       setSelectedSemester(String(sections[0].semester))
     }
   }, [sections, selectedSemester])
+
+  // Fetch timetable slots for selected subject + section to know which periods are "regular"
+  useEffect(() => {
+    let isActive = true
+    async function fetchSlots() {
+      if (!selectedSubject || !selectedSection) {
+        setTimetableSlots([])
+        return
+      }
+      const { data } = await supabase
+        .from("timetable_slots")
+        .select("day, period")
+        .eq("subject_id", selectedSubject)
+        .eq("section_id", selectedSection)
+      if (isActive) {
+        setTimetableSlots(data ?? [])
+      }
+    }
+    fetchSlots()
+    return () => { isActive = false }
+  }, [selectedSubject, selectedSection])
 
   useEffect(() => {
     let isActive = true
@@ -639,6 +664,7 @@ export default function AttendanceClient({
                 setSelectedSubject={setSelectedSubject}
                 setSelectedPeriod={setSelectedPeriod}
                 setSelectedDate={setSelectedDate}
+                timetableSlots={timetableSlots}
               />
             )}
           </div>
