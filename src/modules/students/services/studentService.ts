@@ -78,7 +78,7 @@ export async function getStudentsByInstitution(
             program: prog ? { id: prog.id, name: prog.name } : null,
           }
         : null,
-    } as any as StudentWithSection
+    } as StudentWithSection
   })
 }
 
@@ -127,7 +127,7 @@ export async function getStudentById(studentId: string): Promise<StudentWithSect
     created_at: user?.created_at,
     is_active: user?.is_active,
     department_id: null,
-  } as any as StudentWithSection
+  } as StudentWithSection
 }
 
 /**
@@ -209,8 +209,8 @@ export async function updateStudent(
   const supabase = await createSupabaseStudentClient()
 
   // Separate user fields from student fields
-  const userFields: Record<string, any> = {}
-  const studentFields: Record<string, any> = {}
+  const userFields: Record<string, unknown> = {}
+  const studentFields: Record<string, unknown> = {}
 
   if (input.name !== undefined) userFields.name = input.name
   if (input.phone !== undefined) userFields.phone = input.phone || null

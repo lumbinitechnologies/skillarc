@@ -1,5 +1,9 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -22,7 +26,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useTerms } from "@/lib/org-type-context"
 
-interface Institution { id: string; name: string; domain: string | null }
+interface Institution { id: string; name: string; domain: string | null; organization_id?: string | null }
 interface Stats { 
   faculty: number
   students: number
@@ -93,7 +97,7 @@ export default function InstitutionAdminDashboardClient({
     programsWithoutSectionsCount: number
   }
   recentActivity: Activity[]
-  recentInvites: any[]
+  recentInvites: Array<{ id: string; email: string; role: string; created_at?: string }>
   upcomingEvents: Event[]
 }) {
   const router = useRouter()
@@ -108,17 +112,12 @@ export default function InstitutionAdminDashboardClient({
 
   const [activeTooltip, setActiveTooltip] = useState<number | null>(null)
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null)
-  const [clientTime, setClientTime] = useState<Date | null>(null)
+  const timestamp = useCurrentTime()
+  const clientTime = timestamp ? new Date(timestamp) : null
   
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setClientTime(new Date())
-    const timer = setInterval(() => {
-      setClientTime(new Date())
-    }, 10000) // Update every 10 seconds for real-time tracking
-    return () => clearInterval(timer)
-  }, [])
+
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -144,7 +143,7 @@ export default function InstitutionAdminDashboardClient({
           email: inviteEmail,
           role: inviteRole,
           institutionId: institution.id,
-          organizationId: (institution as any).organization_id || "default", // Safe fallback
+          organizationId: institution.organization_id, // Safe fallback
         }),
       })
 
@@ -164,9 +163,9 @@ export default function InstitutionAdminDashboardClient({
         setIsInviteOpen(false)
         router.refresh()
       }, 1500)
-    } catch (err: any) {
+    } catch (err: unknown) {
       setInviteStatus("error")
-      setInviteError(err.message)
+      setInviteError(readErrorMessage(err))
     }
   }
 

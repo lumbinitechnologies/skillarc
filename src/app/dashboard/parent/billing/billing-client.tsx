@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { CreditCard, CheckCircle2, AlertTriangle, Clock } from "lucide-react"
@@ -42,14 +45,17 @@ function fmt(amount: number) {
 
 export default function ParentBillingClient({
   parentName,
-  children,
+  students,
+  renderedAt,
 }: {
   parentName: string
-  children: ChildWithBilling[]
+  students: ChildWithBilling[]
+  renderedAt: number
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const child = children[selectedIdx] ?? null
+  const child = students[selectedIdx] ?? null
 
+  const currentTime = useCurrentTime() || renderedAt
   return (
     <PageShell>
       <PageHeader
@@ -58,13 +64,13 @@ export default function ParentBillingClient({
         title="Fees & Billing"
         subtitle="Track fee payment status and outstanding dues for your child."
         actions={
-          children.length > 1 ? (
+          students.length > 1 ? (
             <select
               value={selectedIdx}
               onChange={(e) => setSelectedIdx(Number(e.target.value))}
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[var(--primary)] transition"
             >
-              {children.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
+              {students.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
             </select>
           ) : undefined
         }
@@ -140,7 +146,7 @@ export default function ParentBillingClient({
               ) : (
                 <div className="divide-y divide-slate-50">
                   {child.records.map((r) => {
-                    const isOverdue = r.status === "PENDING" && r.dueDate && new Date(r.dueDate) < new Date()
+                    const isOverdue = r.status === "PENDING" && r.dueDate && Date.parse(r.dueDate) < currentTime
                     const displayStatus = isOverdue ? "OVERDUE" : r.status
                     const sc = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG.PENDING
                     return (

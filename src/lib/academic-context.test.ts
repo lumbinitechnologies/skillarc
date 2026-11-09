@@ -54,9 +54,9 @@ const profile = {
 
 test("Task 04 contract exposes the configured hard bounds", () => {
   assert.deepEqual(ACADEMIC_CONTEXT_LIMITS, {
-    maxQueries: 12,
+    maxQueries: 20,
     maxRows: 50,
-    maxContextChars: 2500,
+    maxContextChars: 5000,
     academicWindowDays: 180,
     queryTimeoutMs: 2000,
     maxSubjects: 12,

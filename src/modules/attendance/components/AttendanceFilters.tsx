@@ -1,9 +1,11 @@
+import { useCurrentTime } from "@/hooks/use-current-time"
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
 import { BookOpen, CalendarDays, Clock3, GraduationCap, Layers, Users } from "lucide-react"
 
 interface Props {
-  programs: any[]
-  sections: any[]
-  subjects: any[]
+  programs: AcademicOption[]
+  sections: AcademicOption[]
+  subjects: AcademicOption[]
 
   selectedProgram: string
   selectedSemester: string
@@ -41,7 +43,8 @@ export default function AttendanceFilters({
   setSelectedDate,
   isCompact = false,
 }: Props) {
-  const filteredSections = sections.filter((s: any) => {
+  const currentTime = useCurrentTime()
+  const filteredSections = sections.filter((s) => {
     if (!selectedSemester) return false
 
     return (
@@ -50,7 +53,7 @@ export default function AttendanceFilters({
     )
   })
 
-  const filteredSubjects = subjects.filter((s: any) => {
+  const filteredSubjects = subjects.filter((s) => {
     if (!selectedSemester) return false
 
     return String(s.semester) === selectedSemester
@@ -69,7 +72,7 @@ export default function AttendanceFilters({
           className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
         >
           <option value="">All programs</option>
-          {programs.map((p: any) => (
+          {programs.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
@@ -107,7 +110,7 @@ export default function AttendanceFilters({
           className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
         >
           <option value="">Select section</option>
-          {filteredSections.map((s: any) => (
+          {filteredSections.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>
@@ -126,7 +129,7 @@ export default function AttendanceFilters({
           className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2.5 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs truncate"
         >
           <option value="">Select subject</option>
-          {filteredSubjects.map((s: any) => (
+          {filteredSubjects.map((s) => (
             <option key={s.id} value={s.id}>
               {s.code ? `${s.code} • ` : ""}{s.name}
             </option>
@@ -161,7 +164,7 @@ export default function AttendanceFilters({
         <input
           type="date"
           value={selectedDate}
-          max={new Date().toISOString().slice(0, 10)}
+          max={currentTime ? new Date(currentTime).toISOString().slice(0, 10) : undefined}
           onChange={(e) => setSelectedDate(e.target.value)}
           className="w-full rounded-2xl border border-slate-200 bg-white/90 px-3 py-2 text-xs font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-[#6C63FF] focus:ring-2 focus:ring-indigo-100 shadow-2xs"
         />

@@ -1,3 +1,5 @@
+import { relationOne } from "@/lib/academic-content-types"
+import { measureServer } from "@/lib/perf"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { ROLES } from "@/constants/roles"
@@ -5,10 +7,10 @@ import { SubjectsClientPage } from "./subjects-client"
 import { getCurrentUserContext } from "@/lib/user-context"
 
 export default async function SubjectsPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentUserContext()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.institution-admin.subjects.context", () => getCurrentUserContext())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
@@ -17,8 +19,8 @@ export default async function SubjectsPage() {
   const institutionId = context.institution_id
   const supabase = await createSupabaseServerClient()
 
-  const tBatchStart = performance.now()
-  const [subjectsRes, departmentsRes, programsRes] = await Promise.all([
+
+  const [subjectsRes, departmentsRes, programsRes] = await measureServer("app.dashboard.institution-admin.subjects.data", () => Promise.all([
     supabase
       .from("subjects")
       .select(`
@@ -41,17 +43,15 @@ export default async function SubjectsPage() {
       .select("id, name, department_id, department:department_id(id, name)")
       .eq("institution_id", institutionId)
       .order("name"),
-  ])
-  const batchMs = performance.now() - tBatchStart
-  const totalMs = performance.now() - tPageStart
+  ]))
 
-  const subjects = subjectsRes.data ?? []
+
+
+  const subjects = (subjectsRes.data ?? []).map(row => { const program = relationOne(row.program); return { ...row, program: program ? { ...program, department: relationOne(program.department) } : null } })
   const departments = departmentsRes.data ?? []
-  const programs = programsRes.data ?? []
+  const programs = (programsRes.data ?? []).map(row => ({ ...row, department: relationOne(row.department) }))
 
-  console.info(
-    `[DashboardInstitutionAdminSubjects] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)}`
-  )
+
 
   return (
     <SubjectsClientPage

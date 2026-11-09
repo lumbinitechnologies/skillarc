@@ -18,7 +18,7 @@ export async function GET() {
   const admin = createSupabaseAdminClient()
 
   // 1. Try to fetch from public.users table with admin client
-  let coreProfile: any = null
+  let coreProfile = null
   try {
     const { data } = await admin
       .from("users")
@@ -31,14 +31,14 @@ export async function GET() {
   }
 
   // Fallback to auth user metadata if users table row is missing or empty
-  const fullName = coreProfile?.name || (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || user.email?.split("@")[0] || "User"
+  const fullName = coreProfile?.name || (user.user_metadata)?.full_name || (user.user_metadata)?.name || user.email?.split("@")[0] || "User"
   const email = coreProfile?.email || user.email || ""
-  const phone = coreProfile?.phone || user.phone || (user.user_metadata as any)?.phone || ""
-  const role = coreProfile?.role || (user.user_metadata as any)?.role || "STUDENT"
-  const profileImageUrl = coreProfile?.profile_image_url || (user.user_metadata as any)?.profile_image_url || (user.user_metadata as any)?.avatar_url || null
+  const phone = coreProfile?.phone || user.phone || (user.user_metadata)?.phone || ""
+  const role = coreProfile?.role || (user.user_metadata)?.role || "STUDENT"
+  const profileImageUrl = coreProfile?.profile_image_url || (user.user_metadata)?.profile_image_url || (user.user_metadata)?.avatar_url || null
 
   // 2. Fetch extended details from user_profile_details
-  let details: any = null
+  let details = null
   try {
     const { data } = await admin
       .from("user_profile_details")
@@ -80,7 +80,7 @@ export async function PUT(request: NextRequest) {
 
   // 1. Update public.users table if present
   try {
-    const updatePayload: Record<string, any> = {
+    const updatePayload: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
     if (typeof name === "string" && name.trim()) updatePayload.name = name.trim()
@@ -97,7 +97,7 @@ export async function PUT(request: NextRequest) {
 
   // 2. Also update auth user metadata so session reflects it immediately
   try {
-    const metaUpdates: Record<string, any> = { ...(user.user_metadata || {}) }
+    const metaUpdates: Record<string, unknown> = { ...(user.user_metadata || {}) }
     if (typeof name === "string" && name.trim()) {
       metaUpdates.full_name = name.trim()
       metaUpdates.name = name.trim()

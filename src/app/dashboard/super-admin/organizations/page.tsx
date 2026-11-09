@@ -18,14 +18,14 @@ export default async function OrganizationsPage() {
 
   if (orgError) console.error("Org fetch error:", orgError.message, orgError.details, orgError.hint)
 
-  let featuresMap: Record<string, string[]> = {}
+  const featuresMap: Record<string, string[]> = {}
   try {
     const { data: featuresData } = await supabase
       .from("organizations")
       .select("id, features")
     
     if (featuresData) {
-      featuresData.forEach((row: any) => {
+      featuresData.forEach((row) => {
         featuresMap[row.id] = row.features || []
       })
     }
@@ -51,7 +51,7 @@ export default async function OrganizationsPage() {
   }
 
   const organizations =
-    organizationsRaw?.map((org: any) => ({
+    organizationsRaw?.map((org) => ({
       id: org.id,
       name: org.name,
       created_at: org.created_at,

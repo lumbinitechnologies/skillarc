@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 // app/dashboard/super-admin/org-admins/page.tsx
 
 import { createSupabaseServerClient } from "@/lib/supabase-server"
@@ -29,17 +30,17 @@ export default async function OrgAdminsPage() {
 
   if (orgsError) console.error("Orgs fetch error:", orgsError.message, orgsError.details)
 
-  const orgAdmins = (adminsRaw ?? []).map((a: any) => ({
+  const orgAdmins = (adminsRaw ?? []).map((a) => ({
     id: a.id,
     name: a.name ?? "",
     email: a.email ?? "",
     created_at: a.created_at,
     organization_id: a.organization_id ?? "",
-    organization_name: (a.organizations as any)?.name ?? "—",
+    organization_name: relationOne(a.organizations)?.name ?? "—",
     last_login: undefined,
   }))
 
-  const organizations = (orgsRaw ?? []).map((o: any) => ({
+  const organizations = (orgsRaw ?? []).map((o) => ({
     id: o.id,
     name: o.name,
   }))

@@ -29,17 +29,17 @@ interface SubjectSummary {
 }
 
 export default async function StudentAttendancePage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.attendance.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
   const supabase = await createSupabaseServerClient()
 
-  const tBatchStart = performance.now()
+
   const [studentRes, institutionRes, recordsRes, leaveRes] = await measureServer(
     "dashboard.student.attendance.data",
     () =>
@@ -93,12 +93,12 @@ export default async function StudentAttendancePage() {
           .order("created_at", { ascending: false }),
       ])
   )
-  const batchMs = performance.now() - tBatchStart
+
 
   const studentProfile = studentRes.data
   const institution = institutionRes.data
-  const rawRecords = (recordsRes.data ?? []) as any[]
-  const leaveApplications = (leaveRes.data ?? []) as any[]
+  const rawRecords = (recordsRes.data ?? [])
+  const leaveApplications = (leaveRes.data ?? [])
 
   const section = Array.isArray(studentProfile?.sections) ? studentProfile.sections[0] : studentProfile?.sections
   const program = Array.isArray(studentProfile?.programs) ? studentProfile.programs[0] : studentProfile?.programs
@@ -170,10 +170,8 @@ export default async function StudentAttendancePage() {
     rate: totalRecords > 0 ? Math.round((effectivePresent / totalRecords) * 100) : 0,
   }
 
-  const totalMs = performance.now() - tPageStart
-  console.info(
-    `[DashboardStudentAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
+
+
 
   return (
     <AttendanceClient

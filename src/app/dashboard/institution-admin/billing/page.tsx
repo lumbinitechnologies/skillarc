@@ -1,5 +1,7 @@
 "use client"
 
+type InvoicePrintData = Omit<React.ComponentProps<typeof InvoicePrintModal>, "isOpen" | "onClose">
+
 import { useCallback, useEffect, useState } from "react"
 import { Search, Plus, X, Loader2, Printer } from "lucide-react"
 import { supabase } from "@/lib/supabase"
@@ -42,7 +44,7 @@ export default function BillingPage() {
   const [search, setSearch] = useState("")
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [printInvoiceData, setPrintInvoiceData] = useState<any | null>(null)
+  const [printInvoiceData, setPrintInvoiceData] = useState<InvoicePrintData | null>(null)
 
   // Create Plan Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -98,15 +100,15 @@ export default function BillingPage() {
         const programs = programsResult.data ?? []
         const invoices = invoicesResult.data ?? []
 
-        const formatted = data.map((d: any) => {
+        const formatted = data.map((d) => {
           const student = (students || []).find(s => s.id === d.student_id)
           const user = (users || []).find(u => u.id === d.student_id)
           const program = (programs || []).find(p => p.id === student?.program_id)
           const planInvoices = (invoices || []).filter(i => i.payment_plan_id === d.id)
           
           const paidAmt = planInvoices
-            .filter((inv: any) => inv.status === "PAID")
-            .reduce((s: number, inv: any) => s + Number(inv.amount_due), 0)
+            .filter((inv) => inv.status === "PAID")
+            .reduce((s: number, inv) => s + Number(inv.amount_due), 0)
           
           return {
             id: d.id,
@@ -115,7 +117,7 @@ export default function BillingPage() {
             program: program?.name || "Enrolled Program",
             total: Number(d.total_amount),
             paid: paidAmt,
-            installments: planInvoices.map((inv: any) => ({
+            installments: planInvoices.map((inv) => ({
               id: inv.id,
               amount: Number(inv.amount_due),
               due: inv.due_date,

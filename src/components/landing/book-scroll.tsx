@@ -375,7 +375,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 backdrop-blur-md border border-amber-400/40 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FCD34D] animate-pulse shadow-[0_0_8px_#FCD34D]" />
           <span className="text-[10px] uppercase tracking-[0.25em] text-[#FCD34D] font-mono font-bold">
-            ARCH // STRUCTURE
+            ARCH {"//"} STRUCTURE
           </span>
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
@@ -393,7 +393,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E57D37]/20 backdrop-blur-md border border-[#E57D37]/60 mb-3 sm:mb-4 shadow-[0_0_15px_rgba(229,125,55,0.3)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FFA366] animate-pulse shadow-[0_0_8px_#FFA366]" />
           <span className="text-[10px] uppercase tracking-[0.25em] text-[#FFA366] font-mono font-bold">
-            OPERATIONS // VISIBILITY
+            OPERATIONS {"//"} VISIBILITY
           </span>
         </div>
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black uppercase tracking-tight leading-none drop-shadow-[0_10px_30px_rgba(229,125,55,0.3)]">
@@ -411,7 +411,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#E57D37]/20 backdrop-blur-md border border-[#E57D37]/60 mb-3.5 shadow-[0_0_15px_rgba(229,125,55,0.3)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#FFB074] animate-pulse shadow-[0_0_8px_#FFB074]" />
           <span className="text-[10px] uppercase tracking-[0.2em] text-[#FFB074] font-mono font-bold">
-            01 // SCHEDULING
+            01 {"//"} SCHEDULING
           </span>
         </div>
         <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight mb-3 sm:mb-4 leading-tight">
@@ -429,7 +429,7 @@ export default function BookScrollAnimation() {
         <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-sky-500/20 backdrop-blur-md border border-sky-400/60 mb-3.5 shadow-[0_0_15px_rgba(56,189,248,0.35)]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#38BDF8] animate-pulse shadow-[0_0_8px_#38BDF8]" />
           <span className="text-[10px] uppercase tracking-[0.2em] text-[#38BDF8] font-mono font-bold">
-            02 // STUDENT PROGRESS
+            02 {"//"} STUDENT PROGRESS
           </span>
         </div>
         <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black uppercase tracking-tight mb-3 sm:mb-4 leading-tight">

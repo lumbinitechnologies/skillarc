@@ -1,5 +1,8 @@
 "use client"
 
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
+
+
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import {
@@ -88,10 +91,10 @@ export default function AttendanceClient({
   attendanceEntries: AttendanceEntry[]
   subjectSummaries: SubjectSummary[]
   overallSummary: OverallSummary
-  initialLeaveApplications?: any[]
+  initialLeaveApplications?: LeaveApplication[]
 }) {
   const [activeTab, setActiveTab] = useState<"overview" | "analytics" | "log" | "leave">("overview")
-  const [leaveApplications, setLeaveApplications] = useState<any[]>(initialLeaveApplications)
+  const [leaveApplications, setLeaveApplications] = useState<LeaveApplication[]>(initialLeaveApplications)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("ALL")
   
@@ -115,7 +118,7 @@ export default function AttendanceClient({
     ? Math.max(0, Math.ceil((0.75 * overallSummary.total - effectivePresent) / 0.25))
     : 0
 
-  const statusStyles: Record<string, { bg: string; text: string; border: string; label: string; icon: any }> = {
+  const statusStyles: Record<string, { bg: string; text: string; border: string; label: string; icon: import("lucide-react").LucideIcon }> = {
     PRESENT: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", label: "Present", icon: CheckCircle2 },
     ABSENT: { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200", label: "Absent", icon: AlertCircle },
     LATE: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", label: "Late", icon: Clock },
@@ -713,7 +716,7 @@ export default function AttendanceClient({
                   if (result.success) {
                     setLeaveStatus("saved")
                     setLeaveFeedback("🎉 Leave request submitted successfully! Your advisor has been notified.")
-                    const newApp = (result as any).application || {
+                    const newApp = (result).application || {
                       id: Date.now().toString(),
                       from_date: leaveFromDate,
                       to_date: leaveToDate,
@@ -815,7 +818,7 @@ export default function AttendanceClient({
                       )}
 
                       <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between text-[10px] text-slate-400">
-                        <span>Submitted: {new Date(app.created_at || Date.now()).toLocaleDateString()}</span>
+                        <span>Submitted: {app.created_at ? new Date(app.created_at).toLocaleDateString() : "Date unavailable"}</span>
                         {app.approved_at && (
                           <span className={isApproved ? "text-emerald-600 font-semibold" : "text-rose-600 font-semibold"}>
                             {isApproved ? "Approved on " : "Reviewed on "}

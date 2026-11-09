@@ -1,5 +1,12 @@
 "use client"
 
+import { relationOne } from "@/lib/academic-content-types"
+import type { AcademicAssignment, RosterStudent, GeneratedTeam, WorksheetPresentation, CourseGroupAllocation, AttendanceEntry, AcademicStudent, AcademicSubmission, CourseAnnouncement, CourseMeeting, CourseProject, CourseGroup, GradebookColumn, GradebookEntry } from "@/lib/academic-content-types"
+
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import React, { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import {
@@ -80,12 +87,20 @@ import {
 } from "@/app/actions/project-groups"
 import { detectAIContent } from "@/lib/ai-detector"
 import { supabase } from "@/lib/supabase"
+import { getPrivateStorageHref, makePrivateStorageReference } from "@/lib/private-storage"
 import {
   getExistingAttendanceAction,
   saveAttendanceAction
 } from "@/app/dashboard/faculty/attendance/actions"
 import AttendanceOverwriteModal from "@/modules/attendance/components/AttendanceOverwriteModal"
+
+const EMPTY_DEFAULT_OPTIONS: [] = []
 type FacultyTab = "assignments" | "modules" | "syllabus" | "evaluation" | "grades" | "students" | "meetings" | "attendance" | "announcements"
+
+function normalizeWorksheetType(value: string): FacultyWorksheetType {
+  const types: FacultyWorksheetType[] = ["Assignment", "Quiz", "Coding Assignment", "Material", "Syllabus"]
+  return types.find(type => type.toLowerCase() === value.toLowerCase()) ?? "Assignment"
+}
 
 type FacultyWorksheetType = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
 
@@ -102,14 +117,14 @@ interface FacultySubjectDetailClientProps {
     id: string
     name: string
   }>
-  assignments: Array<any>
-  announcements: Array<any>
-  submissions: Array<any>
-  students: Array<any>
-  meetings: Array<any>
-  projects: Array<any>
-  gradeColumns?: Array<any>
-  gradeEntries?: Array<any>
+  assignments: AcademicAssignment[]
+  announcements: CourseAnnouncement[]
+  submissions: AcademicSubmission[]
+  students: AcademicStudent[]
+  meetings: CourseMeeting[]
+  projects: CourseProject[]
+  gradeColumns?: GradebookColumn[]
+  gradeEntries?: GradebookEntry[]
 }
 
 export function FacultySubjectDetailClient({
@@ -124,37 +139,37 @@ export function FacultySubjectDetailClient({
   students,
   meetings,
   projects,
-  gradeColumns = [],
-  gradeEntries = [],
+  gradeColumns = EMPTY_DEFAULT_OPTIONS,
+  gradeEntries = EMPTY_DEFAULT_OPTIONS,
 }: FacultySubjectDetailClientProps) {
   const [activeTab, setActiveTab] = useState<FacultyTab>("assignments")
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalType, setModalType] = useState<FacultyWorksheetType>("Assignment")
-  const [editingAssignment, setEditingAssignment] = useState<any | null>(null)
-  const [localAnnouncements, setLocalAnnouncements] = useState<any[]>(announcements)
+  const [editingAssignment, setEditingAssignment] = useState<AcademicAssignment | null>(null)
+  const [localAnnouncements, setLocalAnnouncements] = useState<CourseAnnouncement[]>(announcements)
 
   // Project groups states
   const [localProjects, setLocalProjects] = useState(projects)
   const [selectedSectionId, setSelectedSectionId] = useState("")
   const [projectTitle, setProjectTitle] = useState("")
   const [projectDesc, setProjectDesc] = useState("")
-  
+
   // Roster details
-  const [roster, setRoster] = useState<any[]>([])
+  const [roster, setRoster] = useState<RosterStudent[]>([])
   const [loadingRoster, setLoadingRoster] = useState(false)
-  
+
   // Team allocation states (NEW)
   const [teamName, setTeamName] = useState("")
   const [maxTeamSize, setMaxTeamSize] = useState(4)
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
-  
+
   // Separation settings
   const [teamCount, setTeamCount] = useState(3)
   const [themeId, setThemeId] = useState("classic")
   const [focus, setFocus] = useState<"skill_balance" | "role_distribution" | "random">("skill_balance")
-  
+
   // Allocation Outcome
-  const [generatedTeams, setGeneratedTeams] = useState<any[]>([])
+  const [generatedTeams, setGeneratedTeams] = useState<GeneratedTeam[]>([])
   const [overallFeedback, setOverallFeedback] = useState("")
   const [allocating, setAllocating] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -162,11 +177,11 @@ export function FacultySubjectDetailClient({
   const [allocateTab, setAllocateTab] = useState<"projects" | "allocate" | "auto">("projects")
   const [autoGroupSize, setAutoGroupSize] = useState(4)
   const [projectSectionFilter, setProjectSectionFilter] = useState("all")
-  const [editingGroup, setEditingGroup] = useState<any | null>(null)
+  const [editingGroup, setEditingGroup] = useState<CourseGroup | null>(null)
   const [editingGroupName, setEditingGroupName] = useState("")
   const [editingMemberIds, setEditingMemberIds] = useState<string[]>([])
   const [updatingGroup, setUpdatingGroup] = useState(false)
-  const [updateGroup, setUpdateGroup] = useState<any | null>(null)
+  const [updateGroup, setUpdateGroup] = useState<CourseGroup | null>(null)
   const [groupUpdateTitle, setGroupUpdateTitle] = useState("")
   const [groupUpdateMessage, setGroupUpdateMessage] = useState("")
   const [sendingGroupUpdate, setSendingGroupUpdate] = useState(false)
@@ -179,7 +194,7 @@ export function FacultySubjectDetailClient({
   }
 
   // Local submissions & Plagiarism state
-  const [localSubmissions, setLocalSubmissions] = useState<any[]>(submissions)
+  const [localSubmissions, setLocalSubmissions] = useState<AcademicSubmission[]>(submissions)
   const [isScanningPlagiarism, setIsScanningPlagiarism] = useState(false)
   // Keyed by submission ID — stores the latest Gemini scan result for display
   const [scanResults, setScanResults] = useState<Record<string, {
@@ -195,12 +210,17 @@ export function FacultySubjectDetailClient({
     matchedStudent: string
   } | null>(null)
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [submissions]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setLocalSubmissions(submissions)
-  }, [submissions])
+
+  }
 
   // Meetings specific states
-  const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
+  const [localMeetings, setLocalMeetings] = useState<CourseMeeting[]>(meetings)
   const [isStartingMeeting, setIsStartingMeeting] = useState(false)
   const [isCreateMeetingModalOpen, setIsCreateMeetingModalOpen] = useState(false)
   const [meetTitle, setMeetTitle] = useState("")
@@ -213,7 +233,7 @@ export function FacultySubjectDetailClient({
   const [selectedSection, setSelectedSection] = useState(sections[0]?.id || "")
   const [selectedGradeSection, setSelectedGradeSection] = useState(sections[0]?.id || "")
   const [studentPanelTab, setStudentPanelTab] = useState<"students" | "project_groups">("students")
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [selectedPeriod, setSelectedPeriod] = useState("")
   const [attendance, setAttendance] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
@@ -232,7 +252,7 @@ export function FacultySubjectDetailClient({
 
   const [assignmentGradeColumns, setAssignmentGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>([])
   const [customGradeColumns, setCustomGradeColumns] = useState<Array<{ id: string; label: string; max_score: number; weight: number }>>(
-    (gradeColumns ?? []).map((column: any) => ({
+    (gradeColumns ?? []).map((column) => ({
       id: column.id,
       label: column.title,
       max_score: Number(column.max_score ?? 100),
@@ -242,7 +262,11 @@ export function FacultySubjectDetailClient({
   const [gradeValues, setGradeValues] = useState<Record<string, Record<string, string>>>(() => buildGradeValueMap(gradeEntries || []))
   const [gradeWeightMode, setGradeWeightMode] = useState<"percentage" | "marks">("percentage")
 
-  useEffect(() => {
+  const [previousSource0, setPreviousSource0] = React.useState<readonly unknown[] | null>(null)
+  const nextSource0 = [assignments]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     const filtered = assignments.filter((a) => a.type !== "Material" && a.type !== "Syllabus")
     const defaultWeight = filtered.length ? Math.floor(100 / filtered.length) : 0
     setAssignmentGradeColumns((prev) => {
@@ -258,11 +282,12 @@ export function FacultySubjectDetailClient({
         }
       })
     })
-  }, [assignments])
+  })()
+  }
 
   const assignmentGradesByStudent = React.useMemo(() => {
     const map: Record<string, Record<string, number | null>> = {}
-    submissions.forEach((sub: any) => {
+    submissions.forEach((sub) => {
       if (!map[sub.student_id]) map[sub.student_id] = {}
       map[sub.student_id][sub.assignment_id] = sub.grade
     })
@@ -406,15 +431,15 @@ export function FacultySubjectDetailClient({
     return Number((assignmentSum + customSum).toFixed(1))
   }
 
-  useEffect(() => {
-    setLocalAnnouncements(announcements)
-  }, [announcements])
+  const [resetInputs1, setResetInputs1] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs1 = [announcements]
+  if (resetInputs1 === null || nextResetInputs1.some((value, index) => !Object.is(value, resetInputs1[index]))) {
+    setResetInputs1(nextResetInputs1)
 
-  useEffect(() => {
-    const hour = new Date().getHours()
-    const inferredPeriod = hour < 10 ? "1" : hour < 12 ? "2" : hour < 14 ? "3" : hour < 16 ? "4" : "5"
-    setSelectedPeriod(inferredPeriod)
-  }, [])
+    setLocalAnnouncements(announcements)
+
+  }
+
 
   const filteredStudents = React.useMemo(() => {
     return students.filter(student => student.section_id === selectedSection)
@@ -499,7 +524,8 @@ export function FacultySubjectDetailClient({
     setAttendance(newAttendance)
   }
 
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const attendanceNow = useCurrentTime()
+  const todayIso = attendanceNow ? new Date(attendanceNow).toISOString().slice(0, 10) : ""
   const isFutureAttendanceDate = selectedDate > todayIso
 
   const executeAttendanceSave = async () => {
@@ -542,14 +568,19 @@ export function FacultySubjectDetailClient({
     await executeAttendanceSave()
   }
 
-  useEffect(() => {
+  const [resetInputs2, setResetInputs2] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs2 = [meetings]
+  if (resetInputs2 === null || nextResetInputs2.some((value, index) => !Object.is(value, resetInputs2[index]))) {
+    setResetInputs2(nextResetInputs2)
+
     setLocalMeetings(meetings)
-  }, [meetings])
+
+  }
 
   useEffect(() => {
     const channel = supabase
       .channel("live_meetings_channel")
-      .on(
+      .on<CourseMeeting>(
         "postgres_changes",
         { event: "*", schema: "public", table: "meetings", filter: `subject_id=eq.${subject.id}` },
         (payload) => {
@@ -717,28 +748,28 @@ export function FacultySubjectDetailClient({
           studentName: student?.name || "Unknown Student",
           studentProfileImageUrl: student?.profile_image_url || null,
           rollNo: student?.email?.split("@")[0].toUpperCase() || "N/A",
-          sectionName: student ? (sectionMap.get(student.section_id) || "N/A") : "N/A"
+          sectionName: student ? (sectionMap.get(student.section_id ?? "") || "N/A") : "N/A"
         }
       })
   }
 
-  const getNotSubmittedForAssignment = (assignment: any) => {
+  const getNotSubmittedForAssignment = (assignment: AcademicAssignment) => {
     const assignedSectionIds = assignment.section_ids || []
     const submittedStudentIds = new Set(localSubmissions.filter(s => s.assignment_id === assignment.id).map(s => s.student_id))
-    
+
     return students
-      .filter(s => assignedSectionIds.includes(s.section_id) && !submittedStudentIds.has(s.id))
+      .filter(s => assignedSectionIds.includes(s.section_id ?? "") && !submittedStudentIds.has(s.id))
       .map(s => ({
         id: s.id,
         name: s.name,
         profile_image_url: s.profile_image_url || null,
         rollNo: s.email?.split("@")[0].toUpperCase() || "N/A",
-        sectionName: sectionMap.get(s.section_id) || "N/A"
+        sectionName: sectionMap.get(s.section_id ?? "") || "N/A"
       }))
   }
 
   // Active Assignment for Grading
-  const [selectedGradingAssignment, setSelectedGradingAssignment] = useState<any | null>(null)
+  const [selectedGradingAssignment, setSelectedGradingAssignment] = useState<AcademicAssignment | null>(null)
   const activeGradingSubmissions = selectedGradingAssignment ? getSubmissionsForAssignment(selectedGradingAssignment.id) : []
   const activeGradingNotSubmitted = selectedGradingAssignment ? getNotSubmittedForAssignment(selectedGradingAssignment) : []
 
@@ -786,7 +817,7 @@ export function FacultySubjectDetailClient({
         currentSub.code_content,
         currentSub.feedback,
         Array.isArray(currentSub.quiz_answers)
-          ? currentSub.quiz_answers.map((a: any) => String(a ?? "")).join(" ")
+          ? currentSub.quiz_answers.map((a) => String(a ?? "")).join(" ")
           : typeof currentSub.quiz_answers === "string"
           ? currentSub.quiz_answers
           : "",
@@ -796,7 +827,11 @@ export function FacultySubjectDetailClient({
     : ""
   const aiResult = currentSub ? detectAIContent(aiResultText) : null
 
-  useEffect(() => {
+  const [resetInputs3, setResetInputs3] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs3 = [currentSub?.id, activeQueueTab]
+  if (resetInputs3 === null || nextResetInputs3.some((value, index) => !Object.is(value, resetInputs3[index]))) {
+    setResetInputs3(nextResetInputs3)
+
     if (currentSub) {
       if (currentSub.status === "graded") {
         setScoreInput(currentSub.grade != null ? String(currentSub.grade) : "")
@@ -809,7 +844,8 @@ export function FacultySubjectDetailClient({
       setScoreInput("")
       setFeedbackInput("")
     }
-  }, [currentSub?.id, activeQueueTab])
+
+  }
 
   const handleSaveGrade = async () => {
     if (!currentSub || !scoreInput) return
@@ -854,9 +890,9 @@ export function FacultySubjectDetailClient({
       } else {
         setToast({ message: `Error saving grade: ${res.error || "Unknown error"}`, type: "warning" })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save grade error:", err)
-      setToast({ message: `Failed to save grade: ${err.message || "Unknown error"}`, type: "warning" })
+      setToast({ message: `Failed to save grade: ${readErrorMessage(err) || "Unknown error"}`, type: "warning" })
     } finally {
       setIsSavingGrade(false)
     }
@@ -919,8 +955,8 @@ export function FacultySubjectDetailClient({
       return
     }
 
-    const filtered = students.filter((s: any) => s.section_id === secId)
-    const enriched = filtered.map((st: any, i: number) => ({
+    const filtered = students.filter((s) => s.section_id === secId)
+    const enriched = filtered.map((st, i: number) => ({
       id: st.id,
       name: st.name,
       email: st.email,
@@ -932,20 +968,20 @@ export function FacultySubjectDetailClient({
     setRoster(enriched)
   }
 
-  function getGroupSectionId(group: any) {
-    const memberIds = (group.group_members || []).map((member: any) => member.student_id)
+  function getGroupSectionId(group: CourseGroup) {
+    const memberIds = (group.group_members || []).map((member) => member.student_id)
     const memberSections = memberIds
-      .map((memberId: string) => students.find((student: any) => student.id === memberId)?.section_id)
+      .map((memberId: string) => students.find((student) => student.id === memberId)?.section_id)
       .filter(Boolean)
-    return memberSections.length > 0 && memberSections.every((sectionId: string) => sectionId === memberSections[0])
+    return memberSections.length > 0 && memberSections.every((sectionId) => sectionId === memberSections[0])
       ? memberSections[0]
       : null
   }
 
-  function openGroupEditor(group: any) {
+  function openGroupEditor(group: CourseGroup) {
     setEditingGroup(group)
     setEditingGroupName(group.group_name || "")
-    setEditingMemberIds((group.group_members || []).map((member: any) => member.student_id))
+    setEditingMemberIds((group.group_members || []).map((member) => member.student_id))
   }
 
   async function handleUpdateGroup() {
@@ -963,15 +999,15 @@ export function FacultySubjectDetailClient({
     })
 
     if (result.success) {
-      setLocalProjects((prev) => prev.map((project: any) => ({
+      setLocalProjects((prev) => prev.map((project) => ({
         ...project,
-        project_groups: project.project_groups?.map((group: any) => group.id === editingGroup.id
+        project_groups: project.project_groups?.map((group) => group.id === editingGroup.id
           ? {
               ...group,
               group_name: editingGroupName.trim(),
               group_members: editingMemberIds.map((studentId) => ({
                 student_id: studentId,
-                users: { name: students.find((student: any) => student.id === studentId)?.name || "Student" },
+                users: { name: students.find((student) => student.id === studentId)?.name || "Student" },
               })),
             }
           : group),
@@ -1015,14 +1051,14 @@ export function FacultySubjectDetailClient({
       return
     }
 
-    const sectionStudents = students.filter((student: any) => student.section_id === selectedSectionId)
+    const sectionStudents = students.filter((student) => student.section_id === selectedSectionId)
     if (sectionStudents.length === 0) {
       triggerToast("No students found in the selected section", "warning")
       return
     }
 
     const groupSize = Math.max(2, Math.min(autoGroupSize, sectionStudents.length))
-    const enriched = sectionStudents.map((student: any, index: number) => ({
+    const enriched = sectionStudents.map((student, index: number) => ({
       ...student,
       role: POPULAR_ROLES[index % POPULAR_ROLES.length],
       skill: (index % 3) + 3,
@@ -1036,7 +1072,7 @@ export function FacultySubjectDetailClient({
         name: `Team ${teams.length + 1}`,
         description: `Automatically generated team for Section ${sectionMap.get(selectedSectionId) || "students"}.`,
         motto: "Learn together, build together.",
-        memberIds: members.map((student: any) => student.id),
+        memberIds: members.map((student) => student.id),
         synergyScore: 85,
       })
     }
@@ -1048,7 +1084,7 @@ export function FacultySubjectDetailClient({
     triggerToast(`${teams.length} teams generated successfully`, "success")
   }
 
-  function handleRosterUpdate(id: string, field: "role" | "skill", val: any) {
+  function handleRosterUpdate(id: string, field: "role" | "skill", val: string | number) {
     setRoster(prev => prev.map(m => m.id === id ? { ...m, [field]: val } : m))
   }
 
@@ -1074,7 +1110,7 @@ export function FacultySubjectDetailClient({
         teams[idx % teamCount].memberIds.push(m.id)
       })
     } else if (focus === "skill_balance") {
-      const sorted = [...roster].sort((a, b) => b.skill - a.skill)
+      const sorted = [...roster].sort((a, b) => (b.skill ?? 0) - (a.skill ?? 0))
       sorted.forEach(m => {
         let minTeam = teams[0]
         let minSkill = Infinity
@@ -1088,10 +1124,10 @@ export function FacultySubjectDetailClient({
         minTeam.memberIds.push(m.id)
       })
     } else {
-      const rolesMap: Record<string, any[]> = {}
+      const rolesMap: Record<string, RosterStudent[]> = {}
       roster.forEach(m => {
-        if (!rolesMap[m.role]) rolesMap[m.role] = []
-        rolesMap[m.role].push(m)
+        if (!rolesMap[m.role ?? "Unassigned"]) rolesMap[m.role ?? "Unassigned"] = []
+        rolesMap[m.role ?? "Unassigned"].push(m)
       })
       Object.keys(rolesMap).forEach((role, idx) => {
         rolesMap[role].forEach((m, mIdx) => {
@@ -1119,7 +1155,7 @@ export function FacultySubjectDetailClient({
       teamCount,
       theme: themeId,
       focus
-    })) as any
+    }))
 
     if (res.success && res.data) {
       setGeneratedTeams(res.data.teams || [])
@@ -1181,13 +1217,13 @@ export function FacultySubjectDetailClient({
     setSaving(false)
   }
 
-  const typeConfig = {
+  const typeConfig: Record<string, WorksheetPresentation> = {
     'Assignment': { icon: FileText, color: 'text-[#6C63FF]', bg: 'bg-[#6C63FF]/5', border: 'border-[#6C63FF]/15', label: 'Assignment' },
     'Quiz': { icon: Brain, color: 'text-[#8B5CF6]', bg: 'bg-[#8B5CF6]/5', border: 'border-[#8B5CF6]/15', label: 'Quiz' },
     'Coding Assignment': { icon: FileCode, color: 'text-[#38bdf8]', bg: 'bg-[#38bdf8]/5', border: 'border-[#38bdf8]/15', label: 'Coding' },
     'Material': { icon: BookOpen, color: 'text-[#00C2A8]', bg: 'bg-[#00C2A8]/5', border: 'border-[#00C2A8]/15', label: 'Material' },
     'Syllabus': { icon: Book, color: 'text-[#f59e0b]', bg: 'bg-[#f59e0b]/5', border: 'border-[#f59e0b]/15', label: 'Syllabus' },
-  } as any
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -1239,7 +1275,7 @@ export function FacultySubjectDetailClient({
             <button
               key={tab.id}
               onClick={() => {
-                setActiveTab(tab.id as any)
+                setActiveTab(tab.id as FacultyTab)
                 setSelectedGradingAssignment(null)
               }}
               className={`flex-1 min-w-[100px] flex items-center justify-center py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 cursor-pointer ${
@@ -1257,7 +1293,7 @@ export function FacultySubjectDetailClient({
 
       {/* Main Body */}
       <div className="w-full">
-        
+
         {/* Tab 1: Assignments */}
         {activeTab === "assignments" && (
           <div className="space-y-6">
@@ -1313,7 +1349,7 @@ export function FacultySubjectDetailClient({
                     type="Assignment"
                     cfg={typeConfig["Assignment"]}
                     statsFn={getSubmissionStats}
-                    onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                    onEdit={(a) => { setEditingAssignment(a); setModalType(normalizeWorksheetType(a.type)); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
                     onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
@@ -1328,7 +1364,7 @@ export function FacultySubjectDetailClient({
                     type="Quiz"
                     cfg={typeConfig["Quiz"]}
                     statsFn={getSubmissionStats}
-                    onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                    onEdit={(a) => { setEditingAssignment(a); setModalType(normalizeWorksheetType(a.type)); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
                     onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
@@ -1343,7 +1379,7 @@ export function FacultySubjectDetailClient({
                     type="Coding Assignment"
                     cfg={typeConfig["Coding Assignment"]}
                     statsFn={getSubmissionStats}
-                    onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                    onEdit={(a) => { setEditingAssignment(a); setModalType(normalizeWorksheetType(a.type)); setIsModalOpen(true) }}
                     onDelete={handleDeleteAssignment}
                     formatDate={formatDueDate}
                     onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("evaluation") }}
@@ -1397,7 +1433,7 @@ export function FacultySubjectDetailClient({
                 type="Material"
                 cfg={typeConfig["Material"]}
                 statsFn={getSubmissionStats}
-                onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                onEdit={(a) => { setEditingAssignment(a); setModalType(normalizeWorksheetType(a.type)); setIsModalOpen(true) }}
                 onDelete={handleDeleteAssignment}
                 formatDate={formatDueDate}
                 onGrade={(a) => { setSelectedGradingAssignment(a); setActiveTab("grades") }}
@@ -1449,7 +1485,7 @@ export function FacultySubjectDetailClient({
                 type="Syllabus"
                 cfg={typeConfig["Syllabus"]}
                 statsFn={getSubmissionStats}
-                onEdit={(a) => { setEditingAssignment(a); setModalType(a.type); setIsModalOpen(true) }}
+                onEdit={(a) => { setEditingAssignment(a); setModalType(normalizeWorksheetType(a.type)); setIsModalOpen(true) }}
                 onDelete={handleDeleteAssignment}
                 formatDate={formatDueDate}
                 onGrade={() => {}}
@@ -1660,7 +1696,7 @@ export function FacultySubjectDetailClient({
                           <div className="space-y-4">
                             <h4 className="font-bold text-slate-800 text-sm">Quiz Results Summary (Auto Graded)</h4>
                             <div className="space-y-3">
-                              {(selectedGradingAssignment.questions || []).map((q: any, qi: number) => {
+                              {(selectedGradingAssignment.questions || []).map((q, qi: number) => {
                                 const selectedAns = currentSub.quiz_answers?.[qi];
                                 const isCorrect = selectedAns === q.answer;
                                 return (
@@ -1712,9 +1748,9 @@ export function FacultySubjectDetailClient({
                               <div className="border border-slate-200 p-6 rounded-2xl text-center bg-slate-50">
                                 <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3 animate-bounce" />
                                 <h4 className="font-bold text-slate-800">Submitted Document</h4>
-                                <p className="text-xs text-slate-400 mt-1 truncate max-w-sm mx-auto">{currentSub.file_url}</p>
+                                <p className="text-xs text-slate-400 mt-1 truncate max-w-sm mx-auto">{currentSub.file_url.split("/").pop()?.replace(/^\d+_/, "") ?? "Attached file"}</p>
                                 <a
-                                  href={currentSub.file_url}
+                                  href={getPrivateStorageHref(currentSub.file_url, "assignments") ?? undefined}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="inline-block mt-4 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-600 font-bold rounded-xl text-xs"
@@ -1919,11 +1955,11 @@ export function FacultySubjectDetailClient({
                                 try {
                                   const res = await runPlagiarismScanAction(currentSub.id)
                                   if (res.success) {
-                                    const isNoContent = (res as any).noContent === true
+                                    const isNoContent = (res).noContent === true
                                     triggerToast(
                                       isNoContent
                                         ? "Scanned — no readable text found in submission"
-                                        : (res as any).usedGemini
+                                        : (res).usedGemini
                                         ? "Integrity scan complete (Gemini AI)"
                                         : "Integrity scan complete",
                                       isNoContent ? "info" : "success"
@@ -1933,11 +1969,11 @@ export function FacultySubjectDetailClient({
                                       setScanResults(prev => ({
                                         ...prev,
                                         [currentSub.id]: {
-                                          aiVerdict: (res as any).aiVerdict,
-                                          aiConfidence: (res as any).aiConfidence,
-                                          aiSummary: (res as any).aiSummary,
-                                          aiSignals: (res as any).aiSignals,
-                                          usedGemini: (res as any).usedGemini,
+                                          aiVerdict: (res).aiVerdict,
+                                          aiConfidence: (res).aiConfidence,
+                                          aiSummary: res.aiSummary ?? undefined,
+                                          aiSignals: res.aiSignals ?? undefined,
+                                          usedGemini: (res).usedGemini,
                                         },
                                       }))
                                     }
@@ -2163,7 +2199,7 @@ export function FacultySubjectDetailClient({
                       <tr key={student.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3">
                           <div className="font-semibold text-slate-800 text-sm">{student.name}</div>
-                          <div className="text-[10px] text-slate-400 mt-1">Section {sectionMap.get(student.section_id) || "N/A"}</div>
+                          <div className="text-[10px] text-slate-400 mt-1">Section {sectionMap.get(student.section_id ?? "") || "N/A"}</div>
                         </td>
                         <td className="px-4 py-3 text-[10px] text-slate-500 font-mono">{student.email}</td>
                         {assignmentGradeColumns.map((col) => (
@@ -2234,7 +2270,7 @@ export function FacultySubjectDetailClient({
               <div className="text-center py-12 bg-white border border-slate-200 rounded-3xl text-slate-400">
                 <MessageSquare className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                 <h4 className="font-bold text-slate-700 text-sm">No announcements posted</h4>
-                <p className="text-xs text-slate-400 mt-1">Updates you post will show up here and in the students' Stream.</p>
+                <p className="text-xs text-slate-400 mt-1">Updates you post will show up here and in the students&apos; Stream.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -2335,7 +2371,7 @@ export function FacultySubjectDetailClient({
                             <td className="px-6 py-4 text-xs font-semibold text-slate-500 font-mono">{student.email}</td>
                             <td className="px-6 py-4">
                               <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
-                                Section {sectionMap.get(student.section_id) || "N/A"}
+                                Section {sectionMap.get(student.section_id ?? "") || "N/A"}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -2467,14 +2503,14 @@ export function FacultySubjectDetailClient({
                             <p className="py-10 text-center text-sm text-slate-400">No teams generated yet.</p>
                           ) : (
                             <div className="space-y-2 max-h-[360px] overflow-y-auto">
-                              {generatedTeams.map((team: any, index: number) => (
+                              {generatedTeams.map((team, index: number) => (
                                 <div key={`${team.name}-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
                                   <div className="flex items-center justify-between gap-3">
                                     <span className="text-sm font-bold text-slate-800">{team.name}</span>
                                     <span className="text-xs font-semibold text-slate-500">{team.memberIds.length} students</span>
                                   </div>
                                   <p className="mt-1 text-xs text-slate-500">
-                                    {team.memberIds.map((id: string) => roster.find((student: any) => student.id === id)?.name).filter(Boolean).join(", ")}
+                                    {team.memberIds.map((id: string) => roster.find((student) => student.id === id)?.name).filter(Boolean).join(", ")}
                                   </p>
                                 </div>
                               ))}
@@ -2726,7 +2762,7 @@ export function FacultySubjectDetailClient({
                                 </h4>
 
                                 <div className="grid gap-4 sm:grid-cols-2">
-                                  {generatedTeams.map((team: any, idx: number) => {
+                                  {generatedTeams.map((team, idx: number) => {
                                     return (
                                       <div key={idx} className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm">
                                         <div className="flex items-start justify-between gap-2 mb-3">
@@ -2750,7 +2786,7 @@ export function FacultySubjectDetailClient({
                                             <p className="text-[10px] font-bold text-slate-400 uppercase">Members</p>
                                             <div className="mt-1 space-y-1">
                                               {team.memberIds.slice(0, 3).map((memberId: string, mIdx: number) => {
-                                                const member = roster.find((s: any) => s.id === memberId)
+                                                const member = roster.find((s) => s.id === memberId)
                                                 return (
                                                   <p key={mIdx} className="text-xs text-slate-600 truncate">
                                                     • {member?.name}
@@ -2797,11 +2833,11 @@ export function FacultySubjectDetailClient({
                           <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
                             <FolderKanban className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
                             <h3 className="mt-4 text-base font-semibold text-slate-900">No project groups created yet</h3>
-                            <p className="mt-2 text-sm text-slate-500">Switch to the "New Allocate" tab to split project teams for a section.</p>
+                            <p className="mt-2 text-sm text-slate-500">Switch to the &quot;New Allocate&quot; tab to split project teams for a section.</p>
                           </div>
                         ) : (
                           localProjects.map((proj) => {
-                            const visibleGroups = (proj.project_groups || []).filter((group: any) =>
+                            const visibleGroups = (proj.project_groups || []).filter((group) =>
                               projectSectionFilter === "all" || getGroupSectionId(group) === projectSectionFilter
                             )
 
@@ -2814,14 +2850,14 @@ export function FacultySubjectDetailClient({
                                   <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
                                 </div>
                                 <div className="divide-y divide-slate-100 border-t border-slate-100">
-                                  {visibleGroups.map((group: any, groupIndex: number) => (
+                                  {visibleGroups.map((group, groupIndex: number) => (
                                     <div key={group.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
                                       <div className="flex min-w-0 items-start gap-3">
                                         <span className="w-6 shrink-0 pt-0.5 text-xs font-bold text-slate-400">{groupIndex + 1}.</span>
                                         <div className="min-w-0">
                                           <p className="font-bold text-slate-800">{group.group_name}</p>
                                           <p className="mt-1 truncate text-xs font-medium text-slate-400">
-                                            {(group.group_members || []).map((member: any) => member.users?.name || "Student").join(", ") || "No members"}
+                                            {(group.group_members || []).map((member) => relationOne(member.users)?.name || "Student").join(", ") || "No members"}
                                           </p>
                                         </div>
                                       </div>
@@ -2937,8 +2973,8 @@ export function FacultySubjectDetailClient({
 
               <div className="divide-y divide-slate-100">
                 {localMeetings.map((m) => {
-                  const sectName = sectionMap.get(m.section_id) || "N/A"
-                  const startStr = m.scheduled_start ? new Date(m.scheduled_start).toLocaleString() : new Date(m.started_at).toLocaleString()
+                  const sectName = sectionMap.get(m.section_id ?? "") || "N/A"
+                  const startStr = m.scheduled_start ? new Date(m.scheduled_start).toLocaleString() : (m.started_at ? new Date(m.started_at).toLocaleString() : "Time unavailable")
                   return (
                     <div key={m.id} className="p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-slate-50/50 transition-colors">
                       <div className="space-y-1">
@@ -3277,7 +3313,7 @@ export function FacultySubjectDetailClient({
           gradeWeightMode={gradeWeightMode}
           assignmentColumns={assignmentGradeColumns}
           customColumns={customGradeColumns}
-          students={gradebookStudents}
+          students={gradebookStudents.map(student => ({ ...student, email: student.email ?? "" }))}
           assignmentGrades={assignmentGradesByStudent}
           customGrades={gradeValues}
         />
@@ -3296,7 +3332,7 @@ export function FacultySubjectDetailClient({
             <h3 className="font-extrabold text-slate-800 text-base mb-4 flex items-center gap-2">
               <Calendar size={18} className="text-indigo-600" /> Schedule Video Class Call
             </h3>
-            
+
             <div className="space-y-4 text-left">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Lecture Title</label>
@@ -3385,7 +3421,7 @@ export function FacultySubjectDetailClient({
               placeholder="Team name"
             />
             <div className="mt-4 max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-100 p-3">
-              {students.map((student: any) => (
+              {students.map((student) => (
                 <label key={student.id} className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-slate-50">
                   <input
                     type="checkbox"
@@ -3511,14 +3547,14 @@ function SectionGroup({
   onGrade,
 }: {
   label: string
-  items: Array<any>
+  items: AcademicAssignment[]
   type: string
-  cfg: any
+  cfg: WorksheetPresentation
   statsFn: (id: string) => { total: number, graded: number, pending: number }
-  onEdit: (a: any) => void
+  onEdit: (a: AcademicAssignment) => void
   onDelete: (id: string) => void
   formatDate: (d: string | null) => string
-  onGrade: (a: any) => void
+  onGrade: (a: AcademicAssignment) => void
 }) {
   const Icon = cfg.icon
   return (
@@ -3615,7 +3651,7 @@ interface CreateWorksheetModalProps {
   facultyId: string
   initialType: "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
   sections: Array<{ id: string; name: string }>
-  editingAssignment?: any | null
+  editingAssignment?: AcademicAssignment | null
 }
 
 function CreateWorksheetModal({
@@ -3627,6 +3663,7 @@ function CreateWorksheetModal({
   sections,
   editingAssignment,
 }: CreateWorksheetModalProps) {
+  const now = useCurrentTime()
   const [type, setType] = useState<"Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus">(initialType)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -3637,12 +3674,13 @@ function CreateWorksheetModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], [])
+  const todayNow = useCurrentTime()
+  const todayStr = todayNow ? new Date(todayNow).toISOString().split("T")[0] : ""
   const isPastDueDateSelected = Boolean(
     type !== "Material" &&
     type !== "Syllabus" &&
     dueDate &&
-    new Date(`${dueDate}T${dueTime || "23:59"}:00`).getTime() < Date.now()
+    new Date(`${dueDate}T${dueTime || "23:59"}:00`).getTime() < now
   )
 
   // Upload states for Faculty attachments
@@ -3681,8 +3719,8 @@ function CreateWorksheetModal({
     setFileName(file.name)
     try {
       const bucketName = "assignments"
-      const filePath = `faculty-${facultyId}/${Date.now()}_${file.name}`
-      
+      const filePath = `faculty-${facultyId}/${now}_${file.name}`
+
       const { data, error } = await supabase.storage
         .from(bucketName)
         .upload(filePath, file)
@@ -3691,16 +3729,14 @@ function CreateWorksheetModal({
         throw error
       }
 
-      const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath)
-      setUploadedFiles(prev => [...prev, publicData.publicUrl])
+      setUploadedFiles(prev => [...prev, makePrivateStorageReference("assignments", filePath)])
       setFormError(null)
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (typeof window !== "undefined" && !window.navigator.onLine) {
         setFormError("Network disconnected during upload. Please check your connection.")
       } else {
-        console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
-        setUploadedFiles(prev => [...prev, `https://mock-lms-storage.local/faculty-${facultyId}/${Date.now()}_${file.name}`])
-        setFormError(null)
+        console.warn("Storage upload failed:", readErrorMessage(err))
+        setFormError("File upload failed. Please try again.")
       }
     } finally {
       setIsUploadingFile(false)
@@ -3829,16 +3865,20 @@ function CreateWorksheetModal({
     { input: "", output: "" },
   ])
 
-  useEffect(() => {
+  const [previousSource1, setPreviousSource1] = React.useState<readonly unknown[] | null>(null)
+  const nextSource1 = [editingAssignment, initialType, sections]
+  if (previousSource1 === null || nextSource1.some((value, index) => !Object.is(value, previousSource1[index]))) {
+    setPreviousSource1(nextSource1)
+    ;(() => {
     setFormError(null)
     if (editingAssignment) {
-      setType(editingAssignment.type)
+      setType(normalizeWorksheetType(editingAssignment.type))
       setTitle(editingAssignment.title)
       setDescription(editingAssignment.description || "")
       setTargetSectionIds(editingAssignment.section_ids || [])
       setMaxScore(editingAssignment.max_score || 100)
       setUploadedFiles(editingAssignment.files || [])
-      
+
       if (editingAssignment.due_date) {
         const d = new Date(editingAssignment.due_date)
         setDueDate(d.toISOString().split("T")[0])
@@ -3872,7 +3912,8 @@ function CreateWorksheetModal({
       setTestCases([{ input: "", output: "" }])
       setUploadedFiles([])
     }
-  }, [editingAssignment, initialType, sections])
+  })()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -3901,7 +3942,7 @@ function CreateWorksheetModal({
           setFormError("Please provide a valid due date and time.")
           return
         }
-        if (fullDueDate.getTime() < Date.now()) {
+        if (fullDueDate.getTime() < now) {
           setFormError("Due date and time cannot be in the past. Please select a future date and time.")
           return
         }
@@ -4179,9 +4220,7 @@ function CreateWorksheetModal({
                       <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
                         <FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                         <span className="text-xs text-indigo-800 font-semibold flex-1 truncate">
-                          {url.startsWith("https://mock-lms-storage.local/") 
-                            ? url.substring(url.lastIndexOf("/") + 1)
-                            : url}
+                          {url.split("/").pop()?.replace(/^\d+_/, "") || "Attached file"}
                         </span>
                         <button
                           type="button"
@@ -4265,9 +4304,7 @@ function CreateWorksheetModal({
                       <div key={idx} className="flex items-center gap-3 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
                         <FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
                         <span className="text-xs text-indigo-800 font-semibold flex-1 truncate">
-                          {url.startsWith("https://mock-lms-storage.local/") 
-                            ? url.substring(url.lastIndexOf("/") + 1)
-                            : url}
+                          {url.split("/").pop()?.replace(/^\d+_/, "") || "Attached file"}
                         </span>
                         <button
                           type="button"
@@ -4659,10 +4696,10 @@ function CreateWorksheetModal({
   )
 }
 
-const typeConfig = {
+const typeConfig: Record<string, WorksheetPresentation> = {
   'Assignment': { icon: FileText, color: 'text-[#6C63FF]', bg: 'bg-[#6C63FF]/5', border: 'border-[#6C63FF]/15', activeBg: 'bg-[#6C63FF]', label: 'Assignment' },
   'Quiz': { icon: Brain, color: 'text-[#8B5CF6]', bg: 'bg-[#8B5CF6]/5', border: 'border-[#8B5CF6]/15', activeBg: 'bg-[#8B5CF6]', label: 'Quiz' },
   'Coding Assignment': { icon: FileCode, color: 'text-[#38bdf8]', bg: 'bg-[#38bdf8]/5', border: 'border-[#38bdf8]/15', activeBg: 'bg-[#38bdf8]', label: 'Coding' },
   'Material': { icon: BookOpen, color: 'text-[#00C2A8]', bg: 'bg-[#00C2A8]/5', border: 'border-[#00C2A8]/15', activeBg: 'bg-[#00C2A8]', label: 'Material' },
   'Syllabus': { icon: Book, color: 'text-[#f59e0b]', bg: 'bg-[#f59e0b]/5', border: 'border-[#f59e0b]/15', activeBg: 'bg-[#f59e0b]', label: 'Syllabus' },
-} as any
+}

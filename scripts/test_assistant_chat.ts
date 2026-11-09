@@ -1,6 +1,4 @@
-// @ts-nocheck
 import { createClient } from "@supabase/supabase-js"
-import ws from "ws"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -9,7 +7,7 @@ const appUrl = "http://localhost:3001"
 async function getAuthCookie(email: string, password = "TestPassword123!") {
   const authClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false },
-    realtime: { transport: ws },
+    realtime: { transport: WebSocket },
   })
 
   const { data, error } = await authClient.auth.signInWithPassword({ email, password })

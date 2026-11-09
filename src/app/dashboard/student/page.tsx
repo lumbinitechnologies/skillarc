@@ -1,3 +1,5 @@
+import { relationOne } from "@/lib/academic-content-types"
+import { getServerTime } from "@/lib/server-time"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
@@ -8,10 +10,10 @@ import { measureServer } from "@/lib/perf"
 export const dynamic = "force-dynamic"
 
 export default async function DashboardPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
@@ -19,7 +21,7 @@ export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient()
 
   // Consolidated parallel batch: Fetch student, timetable_slots, timetable_weeks, attendance, and institution in ONE single Promise.all
-  const tBatchStart = performance.now()
+
   const [studentRes, timetableRes, weeksRes, attendanceRes, institutionRes] = await measureServer(
     "dashboard.student.overview.data",
     () =>
@@ -52,37 +54,35 @@ export default async function DashboardPage() {
           .maybeSingle(),
       ])
   )
-  const batchMs = performance.now() - tBatchStart
+
 
   const studentData = studentRes.data
-  const section = studentData?.sections as any
-  const program = studentData?.programs as any
+  const section = relationOne(studentData?.sections)
+  const program = relationOne(studentData?.programs)
   const institution = institutionRes.data
-  const allSlots = (timetableRes.data ?? []) as any[]
-  const weeksData = (weeksRes.data ?? []) as any[]
-  const attendanceRecords = (attendanceRes.data ?? []) as any[]
+  const allSlots = (timetableRes.data ?? [])
+  const weeksData = (weeksRes.data ?? [])
+  const attendanceRecords = attendanceRes.data ?? []
 
   // Determine active week in-memory without any sequential database round-trips
   let activeWeekId: string | null = null
   if (weeksData.length > 0) {
-    const today = new Date().toISOString().split("T")[0]
-    const currentWeek = weeksData.find((w: any) => w.start_date <= today && today <= w.end_date)
+    const today = (await getServerTime()).toISOString().split("T")[0]
+    const currentWeek = weeksData.find((w) => w.start_date <= today && today <= w.end_date)
     if (currentWeek) {
       activeWeekId = currentWeek.id
     }
   }
 
   // Filter slots for active week, falling back to default template slots (week_id === null)
-  let timetableRows = activeWeekId ? allSlots.filter((s: any) => s.week_id === activeWeekId) : []
+  let timetableRows = activeWeekId ? allSlots.filter((s) => s.week_id === activeWeekId) : []
   if (timetableRows.length === 0) {
-    timetableRows = allSlots.filter((s: any) => !s.week_id)
+    timetableRows = allSlots.filter((s) => !s.week_id)
   }
 
-  const totalMs = performance.now() - tPageStart
 
-  console.info(
-    `[DashboardStudent] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
+
+
 
   const sectionName = section?.name ?? "Not assigned"
   const programName = program?.name ?? "Not assigned"
@@ -92,7 +92,7 @@ export default async function DashboardPage() {
   const subjectMap = new Map<string, { id: string; name: string; code: string }>()
   const facultyMap = new Map<string, string>()
 
-  timetableRows.forEach((slot: any) => {
+  timetableRows.forEach((slot) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
     if (sub?.id) {
@@ -105,8 +105,8 @@ export default async function DashboardPage() {
 
   // Per-subject attendance calculations
   const subjectAttendanceMap = new Map<string, { present: number; absent: number; late: number; total: number }>()
-  attendanceRecords.forEach((record: any) => {
-    const subId = record.attendance_sessions?.subject_id
+  attendanceRecords.forEach((record) => {
+    const subId = relationOne(record.attendance_sessions)?.subject_id
     if (!subId) return
     const cur = subjectAttendanceMap.get(subId) || { present: 0, absent: 0, late: 0, total: 0 }
     if (record.status !== "NOT_MARKED") {
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
     const subAtt = subjectAttendanceMap.get(subject.id) || { present: 0, absent: 0, late: 0, total: 0 }
     const effectivePresent = subAtt.present + subAtt.late
     const rate = subAtt.total > 0 ? Math.round((effectivePresent / subAtt.total) * 100) : 0
-    const facultySlot = timetableRows.find((slot: any) => slot.subject_id === subject.id)
+    const facultySlot = timetableRows.find((slot) => slot.subject_id === subject.id)
     return {
       id: subject.id,
       name: subject.name,
@@ -138,9 +138,9 @@ export default async function DashboardPage() {
     }
   })
 
-  const todayName = new Date().toLocaleDateString("en-US", { weekday: "long" })
+  const todayName = (await getServerTime()).toLocaleDateString("en-US", { weekday: "long" })
 
-  const schedule = timetableRows.map((slot: any) => {
+  const schedule = timetableRows.map((slot) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
     return {
@@ -155,10 +155,10 @@ export default async function DashboardPage() {
   const todaySchedule = schedule.filter((slot) => slot.day === todayName)
   const upcomingSchedule = schedule.filter((slot) => slot.day !== todayName).slice(0, 4)
 
-  const totalAttendance = attendanceRecords?.filter((r: any) => r.status !== "NOT_MARKED").length ?? 0
-  const presentCount = attendanceRecords?.filter((record: any) => record.status === "PRESENT" || record.status === "APPROVED_ABSENCE" || record.status === "EXCUSED").length ?? 0
-  const absentCount = attendanceRecords?.filter((record: any) => record.status === "ABSENT").length ?? 0
-  const lateCount = attendanceRecords?.filter((record: any) => record.status === "LATE").length ?? 0
+  const totalAttendance = attendanceRecords?.filter((r) => r.status !== "NOT_MARKED").length ?? 0
+  const presentCount = attendanceRecords?.filter((record) => record.status === "PRESENT" || record.status === "APPROVED_ABSENCE" || record.status === "EXCUSED").length ?? 0
+  const absentCount = attendanceRecords?.filter((record) => record.status === "ABSENT").length ?? 0
+  const lateCount = attendanceRecords?.filter((record) => record.status === "LATE").length ?? 0
   const effectivePresent = presentCount + lateCount
   const attendanceRate = totalAttendance > 0 ? Math.round((effectivePresent / totalAttendance) * 100) : 0
 

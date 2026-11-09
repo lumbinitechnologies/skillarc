@@ -1,5 +1,11 @@
-// src/components/events/events-portal-client.tsx
 "use client";
+
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+// src/components/events/events-portal-client.tsx
+
 
 import React, { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
@@ -177,6 +183,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
   const [selectedTimeAmPm, setSelectedTimeAmPm] = useState<"AM" | "PM">("AM");
 
   // Calendar State - Automatically defaults to system current month
+  const currentTime = useCurrentTime();
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
 
@@ -302,8 +309,8 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
       });
       setEventsData(data);
       setLoadError(null);
-    } catch (err: any) {
-      console.error("Error fetching events:", err?.message || err);
+    } catch (err: unknown) {
+      console.error("Error fetching events:", readErrorMessage(err) || err);
       setLoadError("We couldn't load events.");
       if (!seedData) setEvents([]);
     } finally {
@@ -333,7 +340,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
 
   // Timeline Helper (Date comparisons in local timezone)
   const getTimelineStatus = (dateStr: string) => {
-    const today = new Date();
+    const today = new Date(currentTime);
     today.setHours(0, 0, 0, 0);
     const ev = parseLocalDate(dateStr);
     ev.setHours(0, 0, 0, 0);
@@ -478,9 +485,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
       setShowReservationModal(false);
       setShowTicketModal(true);
       triggerToast("Seat reserved successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Reservation error:", err);
-      alert(err?.message || "Failed to confirm reservation.");
+      alert(readErrorMessage(err) || "Failed to confirm reservation.");
     } finally {
       setIsSubmittingReservation(false);
     }
@@ -552,9 +559,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
 
       setForm(prev => ({ ...prev, image_url: data.url }));
       triggerToast("Cover banner uploaded!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Cover upload error:", err);
-      alert(err.message || "Failed to upload image.");
+      alert(readErrorMessage(err) || "Failed to upload image.");
     } finally {
       setUploadingCover(false);
     }
@@ -596,7 +603,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
           uploadedImages.push({
             url: data.url,
             caption: galleryCaption.trim() || undefined,
-            uploaded_at: new Date().toISOString(),
+            uploaded_at: data.uploaded_at,
           });
         }
       }
@@ -614,9 +621,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
         }));
       }
       void reconcileEvents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Gallery upload error:", err);
-      alert(err.message || "Error uploading photos.");
+      alert(readErrorMessage(err) || "Error uploading photos.");
     } finally {
       setUploadingGallery(false);
     }
@@ -654,9 +661,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
           : event),
       }));
       void reconcileEvents();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Delete photo error:", err);
-      alert(err.message || "Failed to delete photo.");
+      alert(readErrorMessage(err) || "Failed to delete photo.");
     } finally {
       setDeletingGalleryUrl(null);
     }
@@ -669,7 +676,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
     const time24 = parseTime12To24(form.time);
     const eventDateStr = `${form.date}T${time24}:00`;
     const selectedDate = new Date(eventDateStr);
-    const now = new Date();
+    const now = new Date(currentTime);
     if (selectedDate < now && !isEditing) {
       alert("Event date and time cannot be in the past.");
       return;
@@ -687,7 +694,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
       image_url: form.image_url || null,
     });
 
-    const payload: any = {
+    const payload: Record<string, unknown> = {
       title: form.name,
       description: descPayload,
       event_date: eventDateStr,
@@ -802,9 +809,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
         tags: "",
         image_url: "",
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error saving event:", err);
-      alert(err?.message || "Failed to save event in database.");
+      alert(readErrorMessage(err) || "Failed to save event in database.");
     }
   };
 
@@ -838,9 +845,9 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
       void reconcileEvents();
       setDeleteConfirmOpen(false);
       setDeletingEventId(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error deleting event:", err);
-      alert(err?.message || "Failed to delete event.");
+      alert(readErrorMessage(err) || "Failed to delete event.");
     } finally {
       setIsDeleting(false);
     }
@@ -857,7 +864,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
     setCurrentDate(new Date(year, month + 1, 1));
   };
   const jumpToToday = () => {
-    const today = new Date();
+    const today = new Date(currentTime);
     setCurrentDate(today);
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     setSelectedDateStr(todayStr);
@@ -1196,7 +1203,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
                 const monthStr = String(day.getMonth() + 1).padStart(2, "0");
                 const dateStr = `${yearStr}-${monthStr}-${String(dayNum).padStart(2, "0")}`;
 
-                const now = new Date();
+                const now = new Date(currentTime);
                 const isToday = now.getFullYear() === yearStr && (now.getMonth() + 1) === (day.getMonth() + 1) && now.getDate() === dayNum;
 
                 const dayEvents = events.filter(e => e.date === dateStr);
@@ -2263,7 +2270,7 @@ export default function EventsPortalClient({ initialData }: { initialData?: Even
                   <Input 
                     type="date" 
                     required 
-                    min={new Date().toISOString().split("T")[0]}
+                    min={currentTime ? new Date(currentTime).toISOString().split("T")[0] : undefined}
                     value={form.date} 
                     onChange={e => setForm(p => ({ ...p, date: e.target.value }))} 
                   />

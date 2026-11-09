@@ -1,4 +1,9 @@
-﻿"use client"
+"use client"
+
+import { relationOne } from "@/lib/academic-content-types"
+import type { CourseProject, RosterStudent, GeneratedTeam } from "@/lib/academic-content-types"
+import type { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
+﻿
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
@@ -8,9 +13,9 @@ import { createProjectWithGroupsAction, getSubjectStudentsAction } from "@/app/a
 
 interface StudentGroupsProps {
   profile: { id: string; name: string; role: string }
-  initialProjects: any[]
-  subjects: any[]
-  studentGroups: any[]
+  initialProjects: CourseProject[]
+  subjects: Array<{ id: string; name: string; code: string; section_id: string; section_name: string }>
+  studentGroups: Awaited<ReturnType<typeof getStudentProjectGroupsAction>>
 }
 
 const POPULAR_ROLES = [
@@ -41,10 +46,10 @@ export default function ProjectGroupsClient({
   const [projectName, setProjectName] = useState("")
   const [teacherNotes, setTeacherNotes] = useState("")
   const [teamSize, setTeamSize] = useState(3)
-  const [roster, setRoster] = useState<any[]>([])
+  const [roster, setRoster] = useState<RosterStudent[]>([])
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [loadingRoster, setLoadingRoster] = useState(false)
-  const [generatedTeams, setGeneratedTeams] = useState<any[]>([])
+  const [generatedTeams, setGeneratedTeams] = useState<GeneratedTeam[]>([])
   const [overallFeedback, setOverallFeedback] = useState("")
   const [saving, setSaving] = useState(false)
   const [expandedProjId, setExpandedProjId] = useState<string | null>(null)
@@ -202,7 +207,7 @@ export default function ProjectGroupsClient({
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2">
-                {studentGroups.map((sg: any, idx: number) => (
+                {studentGroups.map((sg, idx: number) => (
                   <div key={idx} className="rounded-3xl border border-white/60 bg-white/90 p-6 shadow-sm backdrop-blur-xl">
                     <div className="mb-4 flex items-center justify-between">
                       <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-indigo-600">
@@ -215,10 +220,10 @@ export default function ProjectGroupsClient({
                     <div className="mt-6 border-t border-slate-100 pt-4">
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Group Teammates</p>
                       <div className="space-y-2">
-                        {sg.members.map((member: any, mIdx: number) => (
+                        {sg.members.map((member, mIdx: number) => (
                           <div key={mIdx} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                            <span className="font-semibold text-slate-700">{member.users?.name}</span>
-                            <span className="text-xs text-slate-400">{member.users?.email}</span>
+                            <span className="font-semibold text-slate-700">{relationOne(member.users)?.name}</span>
+                            <span className="text-xs text-slate-400">{relationOne(member.users)?.email}</span>
                           </div>
                         ))}
                       </div>
@@ -236,13 +241,13 @@ export default function ProjectGroupsClient({
               </div>
             ) : (
               <div className="space-y-4">
-                {projects.map((proj: any) => (
+                {projects.map((proj) => (
                   <div key={proj.id} className="rounded-3xl border border-slate-200/60 bg-white p-6 shadow-sm">
                     <div className="flex items-start justify-between">
                       <div>
                         <h3 className="text-lg font-bold text-slate-900">{proj.title}</h3>
                         <p className="mt-1 text-sm text-slate-500">{proj.description}</p>
-                        <p className="mt-2 text-xs text-slate-400">Created: {new Date(proj.created_at).toLocaleDateString()}</p>
+                        <p className="mt-2 text-xs text-slate-400">Created: {proj.created_at ? new Date(proj.created_at).toLocaleDateString() : "Date unavailable"}</p>
                       </div>
                       <button
                         onClick={() => setExpandedProjId(expandedProjId === proj.id ? null : proj.id)}
@@ -255,14 +260,14 @@ export default function ProjectGroupsClient({
                     {expandedProjId === proj.id && (
                       <div className="mt-6 border-t border-slate-100 pt-6">
                         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                          {proj.project_groups?.map((group: any) => (
+                          {proj.project_groups?.map((group) => (
                             <div key={group.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
                               <h4 className="font-bold text-slate-800 border-b border-slate-100 pb-2 mb-3">{group.group_name}</h4>
                               <div className="space-y-2">
-                                {group.group_members?.map((member: any, mIdx: number) => (
+                                {group.group_members?.map((member, mIdx: number) => (
                                   <div key={mIdx} className="flex flex-col rounded-xl bg-white p-2 text-xs border border-slate-100">
-                                    <span className="font-semibold text-slate-700">{member.users?.name}</span>
-                                    <span className="text-slate-400 mt-0.5">{member.users?.email}</span>
+                                    <span className="font-semibold text-slate-700">{relationOne(member.users)?.name}</span>
+                                    <span className="text-slate-400 mt-0.5">{relationOne(member.users)?.email}</span>
                                   </div>
                                 ))}
                               </div>
@@ -299,7 +304,7 @@ export default function ProjectGroupsClient({
                     className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-indigo-500 focus:outline-none"
                   >
                     <option value="">Select subject...</option>
-                    {subjects.map((sub: any, idx: number) => (
+                    {subjects.map((sub, idx: number) => (
                       <option key={idx} value={sub.section_id}>
                         {sub.name} ({sub.code}) - Sec {sub.section_name}
                       </option>

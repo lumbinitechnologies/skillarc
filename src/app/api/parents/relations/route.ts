@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
@@ -52,9 +53,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ error: "student_id or parent_id is required" }, { status: 400 })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Relations fetch error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -146,9 +147,9 @@ export async function POST(request: NextRequest) {
         registration_number: studRes.data?.registration_number || ""
       }
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Relation creation error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -184,8 +185,8 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error
 
     return NextResponse.json({ success: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Relation delete error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }

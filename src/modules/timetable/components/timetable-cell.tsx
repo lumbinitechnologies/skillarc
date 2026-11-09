@@ -31,7 +31,7 @@ export default function TimetableCell({ day, period }: { day: string; period: st
   const [hovered, setHovered] = useState(false)
 
   const periodNum = Number(String(period).replace(/[^0-9]/g, ""))
-  const assigned = slots.find((s: any) => {
+  const assigned = slots.find((s) => {
     if (s.day !== day) return false
     if (s.period === period) return true
     const sPeriodNum = Number(String(s.period).replace(/[^0-9]/g, ""))

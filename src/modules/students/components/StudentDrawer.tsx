@@ -512,7 +512,11 @@ function GuardianPanel({
   const [parentPhone, setParentPhone] = useState(initialGuardian?.parent?.phone ?? "")
   const [relationship, setRelationship] = useState(initialGuardian?.relationship ?? "Guardian")
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [initialGuardian, studentId]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setParentName(initialGuardian?.parent?.name ?? "")
     setParentEmail(initialGuardian?.parent?.email ?? "")
     setParentPhone(initialGuardian?.parent?.phone ?? "")
@@ -520,7 +524,8 @@ function GuardianPanel({
     setEditing(false)
     setError("")
     setSaved(false)
-  }, [initialGuardian, studentId])
+
+  }
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -596,7 +601,7 @@ function GuardianPanel({
       {!editing && !initialGuardian && (
         <div className="rounded-xl border border-dashed p-8 text-center">
           <p className="text-sm text-muted-foreground">No guardian linked to this student.</p>
-          <p className="text-xs text-muted-foreground mt-1">Click "Add Guardian" to create and link one instantly.</p>
+          <p className="text-xs text-muted-foreground mt-1">Click &quot;Add Guardian&quot; to create and link one instantly.</p>
         </div>
       )}
 
@@ -667,7 +672,7 @@ function GuardianPanel({
             </button>
           </div>
           <p className="text-xs text-slate-400">
-            If the parent email doesn't exist, a new parent account will be created and linked automatically.
+            If the parent email doesn&apos;t exist, a new parent account will be created and linked automatically.
           </p>
         </form>
       )}

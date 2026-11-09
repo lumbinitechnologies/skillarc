@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import React, { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -36,15 +38,39 @@ import {
 } from "lucide-react"
 
 import { submitAssignmentAction } from "@/app/actions/assignments"
-import { verifyCodeAction } from "@/app/actions/code-runner"
 import { supabase } from "@/lib/supabase"
+import { getPrivateStorageHref, makePrivateStorageReference, parsePrivateStoragePath } from "@/lib/private-storage"
+import type { TableRow } from "@/lib/database-row"
+
+type StudentQuizQuestion = { q: string; options: string[] }
+type AssignmentForClient = Omit<TableRow<"assignments">, "questions" | "test_cases"> & {
+  questions: StudentQuizQuestion[] | null
+  test_cases: null
+}
+type SubmissionForClient = Omit<TableRow<"submissions">, "quiz_answers"> & {
+  quiz_answers: number[] | null
+}
+type AssignmentKind = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void
+  msRequestFullscreen?: () => Promise<void> | void
+}
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  mozFullScreenElement?: Element | null
+  msFullscreenElement?: Element | null
+}
+
+function isAssignmentKind(value: string | null): value is AssignmentKind {
+  return value === "Assignment" || value === "Quiz" || value === "Coding Assignment" || value === "Material" || value === "Syllabus"
+}
 
 interface StudentAssignmentSolveClientProps {
   studentId: string
   studentName: string
   subjectId: string
-  assignment: any
-  initialSubmission: any | null
+  assignment: AssignmentForClient
+  initialSubmission: SubmissionForClient | null
 }
 
 const LANGUAGES = [
@@ -59,6 +85,12 @@ const LANG_TEMPLATES: Record<string, string> = {
   javascript: `function solve() {\n    // Write your solution here\n    console.log("Hello, World!");\n}\n\nsolve();`,
   java: `public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n        System.out.println("Hello, World!");\n    }\n}`,
   cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
+}
+
+function parseExplicitInstant(value: string | null | undefined): Date | null {
+  if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 interface ToastState {
@@ -83,12 +115,24 @@ export function StudentAssignmentSolveClient({
   initialSubmission,
 }: StudentAssignmentSolveClientProps) {
   const router = useRouter()
-  const [submission, setSubmission] = useState<any | null>(initialSubmission)
+  const [submission, setSubmission] = useState<SubmissionForClient | null>(initialSubmission)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null)
 
-  // Due date cutoff calculation (allowing 60s latency buffer for on-time submissions)
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => setCurrentTimeMs(Date.now()), 0)
+    const clockTimer = window.setInterval(() => setCurrentTimeMs(Date.now()), 30_000)
+    return () => {
+      window.clearTimeout(initialTimer)
+      window.clearInterval(clockTimer)
+    }
+  }, [])
+
+  // A deadline is actionable only when it carries an explicit UTC offset.
+  // Timezone-less legacy values are shown as unavailable and never treated as overdue.
+  const deadlineInstant = parseExplicitInstant(assignment.due_date)
   const isPastDueDate = Boolean(
-    assignment.due_date && (Date.now() - new Date(assignment.due_date).getTime() > 60000)
+    deadlineInstant && currentTimeMs !== null && currentTimeMs - deadlineInstant.getTime() > 60000
   )
 
   // In-app UI Toast and Confirm States
@@ -146,16 +190,15 @@ export function StudentAssignmentSolveClient({
         throw error
       }
 
-      const { data: publicData } = supabase.storage.from(bucketName).getPublicUrl(filePath)
-      setFileUrl(publicData.publicUrl)
+      setFileUrl(makePrivateStorageReference("assignments", filePath))
       showToast("File uploaded successfully!", "success")
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (typeof window !== "undefined" && !window.navigator.onLine) {
         showToast("Network disconnected during file upload. Please check your connection.", "error")
       } else {
-        console.warn("Storage upload failed, falling back to mock storage URL:", err.message)
-        setFileUrl(`https://mock-lms-storage.local/${studentId}/${Date.now()}_${file.name}`)
-        showToast("File attached successfully.", "info")
+        console.warn("Storage upload failed:", readErrorMessage(err))
+        setFileUrl("")
+        showToast("File upload failed. Please try again.", "error")
       }
     } finally {
       setIsUploadingFile(false)
@@ -189,11 +232,9 @@ export function StudentAssignmentSolveClient({
   const [code, setCode] = useState(() => {
     return initialSubmission?.code_content || LANG_TEMPLATES[assignment.language || "python"] || LANG_TEMPLATES.python
   })
-  const [isRunningCode, setIsRunningCode] = useState(false)
-  const [testResults, setTestResults] = useState<Array<{ passed: boolean; label: string; input?: string; expected?: string; actual?: string; error?: string }> | null>(null)
   const [consoleLogs, setConsoleLogs] = useState<string[]>([
-    "Sandbox Environment initialized.",
-    "Select language and click 'Run Sandbox' to verify test cases."
+    "Code execution is unavailable in this app.",
+    "You can submit your solution for instructor review."
   ])
   const [isResubmitting, setIsResubmitting] = useState(false)
 
@@ -236,7 +277,7 @@ export function StudentAssignmentSolveClient({
         if (prev <= 1) {
           clearInterval(timer)
           setTimeout(() => {
-            handleAutoSubmitQuiz("Time is up! Your quiz has been auto-submitted and graded.")
+            handleAutoSubmitQuiz()
           }, 0)
           return 0
         }
@@ -249,7 +290,7 @@ export function StudentAssignmentSolveClient({
   // Fullscreen Request Helper
   const requestExamFullscreen = async () => {
     try {
-      const elem = document.documentElement as any
+      const elem = document.documentElement as FullscreenElement
       if (elem.requestFullscreen) {
         await elem.requestFullscreen()
       } else if (elem.webkitRequestFullscreen) {
@@ -282,7 +323,7 @@ export function StudentAssignmentSolveClient({
       setIsExitedFullscreenModalOpen(false)
       showToast("⚠️ Security Breach: 3 violations recorded. Your exam is being automatically submitted.", "error")
       setTimeout(() => {
-        performQuizSubmit(quizAnswersRef.current, true, "Exam terminated: Auto-submitted due to 3 security violations (switched tabs / applications).")
+        performQuizSubmit(quizAnswersRef.current, true)
       }, 0)
     } else {
       setViolationReason(reason)
@@ -297,9 +338,9 @@ export function StudentAssignmentSolveClient({
     const onFullscreenChange = () => {
       const inFull = Boolean(
         document.fullscreenElement ||
-        (document as any).webkitFullscreenElement ||
-        (document as any).mozFullScreenElement ||
-        (document as any).msFullscreenElement
+        (document as FullscreenDocument).webkitFullscreenElement ||
+        (document as FullscreenDocument).mozFullScreenElement ||
+        (document as FullscreenDocument).msFullscreenElement
       )
       setIsFullscreen(inFull)
       if (!inFull && !submission) {
@@ -416,20 +457,11 @@ export function StudentAssignmentSolveClient({
     showToast("🛡️ Secure Lockdown Mode activated. All tabs and external apps must remain closed.", "info")
   }
 
-  const performQuizSubmit = async (answersToSubmit: number[], isAuto = false, customFeedback?: string) => {
+  async function performQuizSubmit(answersToSubmit: number[], isAuto = false) {
     if (isPastDueDate && !submission) {
       showToast("Submissions closed: The deadline for this quiz has passed.", "error")
       return
     }
-
-    const questions = assignment.questions || []
-    const totalQuestions = questions.length || 1
-    const maxScore = assignment.max_score || totalQuestions || 100
-    let correctCount = 0
-    answersToSubmit.forEach((ans, idx) => {
-      if (ans === questions[idx]?.answer) correctCount += 1
-    })
-    const finalScore = Number(((correctCount / totalQuestions) * maxScore).toFixed(1))
 
     setIsSubmitting(true)
     const res = await submitAssignmentAction({
@@ -439,24 +471,21 @@ export function StudentAssignmentSolveClient({
       quiz_answers: answersToSubmit,
       code_content: null,
       language: null,
-      grade: finalScore,
-      feedback: customFeedback || `Auto-graded Quiz: ${correctCount}/${totalQuestions} questions correct (${finalScore}/${maxScore} Marks).`,
-      status: "graded",
       subject_id: subjectId,
     })
     setIsSubmitting(false)
     if (res.success) {
       const newSub = {
-        id: (res as any).submissionId || Date.now().toString(),
+        id: res.submissionId || Date.now().toString(),
         assignment_id: assignment.id,
         student_id: studentId,
         file_url: null,
         quiz_answers: answersToSubmit,
         code_content: null,
         language: null,
-        grade: finalScore,
-        feedback: customFeedback || `Auto-graded Quiz: ${correctCount}/${totalQuestions} questions correct (${finalScore}/${maxScore} Marks).`,
-        status: "graded",
+        grade: res.grade ?? null,
+        feedback: null,
+        status: res.status ?? "submitted",
         submitted_at: new Date().toISOString(),
       }
       setSubmission(newSub)
@@ -472,12 +501,10 @@ export function StudentAssignmentSolveClient({
         }
       }
 
-      if (customFeedback) {
-        showToast(customFeedback, "info")
-      } else if (isAuto) {
-        showToast("Time is up! Your quiz has been auto-submitted and graded.", "info")
+      if (isAuto) {
+        showToast("Time is up! Your quiz has been submitted and graded.", "info")
       } else {
-        showToast(`🎉 Quiz submitted successfully! Score: ${finalScore}/${maxScore} (${correctCount}/${totalQuestions} correct)`, "success")
+        showToast(`Quiz submitted successfully. Score: ${res.grade ?? "Pending"}/${assignment.max_score || "—"}.`, "success")
       }
       router.refresh()
     } else {
@@ -485,8 +512,8 @@ export function StudentAssignmentSolveClient({
     }
   }
 
-  const handleAutoSubmitQuiz = async (msg = "Time is up! Your quiz has been auto-submitted and graded.") => {
-    performQuizSubmit(quizAnswersRef.current, true, msg)
+  async function handleAutoSubmitQuiz() {
+    performQuizSubmit(quizAnswersRef.current, true)
   }
 
   const handleManualSubmitQuiz = async () => {
@@ -535,15 +562,12 @@ export function StudentAssignmentSolveClient({
       quiz_answers: null,
       code_content: textAnswer.trim() || null,
       language: "text",
-      grade: null,
-      feedback: null,
-      status: "pending",
       subject_id: subjectId,
     })
     setIsSubmitting(false)
     if (res.success) {
       const newSub = {
-        id: (res as any).submissionId || Date.now().toString(),
+        id: (res).submissionId || Date.now().toString(),
         assignment_id: assignment.id,
         student_id: studentId,
         file_url: fileUrl.trim() || null,
@@ -564,65 +588,9 @@ export function StudentAssignmentSolveClient({
     }
   }
 
-  // Run student code against test cases (real sandbox compilation & execution)
-  const handleRunCode = async () => {
-    // Validate empty code (CODE-020)
-    if (!code || !code.trim()) {
-      showToast("Cannot run empty code. Please write your solution.", "error")
-      setConsoleLogs(prev => [
-        ...prev,
-        "> [VALIDATION ERROR] Cannot execute empty code. Please write a solution."
-      ])
-      return
-    }
-
-    setIsRunningCode(true)
-    setConsoleLogs(prev => [...prev, `> Compiling and executing ${lang.toUpperCase()} in sandbox...`])
-
-    try {
-      const cases = assignment.test_cases || []
-      const res = await verifyCodeAction(code, lang, cases)
-
-      setConsoleLogs(prev => [...prev, ...res.logs])
-
-      if (res.errorType === "syntax") {
-        setTestResults(null)
-        showToast("Compilation Error: Syntax check failed. See console outputs.", "error")
-      } else if (res.errorType === "runtime") {
-        setTestResults(res.results.map((r, idx) => ({
-          passed: r.passed,
-          input: r.input,
-          expected: r.expected,
-          actual: r.actual,
-          error: r.error,
-          label: `Case ${idx + 1}: Input (${r.input || "none"}) → ${r.passed ? "PASSED" : "FAILED (Runtime Error)"}`
-        })))
-        showToast("Runtime Error: Execution terminated with errors. See logs.", "error")
-      } else if (res.allPassed) {
-        setTestResults(res.results.map((r, idx) => ({
-          passed: r.passed,
-          input: r.input,
-          expected: r.expected,
-          actual: r.actual,
-          label: `Case ${idx + 1}: Input (${r.input || "none"}) → Expected: "${r.expected}" | Actual: "${r.actual}"`
-        })))
-        showToast(`🎉 All ${res.totalPassed} test cases passed successfully!`, "success")
-      } else {
-        setTestResults(res.results.map((r, idx) => ({
-          passed: r.passed,
-          input: r.input,
-          expected: r.expected,
-          actual: r.actual,
-          label: `Case ${idx + 1}: Input (${r.input || "none"}) → Expected: "${r.expected}" | Actual: "${r.actual}"`
-        })))
-        showToast(`Verification Failed: ${res.totalTests - res.totalPassed} of ${res.totalTests} test case(s) failed.`, "error")
-      }
-    } catch (err: any) {
-      setConsoleLogs(prev => [...prev, `> [SYSTEM ERROR] Sandbox error: ${err.message}`])
-      showToast("Error running code: " + err.message, "error")
-    } finally {
-      setIsRunningCode(false)
-    }
+  // Code execution is intentionally unavailable until an isolated execution service exists.
+  const handleRunCode = () => {
+    showToast("Code execution is unavailable. You can still submit your work for instructor review.", "info")
   }
 
   const performCodeSubmit = async () => {
@@ -631,87 +599,44 @@ export function StudentAssignmentSolveClient({
       return
     }
 
-    // Validate empty code (CODE-020)
     if (!code || !code.trim()) {
       showToast("Cannot submit empty code. Please write your solution before submitting.", "error")
-      setConsoleLogs(prev => [
-        ...prev,
-        "> [SUBMISSION REJECTED] Cannot submit empty code."
-      ])
       return
     }
 
     setIsSubmitting(true)
-    setConsoleLogs(prev => [...prev, `> Verifying solution prior to submission...`])
+    const res = await submitAssignmentAction({
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: null,
+      quiz_answers: null,
+      code_content: code,
+      language: lang,
+      subject_id: subjectId,
+    })
+    setIsSubmitting(false)
 
-    try {
-      const cases = assignment.test_cases || []
-      const verifyRes = await verifyCodeAction(code, lang, cases)
-
-      setConsoleLogs(prev => [...prev, ...verifyRes.logs])
-
-      // If syntax error, reject submission (CODE-018)
-      if (verifyRes.errorType === "syntax") {
-        setIsSubmitting(false)
-        showToast("Submission Rejected: Please fix syntax/compilation errors before submitting.", "error")
-        return
-      }
-
-      // If runtime error, reject submission (CODE-019)
-      if (verifyRes.errorType === "runtime" || verifyRes.results.some(r => r.error)) {
-        setIsSubmitting(false)
-        showToast("Submission Rejected: Runtime error occurred during test execution.", "error")
-        return
-      }
-
-      // If test cases failed, reject submission (CODE-017)
-      if (!verifyRes.allPassed && cases.length > 0) {
-        setIsSubmitting(false)
-        showToast(`Submission Rejected: Solution failed ${verifyRes.totalTests - verifyRes.totalPassed} test case(s). Please fix failing cases before submitting.`, "error")
-        return
-      }
-
-      // Valid solution, submit (CODE-016)
-      const res = await submitAssignmentAction({
-        assignment_id: assignment.id,
-        student_id: studentId,
-        file_url: null,
-        quiz_answers: null,
-        code_content: code,
-        language: lang,
-        grade: assignment.max_score || 100,
-        feedback: `Automated Code Evaluation: All ${cases.length || 1} test cases passed successfully (${assignment.max_score || 100}/${assignment.max_score || 100} Marks).`,
-        status: "graded",
-        subject_id: subjectId,
-      })
-
-      setIsSubmitting(false)
-
-      if (res.success) {
-        const newSub = {
-          id: (res as any).submissionId || Date.now().toString(),
-          assignment_id: assignment.id,
-          student_id: studentId,
-          file_url: null,
-          quiz_answers: null,
-          code_content: code,
-          language: lang,
-          grade: assignment.max_score || 100,
-          feedback: `Automated Code Evaluation: All ${cases.length || 1} test cases passed successfully (${assignment.max_score || 100}/${assignment.max_score || 100} Marks).`,
-          status: "graded",
-          submitted_at: new Date().toISOString(),
-        }
-        setSubmission(newSub)
-        setIsResubmitting(false)
-        showToast("🚀 Code solution passed all test cases and was submitted successfully!", "success")
-        router.refresh()
-      } else {
-        showToast("Error submitting: " + res.error, "error")
-      }
-    } catch (err: any) {
-      setIsSubmitting(false)
-      showToast("Error evaluating code: " + err.message, "error")
+    if (!res.success) {
+      showToast("Error submitting: " + res.error, "error")
+      return
     }
+
+    setSubmission({
+      id: res.submissionId || Date.now().toString(),
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: null,
+      quiz_answers: null,
+      code_content: code,
+      language: lang,
+      grade: null,
+      feedback: null,
+      status: "pending",
+      submitted_at: new Date().toISOString(),
+    })
+    setIsResubmitting(false)
+    showToast("Code submitted for instructor review. Automated execution is unavailable.", "success")
+    router.refresh()
   }
 
   const handleSubmitCode = async () => {
@@ -729,8 +654,8 @@ export function StudentAssignmentSolveClient({
     setConfirmModal({
       isOpen: true,
       title: "Submit Code Solution?",
-      message: "Your code will be evaluated against all test cases. Make sure your solution is tested and working.",
-      confirmLabel: "Verify & Submit",
+      message: "Your code will be sent to your instructor for review. Automated code execution is unavailable.",
+      confirmLabel: "Submit for Review",
       onConfirm: performCodeSubmit,
     })
   }
@@ -744,12 +669,12 @@ export function StudentAssignmentSolveClient({
 
   const formatDueDate = (dueDate: string | null) => {
     if (!dueDate) return "No due date"
-    const d = new Date(dueDate)
-    if (isNaN(d.getTime())) return dueDate
+    const d = parseExplicitInstant(dueDate)
+    if (!d) return "Deadline unavailable"
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
   }
 
-  const activeType = typeConfig[assignment.type] || typeConfig["Assignment"]
+  const activeType = typeConfig[isAssignmentKind(assignment.type) ? assignment.type : "Assignment"]
   const TypeIcon = activeType.icon
 
   return (
@@ -871,7 +796,7 @@ export function StudentAssignmentSolveClient({
                 <AlertOctagon size={14} className="text-rose-600 shrink-0" />
                 <span>Violation Triggered:</span>
               </div>
-              <p className="text-rose-800 italic">"{violationReason}"</p>
+              <p className="text-rose-800 italic">&quot;{violationReason}&quot;</p>
               <p className="font-semibold text-rose-900 pt-1 border-t border-rose-200/60">
                 All external browser tabs, background applications, Discord, ChatGPT, IDEs, and notes must remain closed.
               </p>
@@ -1038,7 +963,7 @@ export function StudentAssignmentSolveClient({
                     return (
                       <a
                         key={idx}
-                        href={file}
+                        href={getPrivateStorageHref(file, "assignments") ?? undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-700 transition-all"
@@ -1247,7 +1172,7 @@ export function StudentAssignmentSolveClient({
                       return (
                         <a
                           key={idx}
-                          href={file}
+                          href={getPrivateStorageHref(file, "assignments") ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-700 transition-all text-left"
@@ -1276,7 +1201,7 @@ export function StudentAssignmentSolveClient({
                 {submission.feedback && (
                   <div className="pt-2 border-t border-emerald-200/50">
                     <span className="text-[10px] uppercase font-bold text-emerald-600">Faculty Feedback</span>
-                    <p className="text-xs text-emerald-800 mt-1 font-medium italic">"{submission.feedback}"</p>
+                    <p className="text-xs text-emerald-800 mt-1 font-medium italic">&quot;{submission.feedback}&quot;</p>
                   </div>
                 )}
               </div>
@@ -1294,12 +1219,12 @@ export function StudentAssignmentSolveClient({
                 <div>
                   <h4 className="font-bold text-slate-800 text-base">Submission Recorded Successfully!</h4>
                   <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                    Your solution was submitted on {new Date(submission.submitted_at).toLocaleString("en-IN")}.
+                    Your solution was submitted on {submission.submitted_at ? new Date(submission.submitted_at).toLocaleString("en-IN") : "the recorded date is unavailable"}.
                   </p>
                 </div>
                 {submission.file_url && (
                   <a
-                    href={submission.file_url}
+                    href={getPrivateStorageHref(submission.file_url, "assignments") ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
@@ -1334,7 +1259,8 @@ export function StudentAssignmentSolveClient({
                         setLang(submission.language)
                       }
                       if (submission.file_url) {
-                        setFileUrl(submission.file_url)
+                        const existingPath = parsePrivateStoragePath(submission.file_url, "assignments")
+                        setFileUrl(existingPath ? makePrivateStorageReference("assignments", existingPath) : "")
                       }
                     }}
                     className="mt-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
@@ -1367,32 +1293,24 @@ export function StudentAssignmentSolveClient({
                         {submission.grade} <span className="text-sm font-semibold text-emerald-600">/ {assignment.max_score || 100} Marks</span>
                       </div>
                       <p className="text-xs text-emerald-700 font-medium font-['Space_Grotesk']">
-                        {submission.quiz_answers?.filter((ans: number, idx: number) => ans === assignment.questions?.[idx]?.answer).length || 0} of {assignment.questions?.length || 0} Questions Correct
+                        {assignment.questions?.length || 0} questions submitted
                       </p>
                     </div>
                     {/* Key List */}
                     <div className="space-y-3">
-                      {assignment.questions?.map((q: any, qi: number) => {
+                      {assignment.questions?.map((q, qi) => {
                         const selected = submission.quiz_answers?.[qi];
-                        const isCorrect = selected === q.answer;
                         return (
-                          <div key={qi} className={`p-4 rounded-xl border ${isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                          <div key={qi} className="p-4 rounded-xl border bg-slate-50 border-slate-200">
                             <p className="font-semibold text-xs text-slate-800 mb-2">Q{qi + 1}. {q.q}</p>
                             <div className="space-y-1">
                               {q.options.map((opt: string, oi: number) => (
                                 <div
                                   key={oi}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border ${
-                                    oi === q.answer
-                                      ? "bg-green-200 border-green-300 text-green-900"
-                                      : oi === selected
-                                      ? "bg-red-200 border-red-300 text-red-900"
-                                      : "bg-white border-slate-100 text-slate-500"
-                                  }`}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border ${oi === selected ? "bg-indigo-100 border-indigo-300 text-indigo-900" : "bg-white border-slate-100 text-slate-500"}`}
                                 >
                                   <span>{opt}</span>
-                                  {oi === q.answer && <span className="text-[9px] uppercase font-bold text-green-700 bg-white px-1.5 py-0.5 rounded">Key</span>}
-                                  {oi === selected && oi !== q.answer && <span className="text-[9px] uppercase font-bold text-red-700 bg-white px-1.5 py-0.5 rounded">Chosen</span>}
+                                  {oi === selected && <span className="text-[9px] uppercase font-bold text-indigo-700 bg-white px-1.5 py-0.5 rounded">Your answer</span>}
                                 </div>
                               ))}
                             </div>
@@ -1404,7 +1322,7 @@ export function StudentAssignmentSolveClient({
                 ) : (
                   // Active Proctored Quiz Solver
                   <div className="space-y-6">
-                    {assignment.questions?.map((q: any, qi: number) => (
+                    {assignment.questions?.map((q, qi) => (
                       <div key={qi} className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm space-y-3">
                         <p className="font-extrabold text-slate-800 text-sm">
                           <span className="text-indigo-600 mr-1.5 font-mono">Q{qi + 1}.</span> {q.q}
@@ -1486,7 +1404,7 @@ export function StudentAssignmentSolveClient({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-700">Coding Workspace</span>
                     <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
-                      {assignment.test_cases?.length || 0} Test Cases
+                      Execution unavailable
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -1496,7 +1414,6 @@ export function StudentAssignmentSolveClient({
                         onClick={() => {
                           setLang(l.id)
                           setCode(LANG_TEMPLATES[l.id] || "")
-                          setTestResults(null)
                         }}
                         disabled={isPastDueDate}
                         className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all disabled:opacity-50 cursor-pointer ${
@@ -1510,30 +1427,6 @@ export function StudentAssignmentSolveClient({
                     ))}
                   </div>
                 </div>
-
-                {/* Test Results Summary Strip */}
-                {testResults && testResults.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                    {testResults.map((tr, idx) => (
-                      <div
-                        key={idx}
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-xl flex items-center gap-1.5 border transition-all ${
-                          tr.passed
-                            ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                            : "bg-rose-50 border-rose-300 text-rose-800"
-                        }`}
-                        title={tr.label}
-                      >
-                        {tr.passed ? (
-                          <CheckCircle2 size={12} className="text-emerald-600" />
-                        ) : (
-                          <AlertTriangle size={12} className="text-rose-600" />
-                        )}
-                        <span>Case {idx + 1}: {tr.passed ? "Passed" : "Failed"}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
 
                 {/* Editor textarea */}
                 <div className="flex-1 flex flex-col border border-slate-200 rounded-2xl overflow-hidden min-h-[220px]">
@@ -1560,11 +1453,11 @@ export function StudentAssignmentSolveClient({
                       <button
                         type="button"
                         onClick={handleRunCode}
-                        disabled={isRunningCode || isPastDueDate}
+                        disabled
                         className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border border-slate-700"
                       >
-                        {isRunningCode ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} fill="white" />}
-                        Run Sandbox
+                        <Lock size={12} />
+                        Execution Unavailable
                       </button>
                       <button
                         type="button"
@@ -1594,11 +1487,11 @@ export function StudentAssignmentSolveClient({
                 <div className="h-32 bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col flex-shrink-0">
                   <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
                     <div className="flex items-center gap-1">
-                      <Terminal size={10} /> Compiler Sandbox Outputs
+                      <Terminal size={10} /> Code execution status
                     </div>
                     <button
                       type="button"
-                      onClick={() => setConsoleLogs(["Terminal logs cleared."])}
+                      onClick={() => setConsoleLogs(["Automated code execution is unavailable."])}
                       className="text-[9px] text-slate-400 hover:text-slate-200 transition-colors"
                     >
                       Clear
@@ -1748,9 +1641,17 @@ export function StudentAssignmentSolveClient({
   )
 }
 
-const typeConfig = {
+const typeConfig: Record<AssignmentKind, {
+  icon: typeof FileText
+  color: string
+  bg: string
+  border: string
+  activeBg: string
+  label: string
+}> = {
   'Assignment': { icon: FileText, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', activeBg: 'bg-emerald-600', label: 'Assignment' },
   'Quiz': { icon: Brain, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', activeBg: 'bg-purple-600', label: 'Quiz' },
   'Coding Assignment': { icon: FileCode2, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', activeBg: 'bg-blue-600', label: 'Coding' },
   'Material': { icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', activeBg: 'bg-amber-600', label: 'Material' },
-} as any
+  'Syllabus': { icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', activeBg: 'bg-amber-600', label: 'Syllabus' },
+}

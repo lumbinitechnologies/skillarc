@@ -1,7 +1,10 @@
+"use client";
+
+import { useLocalStorageValue } from "@/hooks/use-local-storage-value"
 // src/components/placements/placements-interview-terminal.tsx
 // SkillArc AI Mock Interview Terminal — Voice Recognition, Video Studio, Real-time AI Evaluation, and Performance Scorecards
 
-"use client";
+
 
 import React, { useState, useEffect, useRef } from "react";
 import {
@@ -38,6 +41,7 @@ import {
   Radio
 } from "lucide-react";
 import { Card, Badge, Button, Input, Select } from "@/components/placements-ui";
+import type { SpeechRecognitionLike, SpeechRecognitionWindow } from "@/lib/browser-speech"
 
 interface PlacementsInterviewTerminalProps {
   userId?: string | null;
@@ -347,21 +351,24 @@ export function PlacementsInterviewTerminal({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
-  // Load Past History
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`interview_history_${userId || "guest"}`);
-        if (saved) setHistory(JSON.parse(saved));
-      } catch (err) {
-        console.warn("Failed to load interview history:", err);
-      }
-    }
-  }, [userId]);
+  const historyKey = `interview_history_${userId || "guest"}`;
+  const savedHistory = useLocalStorageValue(historyKey);
+  const [restoredHistoryKey, setRestoredHistoryKey] = useState<string | null>(null);
+  if (savedHistory !== undefined && restoredHistoryKey !== historyKey) {
+    setRestoredHistoryKey(historyKey);
+    try {
+      const parsed: unknown = savedHistory ? JSON.parse(savedHistory) : [];
+      setHistory(Array.isArray(parsed) ? parsed.filter((item): item is InterviewHistoryItem => {
+        if (!item || typeof item !== "object") return false;
+        return ["id", "date", "role", "company", "difficulty", "verdict"].every(key => typeof item[key] === "string") &&
+          typeof item.totalScore === "number" && typeof item.questionCount === "number";
+      }) : []);
+    } catch { setHistory([]); }
+  }
 
   // Session Timer
   useEffect(() => {
@@ -378,15 +385,15 @@ export function PlacementsInterviewTerminal({
   // Web Speech Recognition (Speech to Text)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const speechWindow = window as SpeechRecognitionWindow
+      const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = "en-US";
 
-        recognition.onresult = (event: any) => {
+        recognition.onresult = (event) => {
           let interimTranscript = "";
           let finalTranscript = "";
 
@@ -403,7 +410,7 @@ export function PlacementsInterviewTerminal({
           }
         };
 
-        recognition.onerror = (event: any) => {
+        recognition.onerror = (event) => {
           console.warn("Speech recognition notice:", event.error);
           setIsListening(false);
         };
@@ -489,7 +496,10 @@ export function PlacementsInterviewTerminal({
 
         // Audio Visualizer Meter
         try {
-          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const speechWindow = window as SpeechRecognitionWindow
+          const AudioContextConstructor = window.AudioContext || speechWindow.webkitAudioContext
+          if (!AudioContextConstructor) throw new Error("AudioContext is unavailable in this browser")
+          const audioCtx = new AudioContextConstructor();
           const source = audioCtx.createMediaStreamSource(stream);
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 64;
@@ -538,23 +548,25 @@ export function PlacementsInterviewTerminal({
   };
 
   // Robust Question Parser Helper
-  const parseInterviewQuestion = (data: any, fallbackTrack: string) => {
-    let category = data?.category || fallbackTrack || "Core Technical";
-    let question = data?.question || "";
-    let hint = data?.hint || "Focus on architectural clarity, performance trade-offs, and practical edge cases.";
+  const parseInterviewQuestion = (data: unknown, fallbackTrack: string) => {
+    const record = data && typeof data === "object" ? data as Record<string, unknown> : {}
+    let category = typeof record.category === "string" ? record.category : fallbackTrack || "Core Technical";
+    let question = typeof record.question === "string" ? record.question : "";
+    let hint = typeof record.hint === "string" ? record.hint : "Focus on architectural clarity, performance trade-offs, and practical edge cases.";
 
-    if (!question && data?.text) {
-      const raw = String(data.text).trim();
+    if (!question && typeof record.text === "string") {
+      const raw = record.text.trim();
 
       // Check if raw is JSON string
       try {
         const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
         if (jsonStr.startsWith("{") && jsonStr.endsWith("}")) {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.question) {
+          const parsedValue: unknown = JSON.parse(jsonStr);
+          const parsed = parsedValue && typeof parsedValue === "object" ? parsedValue as Record<string, unknown> : null
+          if (typeof parsed?.question === "string") {
             question = parsed.question;
-            if (parsed.category) category = parsed.category;
-            if (parsed.hint) hint = parsed.hint;
+            if (typeof parsed.category === "string") category = parsed.category;
+            if (typeof parsed.hint === "string") hint = parsed.hint;
           }
         }
       } catch {}
@@ -574,10 +586,11 @@ export function PlacementsInterviewTerminal({
     // Sanitize any residual JSON string if question was somehow stringified
     if (typeof question === "string" && (question.startsWith('{"') || question.startsWith("{\n"))) {
       try {
-        const parsed = JSON.parse(question);
-        if (parsed.question) question = parsed.question;
-        if (parsed.category) category = parsed.category;
-        if (parsed.hint) hint = parsed.hint;
+        const parsedValue: unknown = JSON.parse(question);
+        const parsed = parsedValue && typeof parsedValue === "object" ? parsedValue as Record<string, unknown> : null
+        if (typeof parsed?.question === "string") question = parsed.question;
+        if (typeof parsed?.category === "string") category = parsed.category;
+        if (typeof parsed?.hint === "string") hint = parsed.hint;
       } catch {}
     }
 

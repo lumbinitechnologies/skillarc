@@ -1,3 +1,5 @@
+import { getServerTime } from "@/lib/server-time"
+import { measureServer } from "@/lib/perf"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
@@ -7,29 +9,29 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 export const dynamic = "force-dynamic"
 
 export default async function FacultyDashboardPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.faculty.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
 
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) {
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)) {
     redirect("/auth/login")
   }
 
   // Consolidated parallel batch: Fetch institutions, faculty_subjects, timetable_slots, timetable_weeks, and student count in ONE single Promise.all
-  const tBatchStart = performance.now()
+
   const [
     institutionRes,
     assignedFacultySubjectsRes,
     timetableSlotsRes,
     weeksRes,
     studentCountRes,
-  ] = await Promise.all([
+  ] = await measureServer("app.dashboard.faculty.data", () => Promise.all([
     supabase.from("institutions").select("id, name").eq("id", profile.institution_id).maybeSingle(),
     supabase.from("faculty_subjects").select("subject_id, subjects!inner(id, name, code)").eq("faculty_id", profile.id).limit(6),
     supabase
@@ -45,37 +47,37 @@ export default async function FacultyDashboardPage() {
           .eq("institution_id", profile.institution_id)
       : Promise.resolve({ data: [] }),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("institution_id", profile.institution_id).eq("role", ROLES.STUDENT),
-  ])
-  const batchMs = performance.now() - tBatchStart
+  ]))
+
 
   const institution = institutionRes.data
   const assignedFacultySubjects = assignedFacultySubjectsRes.data ?? []
-  const allSlots = (timetableSlotsRes.data ?? []) as any[]
-  const weeksData = (weeksRes.data ?? []) as any[]
+  const allSlots = (timetableSlotsRes.data ?? [])
+  const weeksData = (weeksRes.data ?? [])
   const studentCount = studentCountRes.count ?? 0
 
   // Resolve active week in-memory
   let activeWeekId: string | null = null
   if (weeksData.length > 0) {
-    const today = new Date().toISOString().split("T")[0]
-    const currentWeek = weeksData.find((w: any) => w.start_date <= today && today <= w.end_date)
+    const today = (await getServerTime()).toISOString().split("T")[0]
+    const currentWeek = weeksData.find((w) => w.start_date <= today && today <= w.end_date)
     if (currentWeek) {
       activeWeekId = currentWeek.id
     }
   }
 
   // Filter slots for active week, falling back to default template slots (week_id === null)
-  let timetableRows = activeWeekId ? allSlots.filter((s: any) => s.week_id === activeWeekId) : []
+  let timetableRows = activeWeekId ? allSlots.filter((s) => s.week_id === activeWeekId) : []
   if (timetableRows.length === 0) {
-    timetableRows = allSlots.filter((s: any) => !s.week_id)
+    timetableRows = allSlots.filter((s) => !s.week_id)
   }
   timetableRows = timetableRows.slice(0, 8)
 
-  const subjects = (assignedFacultySubjects ?? []).map((r: any) => 
+  const subjects = (assignedFacultySubjects ?? []).map((r) =>
     Array.isArray(r.subjects) ? r.subjects[0] : r.subjects
   ).filter(Boolean)
 
-  const timetableSlots = timetableRows.map((slot: any) => ({
+  const timetableSlots = timetableRows.map((slot) => ({
     day: slot.day,
     period: slot.period,
     section_id: slot.section_id,
@@ -83,10 +85,8 @@ export default async function FacultyDashboardPage() {
     sections: Array.isArray(slot.sections) ? slot.sections[0] : slot.sections,
   }))
 
-  const totalMs = performance.now() - tPageStart
-  console.info(
-    `[DashboardFaculty] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} facultyId=${profile.id}`
-  )
+
+
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

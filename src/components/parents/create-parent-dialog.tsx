@@ -1,5 +1,10 @@
 "use client"
 
+import type { StudentWithSection } from "@/modules/students"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState, useEffect } from "react"
 import {
   Dialog,
@@ -40,14 +45,18 @@ export function CreateParentDialog({
     institution_id: parent?.institution_id || "",
     organization_id: parent?.organization_id || null,
   })
-  const [linkedStudents, setLinkedStudents] = useState<any[]>([])
+  const [linkedStudents, setLinkedStudents] = useState<Array<{ id: string; name: string; registration_number?: string | null; relationId?: string; relationship?: string | null }>>([])
   const [studentSearch, setStudentSearch] = useState("")
-  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchResults, setSearchResults] = useState<StudentWithSection[]>([])
   const [relationship, setRelationship] = useState("Father")
   const [isLinking, setIsLinking] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [parent]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setFormData({
       name: parent?.name || "",
       email: parent?.email || "",
@@ -55,21 +64,22 @@ export function CreateParentDialog({
       institution_id: parent?.institution_id || "",
       organization_id: parent?.organization_id || null,
     })
-    setLinkedStudents((parent as any)?.students || [])
+    setLinkedStudents((parent)?.students || [])
     setStudentSearch("")
     setSearchResults([])
     setRelationship("Father")
-  }, [parent])
+
+  }
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (studentSearch.trim().length > 1) {
         try {
-          const res = await fetch(`/api/students?search=${studentSearch}&institution_id=${(formData as any).institution_id || parent?.institution_id || ""}`)
+          const res = await fetch(`/api/students?search=${studentSearch}&institution_id=${(formData).institution_id || parent?.institution_id || ""}`)
           if (res.ok) {
             const data = await res.json()
             const filtered = (data.students || []).filter(
-              (s: any) => !linkedStudents.some((l) => l.id === s.id)
+              (s: StudentWithSection) => !linkedStudents.some((l) => l.id === s.id)
             )
             setSearchResults(filtered)
           }
@@ -82,9 +92,9 @@ export function CreateParentDialog({
     }, 300)
 
     return () => clearTimeout(delayDebounce)
-  }, [studentSearch, linkedStudents, (formData as any).institution_id, parent])
+  }, [studentSearch, linkedStudents, (formData).institution_id, parent])
 
-  const handleLinkStudent = async (student: any) => {
+  const handleLinkStudent = async (student: StudentWithSection) => {
     if (!parent?.id) return
     setIsLinking(true)
     try {
@@ -106,7 +116,7 @@ export function CreateParentDialog({
       const newRelation = await res.json()
       setLinkedStudents(prev => [...prev, {
         id: student.id,
-        name: student.name,
+        name: student.name || "Student",
         email: student.email,
         registration_number: student.registration_number,
         relationship: newRelation.relationship,
@@ -116,8 +126,8 @@ export function CreateParentDialog({
       setSearchResults([])
       toast({ title: "Success", description: "Student linked successfully" })
       onRelationsChanged?.()
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } catch (error: unknown) {
+      toast({ title: "Error", description: readErrorMessage(error), variant: "destructive" })
     } finally {
       setIsLinking(false)
     }
@@ -136,8 +146,8 @@ export function CreateParentDialog({
       setLinkedStudents(prev => prev.filter(s => s.relationId !== relationId && s.id !== studentId))
       toast({ title: "Success", description: "Student unlinked successfully" })
       onRelationsChanged?.()
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } catch (error: unknown) {
+      toast({ title: "Error", description: readErrorMessage(error), variant: "destructive" })
     } finally {
       setIsLinking(false)
     }
@@ -245,7 +255,7 @@ export function CreateParentDialog({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleUnlinkStudent(stud.relationId, stud.id)}
+                        onClick={() => { if (stud.relationId) void handleUnlinkStudent(stud.relationId, stud.id) }}
                         disabled={isLinking}
                         className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                       >

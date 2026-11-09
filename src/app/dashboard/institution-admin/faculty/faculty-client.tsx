@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState } from "react"
 import { motion } from "framer-motion"
 import { GraduationCap, Plus, Upload } from "lucide-react"
@@ -125,8 +127,8 @@ export function FacultyClientPage({
       const data = await response.json()
       if (!response.ok || data.error) throw new Error(data.error || "Failed to resend invite")
       toast({ title: "Invitation Sent", description: `Email sent to ${targetFaculty.email}` })
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to resend", variant: "destructive" })
+    } catch (err: unknown) {
+      toast({ title: "Error", description: readErrorMessage(err) || "Failed to resend", variant: "destructive" })
     }
   }
 

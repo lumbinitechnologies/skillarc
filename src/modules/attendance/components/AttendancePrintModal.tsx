@@ -1,5 +1,8 @@
 "use client"
 
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
+
+
 import React, { useState } from "react"
 import { Printer, X, Download, CheckCircle2, XCircle, Clock, FileText, CheckSquare, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,7 +17,7 @@ interface AttendancePrintModalProps {
   subjectName?: string
   periodName?: string
   date: string
-  students: any[]
+  students: AttendanceStudent[]
   attendance: Record<string, string>
   notes?: Record<string, string>
   sessionNotes?: string

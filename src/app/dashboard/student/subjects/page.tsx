@@ -1,6 +1,8 @@
+import { measureServer } from "@/lib/perf"
 import { redirect } from "next/navigation"
 import { BookOpen, GraduationCap, UserRound, ArrowRight } from "lucide-react"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
 import Link from "next/link"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
@@ -8,122 +10,51 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 export const dynamic = "force-dynamic"
 
 export default async function StudentSubjectsPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.subjects.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
 
-  const adminClient = createSupabaseAdminClient()
-
-  const tBatchStart = performance.now()
-  const [studentRes, timetableRes, subjectsRes, facultySubjectsRes] = await Promise.all([
-    adminClient
-      .from("students")
-      .select("id, section_id, program_id, semester")
-      .eq("id", context.id)
-      .maybeSingle(),
-    context.institution_id
-      ? adminClient
-          .from("timetable_slots")
-          .select("subject_id, faculty_id, section_id, subjects(id, name, code, subject_type), users!faculty_id(id, name)")
-          .eq("institution_id", context.institution_id)
-      : Promise.resolve({ data: [] }),
-    context.institution_id
-      ? adminClient
-          .from("subjects")
-          .select("id, name, code, subject_type, program_id, semester")
-          .eq("institution_id", context.institution_id)
-      : Promise.resolve({ data: [] }),
-    context.institution_id
-      ? adminClient
-          .from("faculty_subjects")
-          .select("subject_id, faculty_id, section_id, users:faculty_id(id, name)")
-          .eq("institution_id", context.institution_id)
-      : Promise.resolve({ data: [] }),
+  const supabase = await createSupabaseServerClient()
+  const [studentRes, subjectsRes, timetableRes, facultySubjectsRes] = await Promise.all([
+    supabase.from("students").select("id, section_id, program_id, semester").eq("id", context.id).maybeSingle(),
+    supabase.from("subjects").select("id, name, code, subject_type").order("name"),
+    supabase.from("timetable_slots").select("subject_id, faculty_id, section_id").eq("institution_id", context.institution_id),
+    supabase.from("faculty_subjects").select("subject_id, faculty_id, section_id").eq("institution_id", context.institution_id),
   ])
-  const batchMs = performance.now() - tBatchStart
-
   const studentData = studentRes.data
-  const allSlots = (timetableRes.data ?? []) as any[]
-  const allSubjects = (subjectsRes.data ?? []) as any[]
-  const allFacultySubjects = (facultySubjectsRes.data ?? []) as any[]
+  const visibleSubjects = subjectsRes.data ?? []
+  const visibleSubjectIds = new Set(visibleSubjects.map((subject) => subject.id))
+  const relationshipRows = [
+    ...(timetableRes.data ?? []),
+    ...(facultySubjectsRes.data ?? []),
+  ].filter((row) => visibleSubjectIds.has(row.subject_id))
+  const facultyIds = [...new Set(relationshipRows.map((row) => row.faculty_id).filter((id): id is string => Boolean(id)))]
+  const adminClient = createSupabaseAdminClient()
+  const facultyResult = facultyIds.length
+    ? await adminClient.from("users").select("id, name").in("id", facultyIds)
+      .eq("institution_id", context.institution_id).eq("role", "FACULTY").eq("is_active", true)
+    : { data: [] }
+  const facultyNames = new Map((facultyResult.data ?? []).map((faculty) => [faculty.id, faculty.name]))
 
-  // Build faculty map from faculty_subjects (official course allocation)
-  const fsMap = new Map<string, string>()
-  allFacultySubjects.forEach((fs: any) => {
-    const u = Array.isArray(fs.users) ? fs.users[0] : fs.users
-    if (fs.subject_id && u?.name) {
-      if (fs.section_id === studentData?.section_id) {
-        fsMap.set(fs.subject_id, u.name)
-      } else if (!fsMap.has(fs.subject_id)) {
-        fsMap.set(fs.subject_id, u.name)
-      }
-    }
-  })
-
-  // Filter slots for student's section
-  const sectionSlots = studentData?.section_id
-    ? allSlots.filter((slot: any) => slot.section_id === studentData.section_id)
-    : []
-
-  // Build slot faculty map
-  const slotFacultyMap = new Map<string, string>()
-  sectionSlots.forEach((slot: any) => {
-    const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
-    const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
-    if (sub?.id && fac?.name && !slotFacultyMap.has(sub.id)) {
-      slotFacultyMap.set(sub.id, fac.name)
-    }
-  })
-
-  const subjectMap = new Map<string, { id: string; name: string; code: string; subjectType: string; facultyName: string }>()
-
-  // 1. First add subjects from student's section timetable slots
-  sectionSlots.forEach((slot: any) => {
-    const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
-    if (sub?.id && !subjectMap.has(sub.id)) {
-      const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
-      subjectMap.set(sub.id, {
-        id: sub.id,
-        name: sub.name,
-        code: sub.code,
-        subjectType: sub.subject_type || "THEORY",
-        facultyName,
-      })
-    }
-  })
-
-  // 2. Also ensure all curriculum subjects for the student's program and semester are included
-  if (studentData?.program_id) {
-    const progSubs = allSubjects.filter((s: any) => {
-      const matchProg = s.program_id === studentData.program_id
-      const matchSem = !studentData.semester || !s.semester || s.semester === studentData.semester
-      return matchProg && matchSem
-    })
-    progSubs.forEach((sub: any) => {
-      if (!subjectMap.has(sub.id)) {
-        const facultyName = fsMap.get(sub.id) ?? slotFacultyMap.get(sub.id) ?? "Faculty pending"
-        subjectMap.set(sub.id, {
-          id: sub.id,
-          name: sub.name,
-          code: sub.code,
-          subjectType: sub.subject_type || "THEORY",
-          facultyName,
-        })
-      }
-    })
+  const facultyBySubject = new Map<string, string>()
+  for (const relationship of relationshipRows) {
+    if (!relationship.subject_id || !relationship.faculty_id) continue
+    if (relationship.section_id !== null && relationship.section_id !== studentData?.section_id) continue
+    const name = facultyNames.get(relationship.faculty_id)
+    if (name && !facultyBySubject.has(relationship.subject_id)) facultyBySubject.set(relationship.subject_id, name)
   }
 
-  const subjects = Array.from(subjectMap.values())
-  const totalMs = performance.now() - tPageStart
-
-  console.info(
-    `[DashboardStudentSubjects] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
-
+  const subjects = visibleSubjects.map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    code: subject.code,
+    subjectType: subject.subject_type || "THEORY",
+    facultyName: facultyBySubject.get(subject.id) ?? "Faculty pending",
+  }))
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
       {/* Header section identical to Attendance Center design */}

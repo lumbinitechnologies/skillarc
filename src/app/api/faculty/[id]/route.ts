@@ -32,7 +32,7 @@ export async function PUT(
     const body = await request.json()
     const { name, department_id, role, is_timetable_builder, phone, employee_id } = body
 
-    const updateData: any = {}
+    const updateData: Record<string, unknown> = {}
     if (name) updateData.name = name
     if (role && [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(role)) {
       updateData.role = role

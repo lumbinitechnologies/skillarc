@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { Resend } from "resend"
 import { createSupabaseAdminClient } from "./supabase-admin"
 
@@ -18,7 +19,7 @@ export interface SendNotificationParams {
   title: string
   message: string
   link?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 function getResendClient() {
@@ -104,7 +105,7 @@ export async function dispatchNotification({
   // 3. Dispatch In-App Notification (Bell icon in Navbar)
   if (pushEnabled) {
     try {
-      const payload: any = {
+      const payload: { user_id: string; title: string; message: string; is_read: boolean; created_at: string; link?: string } = {
         user_id: userId,
         title,
         message,
@@ -162,9 +163,9 @@ export async function dispatchNotification({
         } else {
           emailSent = true
         }
-      } catch (err: any) {
-        console.error("Resend email delivery exception:", err?.message || err)
-        emailError = err?.message || "Resend email delivery exception"
+      } catch (err: unknown) {
+        console.error("Resend email delivery exception:", readErrorMessage(err) || err)
+        emailError = readErrorMessage(err) || "Resend email delivery exception"
       }
     } else {
       console.log(`[Notification Service] 📧 Email queued for ${userEmail} (${title}). Set RESEND_API_KEY in .env to send live emails.`)

@@ -1,3 +1,4 @@
+import { measureServer } from "@/lib/perf"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import { SectionsClientPage } from "./sections-client"
@@ -7,10 +8,10 @@ import { getCurrentUserContext } from "@/lib/user-context"
 export const dynamic = "force-dynamic"
 
 export default async function SectionsPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentUserContext()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.institution-admin.sections.context", () => getCurrentUserContext())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
@@ -19,12 +20,12 @@ export default async function SectionsPage() {
   const institutionId = context.institution_id
   const supabase = await createSupabaseServerClient()
 
-  const tBatchStart = performance.now()
+
   const [
     sectionsRes,
     programsRes,
     facultyRes,
-  ] = await Promise.all([
+  ] = await measureServer("app.dashboard.institution-admin.sections.data", () => Promise.all([
     supabase
       .from("sections")
       .select(`
@@ -51,17 +52,15 @@ export default async function SectionsPage() {
       .select("id, name, email")
       .eq("institution_id", institutionId)
       .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]),
-  ])
-  const batchMs = performance.now() - tBatchStart
-  const totalMs = performance.now() - tPageStart
+  ]))
+
+
 
   const sections = sectionsRes.data ?? []
   const programs = programsRes.data ?? []
   const faculty = facultyRes.data ?? []
 
-  console.info(
-    `[DashboardInstitutionAdminSections] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)}`
-  )
+
 
   return (
     <SectionsClientPage

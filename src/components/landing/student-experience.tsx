@@ -37,7 +37,7 @@ export default function StudentExperience() {
           </div>
           <div className="p-5 space-y-4">
             <span className="text-[9px] font-black text-[#EFEAD8]/50 uppercase tracking-widest block font-mono">
-              [ TODAY'S SCHEDULE ]
+              [ TODAY&apos;S SCHEDULE ]
             </span>
             <div className="space-y-2.5">
               {[
@@ -82,7 +82,7 @@ export default function StudentExperience() {
           </div>
           <div className="p-5 space-y-3">
             <span className="text-[9px] font-black text-[#EFEAD8]/50 uppercase tracking-widest block font-mono">
-              [ TODAY'S PRIORITIES ]
+              [ TODAY&apos;S PRIORITIES ]
             </span>
             <div className="space-y-2">
               {[

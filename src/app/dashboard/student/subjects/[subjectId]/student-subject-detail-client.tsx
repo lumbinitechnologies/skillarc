@@ -1,5 +1,10 @@
 "use client"
 
+import { relationOne } from "@/lib/academic-content-types"
+import type { AcademicAssignment, RosterStudent, GeneratedTeam, WorksheetPresentation, CourseGroupAllocation, AttendanceEntry, AcademicStudent, AcademicSubmission, CourseAnnouncement, CourseMeeting, CourseProject, CourseGroup, GradebookColumn, GradebookEntry } from "@/lib/academic-content-types"
+
+import { useCurrentTime } from "@/hooks/use-current-time"
+
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import {
@@ -34,6 +39,8 @@ import StudentGradePrintModal from "@/modules/gradebook/components/StudentGradeP
 import { replyToAnnouncementAction } from "@/app/actions/announcements"
 import { supabase } from "@/lib/supabase"
 
+const EMPTY_DEFAULT_OPTIONS: [] = []
+
 interface StudentSubjectDetailClientProps {
   studentId: string
   studentName: string
@@ -44,16 +51,16 @@ interface StudentSubjectDetailClientProps {
     code: string
   }
   facultyName: string
-  assignments: Array<any>
-  submissions: Array<any>
-  classmates: Array<any>
-  meetings: Array<any>
-  attendanceEntries: Array<any>
-  attendanceSummary: any
-  projectGroups: Array<any>
-  subjectAnnouncements: Array<any>
-  gradeColumns?: Array<any>
-  gradeEntries?: Array<any>
+  assignments: AcademicAssignment[]
+  submissions: AcademicSubmission[]
+  classmates: AcademicStudent[]
+  meetings: CourseMeeting[]
+  attendanceEntries: AttendanceEntry[]
+  attendanceSummary: { total: number; present: number; absent: number; rate: number }
+  projectGroups: CourseGroupAllocation[]
+  subjectAnnouncements: CourseAnnouncement[]
+  gradeColumns?: GradebookColumn[]
+  gradeEntries?: GradebookEntry[]
 }
 
 export function StudentSubjectDetailClient({
@@ -70,12 +77,13 @@ export function StudentSubjectDetailClient({
   attendanceSummary,
   projectGroups,
   subjectAnnouncements,
-  gradeColumns = [],
-  gradeEntries = [],
+  gradeColumns = EMPTY_DEFAULT_OPTIONS,
+  gradeEntries = EMPTY_DEFAULT_OPTIONS,
 }: StudentSubjectDetailClientProps) {
+  const now = useCurrentTime()
   const [activeTab, setActiveTab] = useState<"assignments" | "modules" | "syllabus" | "grades" | "meetings" | "stream" | "people" | "attendance" | "groups">("assignments")
   const [isStudentGradePrintModalOpen, setIsStudentGradePrintModalOpen] = useState(false)
-  const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<any[]>(subjectAnnouncements)
+  const [localSubjectAnnouncements, setLocalSubjectAnnouncements] = useState<CourseAnnouncement[]>(subjectAnnouncements)
   const [replyTextByAnnouncement, setReplyTextByAnnouncement] = useState<Record<string, string>>({})
   const [isReplying, setIsReplying] = useState<Record<string, boolean>>({})
 
@@ -92,20 +100,30 @@ export function StudentSubjectDetailClient({
   }, [toast])
 
   // Real-time meetings state for active classroom classes
-  const [localMeetings, setLocalMeetings] = useState<any[]>(meetings)
+  const [localMeetings, setLocalMeetings] = useState<CourseMeeting[]>(meetings)
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [meetings]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     setLocalMeetings(meetings)
-  }, [meetings])
 
-  useEffect(() => {
+  }
+
+  const [resetInputs1, setResetInputs1] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs1 = [subjectAnnouncements]
+  if (resetInputs1 === null || nextResetInputs1.some((value, index) => !Object.is(value, resetInputs1[index]))) {
+    setResetInputs1(nextResetInputs1)
+
     setLocalSubjectAnnouncements(subjectAnnouncements)
-  }, [subjectAnnouncements])
+
+  }
 
   useEffect(() => {
     const channel = supabase
       .channel("student_live_meetings")
-      .on(
+      .on<CourseMeeting>(
         "postgres_changes",
         { event: "*", schema: "public", table: "meetings", filter: `subject_id=eq.${subject.id}` },
         (payload) => {
@@ -144,7 +162,7 @@ export function StudentSubjectDetailClient({
 
   const gradeValueMap = React.useMemo(() => {
     const map: Record<string, string | null> = {}
-    ;(gradeEntries || []).forEach((entry: any) => {
+    ;(gradeEntries || []).forEach((entry) => {
       if (entry?.column_id) {
         map[entry.column_id] = entry.score != null ? String(entry.score) : null
       }
@@ -153,14 +171,14 @@ export function StudentSubjectDetailClient({
   }, [gradeEntries])
 
   const gradeSummary = React.useMemo(() => {
-    const validColumns = (gradeColumns || []).filter((column: any) => Number(column.max_score || 0) > 0)
-    const graded = validColumns.filter((column: any) => gradeValueMap[column.id] != null && gradeValueMap[column.id] !== "")
-    const totalScore = validColumns.reduce((sum, column: any) => {
+    const validColumns = (gradeColumns || []).filter((column) => Number(column.max_score || 0) > 0)
+    const graded = validColumns.filter((column) => gradeValueMap[column.id] != null && gradeValueMap[column.id] !== "")
+    const totalScore = validColumns.reduce((sum, column) => {
       const value = Number(gradeValueMap[column.id] ?? 0)
       if (!Number.isFinite(value)) return sum
       return sum + Math.min(value, Number(column.max_score || 0))
     }, 0)
-    const totalMax = validColumns.reduce((sum, column: any) => sum + Number(column.max_score || 0), 0)
+    const totalMax = validColumns.reduce((sum, column) => sum + Number(column.max_score || 0), 0)
     const pct = totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
 
     return {
@@ -171,14 +189,14 @@ export function StudentSubjectDetailClient({
   }, [gradeColumns, gradeValueMap])
 
   // Helper to map assignment ID to student submission status
-  const getAssignmentStatusMeta = (item: any) => {
+  const getAssignmentStatusMeta = (item: AcademicAssignment) => {
     if (item.type === "Material" || item.type === "material" || item.type === "Syllabus") {
       return { label: "Available", bg: "bg-emerald-50 border-emerald-100/50 text-[#00C2A8]", icon: <Eye size={12} /> }
     }
 
     const sub = submissions.find(s => s.assignment_id === item.id)
     if (!sub) {
-      if (item.due_date && new Date(item.due_date).getTime() < Date.now()) {
+      if (item.due_date && new Date(item.due_date).getTime() < now) {
         return { label: "Past Due / Closed", bg: "bg-rose-50 border-rose-200 text-rose-700 font-extrabold", icon: <AlertCircle size={12} /> }
       }
       return { label: "Pending", bg: "bg-amber-50 border-amber-100/50 text-[#FFB020]", icon: <Clock size={12} /> }
@@ -198,13 +216,13 @@ export function StudentSubjectDetailClient({
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
   }
 
-  const typeConfig = {
+  const typeConfig: Record<string, WorksheetPresentation> = {
     'Assignment': { icon: FileText, color: 'text-indigo-600', bg: 'bg-indigo-50/70', label: 'Assignment' },
     'Quiz': { icon: Brain, color: 'text-purple-600', bg: 'bg-purple-50/70', label: 'Quiz' },
     'Coding Assignment': { icon: FileCode, color: 'text-blue-600', bg: 'bg-blue-50/70', label: 'Coding' },
     'Material': { icon: BookOpen, color: 'text-emerald-600', bg: 'bg-emerald-50/70', label: 'Material' },
     'Syllabus': { icon: Book, color: 'text-amber-600', bg: 'bg-amber-50/70', label: 'Syllabus' },
-  } as any
+  }
 
   const handleReplyToAnnouncement = async (announcementId: string) => {
     const replyText = replyTextByAnnouncement[announcementId]?.trim() || ""
@@ -219,17 +237,18 @@ export function StudentSubjectDetailClient({
     })
 
     setIsReplying(prev => ({ ...prev, [announcementId]: false }))
-    if (!res.success) {
+    if (!res.success || !res.reply) {
       showToast("Error sending reply: " + res.error, "error")
       return
     }
 
+    const reply = res.reply
     setReplyTextByAnnouncement(prev => ({ ...prev, [announcementId]: "" }))
     showToast("Reply posted successfully!", "success")
     setLocalSubjectAnnouncements(prev =>
       prev.map((ann) =>
         ann.id === announcementId
-          ? { ...ann, replies: [...(ann.replies || []), res.reply] }
+          ? { ...ann, replies: [...(ann.replies || []), reply] }
           : ann
       )
     )
@@ -315,7 +334,7 @@ export function StudentSubjectDetailClient({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as Parameters<typeof setActiveTab>[0])}
               className={`flex-1 min-w-[120px] flex items-center justify-center py-2.5 px-3 rounded-xl font-bold text-xs transition-all duration-200 active:scale-95 ${
                 active
                   ? "bg-[#6C63FF] text-white shadow-md shadow-indigo-100"
@@ -340,7 +359,7 @@ export function StudentSubjectDetailClient({
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider font-['Plus_Jakarta_Sans']">LIVE CLASSROOM MEETING ACTIVE</h3>
                 <p className="text-xs text-white/90 font-sans mt-0.5">
-                  Your professor is conducting a live classroom lecture: <span className="font-bold">"{localMeetings.find(m => m.is_active)?.title}"</span>. Click Join below to launch.
+                  Your professor is conducting a live classroom lecture: <span className="font-bold">&quot;{localMeetings.find(m => m.is_active)?.title}&quot;</span>. Click Join below to launch.
                 </p>
               </div>
             </div>
@@ -545,7 +564,7 @@ export function StudentSubjectDetailClient({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {gradeColumns.map((column: any) => {
+                      {gradeColumns.map((column) => {
                         const rawScore = gradeValueMap[column.id]
                         const numericScore = rawScore != null && rawScore !== "" ? Number(rawScore) : null
                         const maxScore = Number(column.max_score ?? 100)
@@ -570,7 +589,7 @@ export function StudentSubjectDetailClient({
                               )}
                             </td>
                             <td className="px-6 py-4 text-[11px] text-slate-500 max-w-[240px] whitespace-pre-wrap">
-                              {gradeEntries.find((entry: any) => entry.column_id === column.id)?.feedback || "No feedback provided."}
+                              {gradeEntries.find((entry) => entry.column_id === column.id)?.feedback || "No feedback provided."}
                             </td>
                           </tr>
                         )
@@ -597,9 +616,9 @@ export function StudentSubjectDetailClient({
                 {streamItems.map((item) => {
                   if (item.kind === "announcement") {
                     const ann = item.data
-                    const annFacultyName = ann.faculty?.name || facultyName
-                    const content = ann.description || ann.content || ""
-                    const replies = item.source === "announcement" ? ann.replies || [] : []
+                    const annFacultyName = relationOne(ann.faculty)?.name || facultyName
+                    const content = ann.description || ("content" in ann ? ann.content : "") || ""
+                    const replies = item.source === "announcement" ? item.data.replies || [] : []
                     return (
                       <div key={`${item.source}-${item.id}`} className="bg-white border border-slate-100 rounded-3xl p-6 flex flex-col gap-4 hover:shadow-[0_12px_24px_rgba(108,99,255,0.03)] transition-all duration-350">
                         <div className="flex items-start gap-4">
@@ -624,10 +643,10 @@ export function StudentSubjectDetailClient({
                               <p className="text-xs text-slate-400">No replies yet. Share your question or comment below.</p>
                             ) : (
                               <div className="space-y-3">
-                                {replies.map((reply: any) => (
+                                {replies.map((reply) => (
                                   <div key={reply.id} className="rounded-2xl bg-white p-3 border border-slate-100">
                                     <div className="flex items-center justify-between gap-3">
-                                      <span className="text-xs font-semibold text-slate-700">{reply.users?.name || "Student"}</span>
+                                      <span className="text-xs font-semibold text-slate-700">{relationOne(reply.users)?.name || "Student"}</span>
                                       <span className="text-[10px] text-slate-400">{new Date(reply.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
                                     </div>
                                     <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{reply.message}</p>
@@ -747,7 +766,7 @@ export function StudentSubjectDetailClient({
 
             <div className="divide-y divide-slate-55">
               {localMeetings.map((m) => {
-                const startStr = m.scheduled_start ? new Date(m.scheduled_start).toLocaleString() : new Date(m.started_at).toLocaleString()
+                const startStr = m.scheduled_start ? new Date(m.scheduled_start).toLocaleString() : (m.started_at ? new Date(m.started_at).toLocaleString() : "Time unavailable")
                 return (
                   <div key={m.id} className="p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 hover:bg-slate-50/30 transition-colors duration-200">
                     <div className="space-y-1.5">
@@ -897,7 +916,7 @@ export function StudentSubjectDetailClient({
                 <p className="mt-2 text-sm text-slate-500">Your faculty has not created project group allocations for this subject yet.</p>
               </div>
             ) : (
-              projectGroups.map((gAllocation: any) => {
+              projectGroups.map((gAllocation) => {
                 const proj = gAllocation.project
                 const group = gAllocation.project_group
                 return (
@@ -920,7 +939,7 @@ export function StudentSubjectDetailClient({
                           {group?.group_name || "Team Squad"}
                         </span>
                         {group?.motto && (
-                          <p className="text-xs text-slate-400 italic mt-1">"{group.motto}"</p>
+                          <p className="text-xs text-slate-400 italic mt-1">&quot;{group.motto}&quot;</p>
                         )}
                       </div>
                     </div>
@@ -928,7 +947,7 @@ export function StudentSubjectDetailClient({
                     <div>
                       <h4 className="font-extrabold text-slate-700 text-xs mb-3 uppercase tracking-wider">Teammates & Roles</h4>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {(group?.group_members || []).map((member: any, idx: number) => {
+                        {(group?.group_members || []).map((member, idx: number) => {
                           const isSelf = member.student_id === studentId
                           return (
                             <div
@@ -943,13 +962,13 @@ export function StudentSubjectDetailClient({
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
                                   isSelf ? "bg-[#6C63FF] text-white" : "bg-slate-200 text-slate-600"
                                 }`}>
-                                  {member.users?.name?.substring(0, 2) || "ST"}
+                                  {relationOne(member.users)?.name?.substring(0, 2) || "ST"}
                                 </div>
                                 <div>
                                   <span className={`text-xs font-extrabold block ${isSelf ? "text-indigo-955" : "text-slate-800"}`}>
-                                    {member.users?.name || "Student"} {isSelf && " (You)"}
+                                    {relationOne(member.users)?.name || "Student"} {isSelf && " (You)"}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 font-semibold">{member.users?.email || ""}</span>
+                                  <span className="text-[10px] text-slate-400 font-semibold">{relationOne(member.users)?.email || ""}</span>
                                 </div>
                               </div>
                               <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 border shadow-2xs">

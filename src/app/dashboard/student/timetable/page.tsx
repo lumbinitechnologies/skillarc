@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { ROLES } from "@/constants/roles"
@@ -8,10 +9,10 @@ import { measureServer } from "@/lib/perf"
 export const dynamic = "force-dynamic"
 
 export default async function StudentTimetablePage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.student.timetable.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
@@ -20,7 +21,7 @@ export default async function StudentTimetablePage() {
   const multiWeekEnabled = context.features.includes("multi_week_timetable")
 
   // Consolidated parallel batch: Fetch student profile, timetable slots (with joined subjects & faculty), weeks, events, and settings in ONE single Promise.all
-  const tBatchStart = performance.now()
+
   const [studentRes, timetableRes, weeksRes, eventsRes, settingsRes] = await measureServer(
     "dashboard.student.timetable.data",
     () =>
@@ -61,29 +62,26 @@ export default async function StudentTimetablePage() {
           : Promise.resolve({ data: null }),
       ])
   )
-  const batchMs = performance.now() - tBatchStart
+
 
   const studentData = studentRes.data
-  const sectionName = (studentData as any)?.sections?.name || "Your Section"
-  const programName = (studentData as any)?.sections?.program?.name || "Enrolled Qualification"
+  const section = relationOne(studentData?.sections)
+  const sectionName = section?.name || "Your Section"
+  const programName = relationOne(section?.program)?.name || "Enrolled Qualification"
 
-  const allSlots = (timetableRes.data ?? []) as any[]
-  const allWeeks = (weeksRes.data ?? []) as any[]
+  const allSlots = (timetableRes.data ?? [])
+  const allWeeks = (weeksRes.data ?? [])
   const academicEvents = eventsRes.data ?? []
 
-  // Filter slots & weeks for student's section
-  const timetableRows = studentData?.section_id
-    ? allSlots.filter((slot: any) => !slot.section_id || slot.section_id === studentData.section_id)
-    : allSlots
-
-  const weeks = studentData?.section_id
-    ? allWeeks.filter((w: any) => !w.section_id || w.section_id === studentData.section_id)
-    : allWeeks
+  // Session RLS already returns the student's current validated section or
+  // sections covered by active formal enrollment. Do not narrow by a stale profile section.
+  const timetableRows = allSlots
+  const weeks = allWeeks
 
   const subjectObj: Record<string, { name: string; code: string }> = {}
   const facultyObj: Record<string, string> = {}
 
-  timetableRows.forEach((slot: any) => {
+  timetableRows.forEach((slot) => {
     const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
     const fac = Array.isArray(slot.users) ? slot.users[0] : slot.users
     if (slot.subject_id && sub?.name) {
@@ -102,10 +100,8 @@ export default async function StudentTimetablePage() {
     { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
   ]
 
-  const totalMs = performance.now() - tPageStart
-  console.info(
-    `[DashboardStudentTimetable] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} studentId=${context.id}`
-  )
+
+
 
   return (
     <StudentTimetableClient
