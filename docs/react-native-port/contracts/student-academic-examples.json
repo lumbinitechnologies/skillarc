@@ -1,6 +1,6 @@
 {
-  "status": "proposed-synthetic-examples-not-implemented",
-  "time_policy": "Example institution explicitly uses Asia/Kolkata; example deadline instants are UTC. Deployment policy requires review.",
+  "status": "reviewed-proposal-examples-not-implemented",
+  "time_policy": "Example institution explicitly uses Asia/Kolkata; example deadline instants are UTC. Institution-owned policy approved; the real Australian campus timezone remains unknown.",
   "courses": {
     "data": {
       "context": {
