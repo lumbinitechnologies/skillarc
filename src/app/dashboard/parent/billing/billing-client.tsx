@@ -46,14 +46,16 @@ function fmt(amount: number) {
 export default function ParentBillingClient({
   parentName,
   students,
+  renderedAt,
 }: {
   parentName: string
   students: ChildWithBilling[]
+  renderedAt: number
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const child = students[selectedIdx] ?? null
 
-  const currentTime = useCurrentTime()
+  const currentTime = useCurrentTime() || renderedAt
   return (
     <PageShell>
       <PageHeader
@@ -144,7 +146,7 @@ export default function ParentBillingClient({
               ) : (
                 <div className="divide-y divide-slate-50">
                   {child.records.map((r) => {
-                    const isOverdue = r.status === "PENDING" && r.dueDate && new Date(r.dueDate) < new Date(currentTime)
+                    const isOverdue = r.status === "PENDING" && r.dueDate && Date.parse(r.dueDate) < currentTime
                     const displayStatus = isOverdue ? "OVERDUE" : r.status
                     const sc = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG.PENDING
                     return (

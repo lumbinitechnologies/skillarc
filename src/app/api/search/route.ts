@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const results: SearchResult[] = []
 
   // Admin / HOD / Program Head can search students and faculty
-  if ([ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === role)) {
+  if ([ROLES.INSTITUTION_ADMIN, ROLES.HOD, ROLES.PROGRAM_HEAD].some(allowedRole => allowedRole === role)) {
     const [studentsRes, facultyRes] = await Promise.all([
       supabase.from("users").select("id, name, email").eq("institution_id", iid).eq("role", ROLES.STUDENT).or(`name.ilike.${pattern},email.ilike.${pattern}`).limit(5),
       supabase.from("users").select("id, name, email").eq("institution_id", iid).in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD]).or(`name.ilike.${pattern},email.ilike.${pattern}`).limit(5),

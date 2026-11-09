@@ -329,7 +329,7 @@ export function DepartmentDetailClient({
   }
 
   const [loadingInputs, setLoadingInputs] = useState<readonly unknown[] | null>(null)
-  const nextLoadingInputs = [studentPage, studentLimit, activeTab, institutionId, department.id]
+  const nextLoadingInputs = [studentPage, studentLimit]
   if (loadingInputs === null || nextLoadingInputs.some((value, index) => !Object.is(value, loadingInputs[index]))) {
     setLoadingInputs(nextLoadingInputs)
     setIsLoading(true)

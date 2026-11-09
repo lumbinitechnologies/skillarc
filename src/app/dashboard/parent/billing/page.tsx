@@ -20,6 +20,7 @@ export default async function ParentBillingPage() {
         .order("created_at", { ascending: false })
     : { data: [] }
 
+  const renderedAt = Date.now()
   const raw = (plansRes.data ?? [])
 
   const childBilling = students.map((child) => {
@@ -42,7 +43,7 @@ export default async function ParentBillingPage() {
     const totalDue = records.reduce((a, r) => a + r.amount, 0)
     const totalPaid = records.filter((r) => r.status === "PAID").reduce((a, r) => a + r.amount, 0)
     const outstanding = totalDue - totalPaid
-    const overdue = records.filter((r) => r.status !== "PAID" && r.dueDate && new Date(r.dueDate) < new Date()).length
+    const overdue = records.filter((r) => r.status !== "PAID" && r.dueDate && Date.parse(r.dueDate) < renderedAt).length
 
     return { ...child, records, stats: { totalDue, totalPaid, outstanding, overdue } }
   })
@@ -51,6 +52,7 @@ export default async function ParentBillingPage() {
     <ParentBillingClient
       parentName={profile.name ?? "Parent"}
       students={childBilling}
+      renderedAt={renderedAt}
     />
   )
 }
