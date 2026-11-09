@@ -1,4 +1,5 @@
 import { getParentContext } from "@/lib/parent-context"
+import { getServerTime } from "@/lib/server-time"
 import ParentBillingClient from "./billing-client"
 
 export const dynamic = "force-dynamic"
@@ -20,7 +21,7 @@ export default async function ParentBillingPage() {
         .order("created_at", { ascending: false })
     : { data: [] }
 
-  const renderedAt = Date.now()
+  const renderedAt = (await getServerTime()).getTime()
   const raw = (plansRes.data ?? [])
 
   const childBilling = students.map((child) => {
