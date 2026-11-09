@@ -2,7 +2,7 @@
   "organizationId": "ssuwihnqhpwltrscmsmf",
   "region": "ap-southeast-1",
   "staging": {
-    "projectRef": null,
+    "projectRef": "kzbplqwcammuytqjwdge",
     "branchName": "staging",
     "persistent": true,
     "gitBranch": "staging",
