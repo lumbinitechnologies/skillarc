@@ -70,7 +70,7 @@ Never copy the broad gh CLI OAuth credential into CI. Plugins/CLI sessions canno
 
 Scope Supabase PATs to exact parent/branch operations, with API-key/Auth administration only where fixtures need them. Verify preview credentials cannot query/write production. If provider scoping cannot prevent it, do not enable the job; do not replace it with an organization-wide database-write credential. Do not expose candidate/production keys to PR workflows. Never embed infrastructure bypass secrets in APKs.
 
-Vercel: approve Pro, create custom `staging` environment in existing project, add `staging.theskillarc.com` there, set exact branch-specific public/server database keys and sandbox service settings. Maintain production aliases. Stable staging API must work with application auth and no infrastructure bypass header; protect transient previews separately. Validate pulled build config before build and deployment identity before smoke/promotion. Before and after the stable-host smoke, verify its Vercel alias belongs to the same project and exact candidate deployment; a healthy older staging deployment cannot satisfy this release check. No purchase/trial is automatic.
+Vercel development staging uses Preview on the existing project. Assign staging.theskillarc.com to the staging Preview branch and configure its Preview variables for the isolated Supabase branch and sandbox services. The workflow pulls variables for staging, builds and deploys a Preview after database readiness, and checks the deployment's project, team, branch, and revision before setting the staging alias. It verifies the alias before and after the app-auth smoke check. Keep Git-triggered deployments disabled so the reviewed workflow controls the order.
 
 ## Activation checklist and recovery
 
