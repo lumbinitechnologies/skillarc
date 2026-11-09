@@ -32,7 +32,7 @@
     "sjyotfnhdfmjkulyssps"
   ],
   "activation": {
-    "staging": false,
+    "staging": true,
     "previews": false,
     "production": false
   }
