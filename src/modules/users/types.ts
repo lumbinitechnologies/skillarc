@@ -21,9 +21,7 @@ export interface StudentProfile extends UserProfile {
   semester: number
 }
 
-export interface ParentProfile extends UserProfile {
-  // Parents don't have institution_id, section_id, or semester
-}
+export type ParentProfile = UserProfile
 
 export interface FacultyProfile extends UserProfile {
   department_id: string | null

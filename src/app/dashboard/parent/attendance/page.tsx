@@ -4,9 +4,9 @@ import ParentAttendanceClient from "./attendance-client"
 export const dynamic = "force-dynamic"
 
 export default async function ParentAttendancePage() {
-  const { profile, children, admin } = await getParentContext()
+  const { profile, children: students, admin } = await getParentContext()
 
-  const studentIds = children.map((c) => c.id)
+  const studentIds = students.map((c) => c.id)
 
   // Fetch attendance records with session details for all children
   const recordsData = studentIds.length
@@ -23,18 +23,19 @@ export default async function ParentAttendancePage() {
         .in("student_id", studentIds)
     : { data: [] }
 
-  const raw = (recordsData.data ?? []) as any[]
+  const raw = (recordsData.data ?? [])
 
   // Group records per child
-  const byStudent: Record<string, any[]> = {}
+  const byStudent = new Map<string, typeof raw[number][]>()
   for (const r of raw) {
     const sid = r.student_id
-    if (!byStudent[sid]) byStudent[sid] = []
-    byStudent[sid].push(r)
+    const list = byStudent.get(sid) ?? []
+    list.push(r)
+    byStudent.set(sid, list)
   }
 
-  const childAttendance = children.map((child) => {
-    const records = (byStudent[child.id] ?? []).map((r) => {
+  const childAttendance = students.map((child) => {
+    const records = (byStudent.get(child.id) ?? []).map((r) => {
       const ses = Array.isArray(r.attendance_sessions) ? r.attendance_sessions[0] : r.attendance_sessions
       const sub = Array.isArray(ses?.subjects) ? ses.subjects[0] : ses?.subjects
       const fac = Array.isArray(ses?.users) ? ses.users[0] : ses?.users
@@ -79,7 +80,7 @@ export default async function ParentAttendancePage() {
   return (
     <ParentAttendanceClient
       parentName={profile.name ?? "Parent"}
-      children={childAttendance}
+      students={childAttendance}
     />
   )
 }

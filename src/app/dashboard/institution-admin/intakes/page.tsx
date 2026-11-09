@@ -40,7 +40,7 @@ export default function IntakesPage() {
 
       if (intakesData && intakesData.length > 0) {
         // Count students enrolled in each intake
-        const formatted = await Promise.all(intakesData.map(async (intake: any) => {
+        const formatted = await Promise.all(intakesData.map(async (intake) => {
           const { count } = await supabase
             .from("enrolments")
             .select("id", { count: "exact", head: true })

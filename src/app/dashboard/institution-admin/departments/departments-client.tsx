@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState } from "react"
 import Link from "next/link"
 import { Building2, Plus, Search, Trash2, Upload } from "lucide-react"
@@ -98,9 +100,9 @@ export function DepartmentsClientPage({
         console.error("Failed to create department:", data.error)
         alert(`Error creating department: ${data.error || "Failed to create"}`)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Request error:", err)
-      alert(`Request failed: ${err.message || "Unknown error"}`)
+      alert(`Request failed: ${readErrorMessage(err) || "Unknown error"}`)
     }
   }
 
@@ -126,9 +128,9 @@ export function DepartmentsClientPage({
       } else {
         alert(`Error deleting department: ${data.error || "Failed to delete"}`)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Delete error:", err)
-      alert(`Request failed: ${err.message || "Unknown error"}`)
+      alert(`Request failed: ${readErrorMessage(err) || "Unknown error"}`)
     } finally {
       setIsDeleting(false)
     }

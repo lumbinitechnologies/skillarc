@@ -135,7 +135,7 @@ export default function Ecosystem() {
               Disconnected tools create busywork.
             </h3>
             <p className="text-xs font-mono text-[#EFEAD8]/70 leading-relaxed uppercase font-black">
-              // SEPARATE SYSTEMS, MANUAL UPDATES, AND DUPLICATE RECORDS MAKE IT HARDER TO SUPPORT STUDENTS.
+              {"//"} SEPARATE SYSTEMS, MANUAL UPDATES, AND DUPLICATE RECORDS MAKE IT HARDER TO SUPPORT STUDENTS.
             </p>
 
             <div className="space-y-3 pt-4">
@@ -174,7 +174,7 @@ export default function Ecosystem() {
 
               {/* Terminal Code Preview */}
               <div className="font-mono text-xs space-y-3 text-[#EFEAD8]/90 bg-[#0B132B] p-5 rounded-xl border border-[#EFEAD8]/10 font-black">
-                <p className="text-[#38BDF8]">// Connecting your university structure...</p>
+                <p className="text-[#38BDF8]">{"//"} Connecting your university structure...</p>
                 <p className="text-[#00FF66]">✓ Shared records ready for all teams</p>
                 <p className="text-[#EFEAD8]/70">→ Loading timetables across 14 departments...</p>
                 <p className="text-[#FF5500]">⚡ No scheduling conflicts found</p>
@@ -243,7 +243,7 @@ export default function Ecosystem() {
                 <div className="grid sm:grid-cols-3 gap-4 pt-4">
                   {pillars[activePillar].features.map((feat, i) => (
                     <div key={i} className="p-4 bg-[#EFEAD8]/5 border border-[#EFEAD8]/10 rounded-xl font-mono text-xs">
-                      <span className="text-[#FF5500] block mb-2 font-black">// 0{i + 1}</span>
+                      <span className="text-[#FF5500] block mb-2 font-black">{"//"} 0{i + 1}</span>
                       <p className="text-[#EFEAD8]/90 font-black">{feat}</p>
                     </div>
                   ))}

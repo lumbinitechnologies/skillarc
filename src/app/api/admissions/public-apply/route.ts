@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest) {
       intakes: intakes ?? [],
       fees: fees ?? [],
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Public apply meta error:", error)
     return NextResponse.json({ error: "Failed to load admission parameters" }, { status: 500 })
   }
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       intake = fallbackIntake || {
-        id: null as any,
+        id: null,
         name: "Standard Academic Intake",
         start_date: new Date().toISOString().split("T")[0],
         end_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
     const applicantVisaExpiry = visa_expiry || null
     const applicantEnglishEvidence = body.english_evidence || english_evidence_type || null
 
-    const basePayload: any = {
+    const basePayload = {
       institution_id: finalInstId,
       program_id,
       intake_id: finalIntakeId,
@@ -224,9 +225,11 @@ export async function POST(request: NextRequest) {
       status: "APPLIED",
     }
 
-    const formattedDocs = (documents || [])
-      .filter((d: any) => d.fileName || d.file_name || d.name)
-      .map((d: any, idx: number) => ({
+    type AdmissionDocumentInput = { name?: string; type?: string; document_type?: string; fileName?: string; file_name?: string; fileData?: string; file_url?: string; url?: string; fileSize?: string; file_size?: string }
+    const documentInputs = Array.isArray(documents) ? (documents as unknown[]).filter((value): value is AdmissionDocumentInput => value !== null && typeof value === "object") : []
+    const formattedDocs = documentInputs
+      .filter((d) => d.fileName || d.file_name || d.name)
+      .map((d, idx) => ({
         id: `doc-${idx}-${Date.now()}`,
         name: d.name || "Supporting Document",
         document_type: d.document_type || d.type || "ID_DOCUMENT",
@@ -236,7 +239,7 @@ export async function POST(request: NextRequest) {
         uploaded_at: new Date().toISOString(),
       }))
 
-    const fullPayload: any = {
+    const fullPayload = {
       ...basePayload,
       reference_number: referenceCode,
       date_of_birth: applicantDob,
@@ -269,7 +272,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try inserting full payload with all columns
-    let appData: any = null
+    let appData = null
     const { data: insertedFull, error: fullError } = await admin
       .from("admissions_applications")
       .insert(fullPayload)
@@ -307,7 +310,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Store uploaded documents into admission_documents
     if (formattedDocs.length > 0) {
-      const docRows = formattedDocs.map((doc: any) => ({
+      const docRows = formattedDocs.map((doc) => ({
         application_id: appData.id,
         document_name: `${doc.name} (${doc.file_name})`,
         file_url: doc.file_url,
@@ -361,10 +364,10 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     )
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Public apply submit error:", err)
     return NextResponse.json(
-      { error: err.message || "Failed to submit application. Please verify your details." },
+      { error: readErrorMessage(err) || "Failed to submit application. Please verify your details." },
       { status: 500 }
     )
   }

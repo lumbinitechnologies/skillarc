@@ -198,7 +198,11 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
   const [selectedSemester, setSelectedSemester] = useState("")
   const [selectedSection, setSelectedSection] = useState("")
 
-  useEffect(() => {
+  const [previousSource0, setPreviousSource0] = useState<readonly unknown[] | null>(null)
+  const nextSource0 = [searchParams, programs]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     const queryDepartment = searchParams.get("department") ?? ""
     const queryProgram = searchParams.get("program") ?? ""
     const querySemester = searchParams.get("semester") ?? ""
@@ -214,7 +218,8 @@ export function TimetableSelector({ departments, programs, sections }: Props) {
     setSelectedProgram(queryProgram)
     setSelectedSemester(querySemester)
     setSelectedSection(querySection)
-  }, [searchParams, programs])
+  })()
+  }
 
   const availablePrograms = useMemo(() => {
     if (!selectedDepartment) return programs

@@ -24,7 +24,7 @@ const TOOLTIP_STYLE = {
 
 // ── Area Chart ───────────────────────────────────────────────────────────────
 export function ApexAreaChart({ data, dataKey, xKey = "year", color = "#8b5cf6" }: {
-  data: Record<string, any>[];
+  data: object[];
   dataKey: string;
   xKey?: string;
   color?: string;
@@ -52,7 +52,7 @@ export function ApexAreaChart({ data, dataKey, xKey = "year", color = "#8b5cf6" 
 
 // ── Bar Chart ────────────────────────────────────────────────────────────────
 export function ApexBarChart({ data, dataKey, xKey = "name", color = "#8b5cf6", horizontal = false }: {
-  data: Record<string, any>[];
+  data: object[];
   dataKey: string;
   xKey?: string;
   color?: string;
@@ -88,7 +88,7 @@ export function ApexBarChart({ data, dataKey, xKey = "name", color = "#8b5cf6", 
 
 // ── Multi-Line Chart ──────────────────────────────────────────────────────────
 export function ApexLineChart({ data, lines, xKey = "year" }: {
-  data: Record<string, any>[];
+  data: object[];
   lines: { key: string; label: string; color?: string }[];
   xKey?: string;
 }) {
@@ -121,7 +121,7 @@ export function ApexLineChart({ data, lines, xKey = "year" }: {
 
 // ── Pie/Donut Chart ──────────────────────────────────────────────────────────
 export function ApexPieChart({ data, nameKey = "name", valueKey = "value" }: {
-  data: Record<string, any>[];
+  data: object[];
   nameKey?: string;
   valueKey?: string;
 }) {

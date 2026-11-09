@@ -1,11 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, CreditCard, ShieldCheck, Zap, Building2, Download, ArrowRight, Loader2, X, Printer } from "lucide-react"
+import { AlertCircle, CheckCircle2, ShieldCheck, Loader2, Printer } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import InvoicePrintModal from "@/modules/billing/components/InvoicePrintModal"
 import { useDashboardSession } from "@/components/dashboard-session-provider"
+
+type InvoicePrintData = Omit<React.ComponentProps<typeof InvoicePrintModal>, "isOpen" | "onClose">
 
 type LedgerInstallment = {
   id: string
@@ -25,23 +27,10 @@ export default function StudentBillingPage() {
   const session = useDashboardSession()
   const [ledger, setLedger] = useState<LedgerState>({ total: 0, paid: 0, installments: [] })
   const [loading, setLoading] = useState(true)
-  const [selectedInvoice, setSelectedInvoice] = useState<LedgerInstallment | null>(null)
   const [studentInfo, setStudentInfo] = useState({ name: "Student Account", email: "", id: "" })
-  const [printInvoiceData, setPrintInvoiceData] = useState<any | null>(null)
-  
-  // Payment Modal State
-  const [paymentMethod, setPaymentMethod] = useState<"upi" | "card" | "netbanking">("upi")
-  const [upiId, setUpiId] = useState("")
-  const [cardNumber, setCardNumber] = useState("")
-  const [cardExpiry, setCardExpiry] = useState("")
-  const [cardCvv, setCardCvv] = useState("")
-  const [cardName, setCardName] = useState("")
-  const [selectedBank, setSelectedBank] = useState("HDFC Bank")
+  const [printInvoiceData, setPrintInvoiceData] = useState<InvoicePrintData | null>(null)
 
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentSuccess, setPaymentSuccess] = useState<{ txnId: string; amount: number } | null>(null)
-
-  // Fetch or Auto-Provision active student fees from DB
+  // Load only the billing schedule assigned to the authenticated student.
   const loadFeesSchedule = useCallback(async () => {
     try {
       setLoading(true)
@@ -67,47 +56,7 @@ export default function StudentBillingPage() {
         console.error("Failed to load student billing plans:", plansErr.message)
       }
 
-      let activePlan = plansRes && plansRes.length > 0 ? plansRes[0] : null
-
-      // If no plan exists yet for student, auto-provision one dynamically for their institution
-      if (!activePlan && session.institution_id) {
-        // Check if student has an offer letter with course_fees
-        const { data: appData } = await supabase
-          .from("admissions_applications")
-          .select("offer_letters(course_fees)")
-          .eq("email", session.email || "")
-          .maybeSingle()
-
-        const offerFee = appData?.offer_letters?.[0]?.course_fees ? Number(appData.offer_letters[0].course_fees) : 12500
-
-        const { data: newPlan } = await supabase
-          .from("payment_plans")
-          .insert({
-            student_id: session.id,
-            institution_id: session.institution_id,
-            total_amount: offerFee,
-          })
-          .select()
-          .single()
-
-        if (newPlan) {
-          activePlan = newPlan
-          const today = new Date()
-          const inst1 = Math.round(offerFee * 0.4)
-          const inst2 = Math.round(offerFee * 0.3)
-          const inst3 = offerFee - inst1 - inst2
-
-          const due1 = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 15).toISOString().split("T")[0]
-          const due2 = new Date(today.getFullYear(), today.getMonth() + 2, 15).toISOString().split("T")[0]
-          const due3 = new Date(today.getFullYear(), today.getMonth() + 4, 15).toISOString().split("T")[0]
-
-          await supabase.from("invoices").insert([
-            { payment_plan_id: newPlan.id, amount_due: inst1, due_date: due1, status: "UNPAID" },
-            { payment_plan_id: newPlan.id, amount_due: inst2, due_date: due2, status: "UNPAID" },
-            { payment_plan_id: newPlan.id, amount_due: inst3, due_date: due3, status: "UNPAID" },
-          ])
-        }
-      }
+      const activePlan = plansRes && plansRes.length > 0 ? plansRes[0] : null
 
       if (!activePlan) {
         setLedger({ total: 0, paid: 0, installments: [] })
@@ -121,7 +70,7 @@ export default function StudentBillingPage() {
         .eq("payment_plan_id", activePlan.id)
         .order("due_date", { ascending: true })
 
-      const invoices = (invoicesRes || []).sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+      const invoices = (invoicesRes || []).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
 
       const paidAmt = invoices
         .filter((inv: { status: string; amount_due: number | string }) => inv.status === "PAID")
@@ -149,57 +98,6 @@ export default function StudentBillingPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadFeesSchedule()
   }, [loadFeesSchedule])
-
-  // Handle Online Fee Payment Submission
-  const handleProcessPayment = async () => {
-    if (!selectedInvoice) return
-    setIsProcessing(true)
-
-    try {
-      // Simulate gateway processing delay for realism
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      const refNo = `TXN_${Math.floor(100000000 + Math.random() * 900000000)}`
-      const methodLabel = paymentMethod === "upi" ? `UPI (${upiId || "Instant"})` : paymentMethod === "card" ? "Credit/Debit Card" : `NetBanking (${selectedBank})`
-
-      // 1. Insert transaction into payments table
-      await supabase.from("payments").insert({
-        invoice_id: selectedInvoice.id,
-        amount_paid: selectedInvoice.amount,
-        payment_method: methodLabel,
-        reference_no: refNo,
-      })
-
-      // 2. Update invoice status to PAID
-      await supabase
-        .from("invoices")
-        .update({ status: "PAID" })
-        .eq("id", selectedInvoice.id)
-
-      setPaymentSuccess({
-        txnId: refNo,
-        amount: selectedInvoice.amount,
-      })
-
-      // Refresh ledger
-      await loadFeesSchedule()
-    } catch (err) {
-      console.error("Payment processing error:", err)
-      alert("Payment processing failed. Please try again.")
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const closeModal = () => {
-    setSelectedInvoice(null)
-    setPaymentSuccess(null)
-    setUpiId("")
-    setCardNumber("")
-    setCardExpiry("")
-    setCardCvv("")
-    setCardName("")
-  }
 
   return (
     <div className="space-y-6 p-6 font-sans max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -289,10 +187,11 @@ export default function StudentBillingPage() {
                           </div>
                         ) : (
                           <Button
-                            onClick={() => setSelectedInvoice(inv)}
-                            className="rounded-xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:shadow-md hover:opacity-95 active:scale-95 transition"
+                            disabled
+                            title="Online payment is not available yet"
+                            className="rounded-xl px-3.5 py-1.5 text-xs font-bold"
                           >
-                            Pay Now <ArrowRight size={12} className="ml-1" />
+                            Payment unavailable
                           </Button>
                         )}
                       </td>
@@ -308,14 +207,14 @@ export default function StudentBillingPage() {
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6 h-fit">
           <div className="space-y-1">
             <h3 className="font-bold text-slate-800 text-sm">Payment Security</h3>
-            <p className="text-[10px] text-slate-400">Instant Online Settlements</p>
+            <p className="text-[10px] text-slate-400">Payment status and receipts</p>
           </div>
 
           <div className="p-4 bg-indigo-50/40 rounded-2xl border border-indigo-100/40 space-y-3">
             <div className="flex items-start gap-2.5">
-              <Zap size={16} className="text-[#6C63FF] shrink-0 mt-0.5" />
+              <AlertCircle size={16} className="text-[#6C63FF] shrink-0 mt-0.5" />
               <div className="text-[11px] text-indigo-950 leading-relaxed font-medium">
-                Installments paid online update your tuition ledger balance instantly. Official receipts are issued immediately upon transaction confirmation.
+                Online payment processing is not available yet. Your institution’s billing office can confirm payment options and update your ledger.
               </div>
             </div>
           </div>
@@ -324,247 +223,13 @@ export default function StudentBillingPage() {
             <div className="flex items-start gap-2.5">
               <AlertCircle size={16} className="text-slate-400 shrink-0 mt-0.5" />
               <div className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                Prefer offline payments? You can also present a direct bank transfer reference to the registrar office for manual verification.
+                Contact the registrar office if you need to check a due date, payment status, or receipt.
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* SkillArc Online Fee Payment Modal (Glass 2.0 aesthetics) */}
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white/95 border border-slate-200/80 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden backdrop-blur-md">
-            
-            {/* Header */}
-            <div className="p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between relative">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">SkillArc Fee Gateway</span>
-                <h2 className="text-xl font-extrabold mt-0.5">Settle Installment</h2>
-              </div>
-              <button
-                onClick={closeModal}
-                disabled={isProcessing}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/20 transition"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {paymentSuccess ? (
-              /* Success State */
-              <div className="p-8 text-center space-y-6 animate-in zoom-in-95 duration-200">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                  <CheckCircle2 size={36} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-slate-900">Payment Successful!</h3>
-                  <p className="text-xs text-slate-500 mt-1">Your tuition installment has been recorded in the registry ledger.</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-left space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Transaction ID</span>
-                    <span className="font-bold font-['Space_Grotesk'] text-slate-800">{paymentSuccess.txnId}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Amount Paid</span>
-                    <span className="font-extrabold text-emerald-600 font-['Space_Grotesk']">₹{paymentSuccess.amount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Date & Time</span>
-                    <span className="font-medium text-slate-700">{new Date().toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setPrintInvoiceData({
-                      invoiceId: selectedInvoice?.id || "REC",
-                      amount: paymentSuccess.amount,
-                      dueDate: selectedInvoice?.due || "",
-                      installmentNumber: ledger.installments.findIndex(i => i.id === selectedInvoice?.id) + 1 || 1,
-                      studentName: studentInfo.name,
-                      studentEmail: studentInfo.email,
-                      studentId: studentInfo.id,
-                      remainingBalance: ledger.total - ledger.paid,
-                      txnId: paymentSuccess.txnId,
-                      paymentMethod: paymentMethod === "upi" ? `UPI (${upiId || "Instant"})` : paymentMethod === "card" ? "Credit/Debit Card" : `NetBanking (${selectedBank})`,
-                    })}
-                    className="flex-1 rounded-2xl border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50"
-                  >
-                    <Download size={14} className="mr-1.5" /> Receipt PDF
-                  </Button>
-                  <Button
-                    onClick={closeModal}
-                    className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white"
-                  >
-                    Done
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              /* Payment Form State */
-              <div className="p-6 space-y-6">
-                
-                {/* Summary Banner */}
-                <div className="p-4 rounded-2xl bg-indigo-50/60 border border-indigo-100 flex items-center justify-between">
-                  <div>
-                    <div className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">Installment Due</div>
-                    <div className="text-sm font-semibold text-indigo-950 mt-0.5">Term Due Date: {selectedInvoice.due}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-black font-['Space_Grotesk'] text-[#6C63FF]">₹{selectedInvoice.amount.toLocaleString()}</div>
-                  </div>
-                </div>
-
-                {/* Payment Method Tabs */}
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-slate-700 block">Select Payment Method</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("upi")}
-                      className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition ${
-                        paymentMethod === "upi"
-                          ? "bg-indigo-50/80 border-[#6C63FF] text-[#6C63FF]"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <Zap size={18} /> UPI / GPay
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("card")}
-                      className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition ${
-                        paymentMethod === "card"
-                          ? "bg-indigo-50/80 border-[#6C63FF] text-[#6C63FF]"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <CreditCard size={18} /> Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("netbanking")}
-                      className={`p-3 rounded-2xl border text-xs font-bold flex flex-col items-center gap-1.5 transition ${
-                        paymentMethod === "netbanking"
-                          ? "bg-indigo-50/80 border-[#6C63FF] text-[#6C63FF]"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      <Building2 size={18} /> NetBanking
-                    </button>
-                  </div>
-                </div>
-
-                {/* Tab Specific Inputs */}
-                {paymentMethod === "upi" && (
-                  <div className="space-y-3 animate-in fade-in duration-200">
-                    <label className="text-xs font-semibold text-slate-700 block">VPA / UPI ID</label>
-                    <input
-                      type="text"
-                      value={upiId}
-                      onChange={(e) => setUpiId(e.target.value)}
-                      placeholder="e.g. student@okaxis or 9876543210@paytm"
-                      className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition"
-                    />
-                    <div className="flex gap-2 text-[10px] text-slate-400 font-medium pt-1">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded">GPay</span>
-                      <span className="bg-slate-100 px-2 py-0.5 rounded">PhonePe</span>
-                      <span className="bg-slate-100 px-2 py-0.5 rounded">Paytm</span>
-                      <span className="bg-slate-100 px-2 py-0.5 rounded">BHIM</span>
-                    </div>
-                  </div>
-                )}
-
-                {paymentMethod === "card" && (
-                  <div className="space-y-3 animate-in fade-in duration-200">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">Card Number</label>
-                      <input
-                        type="text"
-                        value={cardNumber}
-                        onChange={(e) => setCardNumber(e.target.value)}
-                        placeholder="4532 •••• •••• 8921"
-                        maxLength={19}
-                        className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition font-mono"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">Expiry (MM/YY)</label>
-                        <input
-                          type="text"
-                          value={cardExpiry}
-                          onChange={(e) => setCardExpiry(e.target.value)}
-                          placeholder="08/28"
-                          maxLength={5}
-                          className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">CVV</label>
-                        <input
-                          type="password"
-                          value={cardCvv}
-                          onChange={(e) => setCardCvv(e.target.value)}
-                          placeholder="•••"
-                          maxLength={4}
-                          className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition font-mono"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">Name on Card</label>
-                      <input
-                        type="text"
-                        value={cardName}
-                        onChange={(e) => setCardName(e.target.value)}
-                        placeholder="As printed on card"
-                        className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {paymentMethod === "netbanking" && (
-                  <div className="space-y-3 animate-in fade-in duration-200">
-                    <label className="text-xs font-semibold text-slate-700 block">Select Bank</label>
-                    <select
-                      value={selectedBank}
-                      onChange={(e) => setSelectedBank(e.target.value)}
-                      className="w-full text-xs p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-[#6C63FF] focus:bg-white transition font-medium"
-                    >
-                      <option value="HDFC Bank">HDFC Bank</option>
-                      <option value="ICICI Bank">ICICI Bank</option>
-                      <option value="State Bank of India">State Bank of India (SBI)</option>
-                      <option value="Axis Bank">Axis Bank</option>
-                      <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Submit Action Button */}
-                <Button
-                  onClick={handleProcessPayment}
-                  disabled={isProcessing}
-                  className="w-full rounded-2xl bg-gradient-to-r from-[#6C63FF] to-[#8B5CF6] py-4 text-sm font-bold text-white shadow-md hover:shadow-lg transition active:scale-95 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing Payment...
-                    </>
-                  ) : (
-                    `Pay ₹${selectedInvoice.amount.toLocaleString()} Now`
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       {printInvoiceData && (
         <InvoicePrintModal
           isOpen={!!printInvoiceData}

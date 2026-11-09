@@ -193,7 +193,7 @@ export default function TimetableDemo() {
               </div>
               <div>
                 <p className="text-sm font-bold text-[#ECDFCB] font-sans">Conflict Checking Active</p>
-                <p className="text-xs text-[#EAAD62] font-mono">// 0 SCHEDULE CLASHES DETECTED</p>
+                <p className="text-xs text-[#EAAD62] font-mono">{"//"} 0 SCHEDULE CLASHES DETECTED</p>
               </div>
             </div>
 
@@ -220,7 +220,7 @@ export default function TimetableDemo() {
                 <Calendar size={14} className="text-[#E57D37]" />
                 <span>TIMETABLE MATRIX PREVIEW</span>
               </span>
-              <span className="text-[10px] text-[#E57D37]">// LIVE SCHEDULE VIEW</span>
+              <span className="text-[10px] text-[#E57D37]">{"//"} LIVE SCHEDULE VIEW</span>
             </div>
 
             <div className="bg-[#3A6DAF]/10 border border-[#3A6DAF]/30 rounded-3xl p-6 shadow-2xl overflow-x-auto backdrop-blur-2xl">
@@ -292,7 +292,7 @@ export default function TimetableDemo() {
             </div>
 
             <p className="text-xs text-[#94BAC4] font-mono text-center pt-2 font-bold">
-              // PLAN. CHECK. RESOLVE. PUBLISH.
+              {"//"} PLAN. CHECK. RESOLVE. PUBLISH.
             </p>
           </div>
 

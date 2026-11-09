@@ -25,42 +25,7 @@ export default function AiSection() {
     { sender: "arca" as const, text: "Dr. Roy teaches Design & Analysis of Algorithms (CS-302)." },
   ]
 
-  useEffect(() => {
-    const trigger = ScrollTrigger.create({
-      trigger: containerRef.current,
-      start: "top 70%",
-      onEnter: () => {
-        if (!hasStarted) {
-          setHasStarted(true)
-          runSimulation()
-        }
-      },
-    })
-
-    return () => trigger.kill()
-  }, [hasStarted])
-
-  const runSimulation = async () => {
-    for (let i = 0; i < conversation.length; i++) {
-      const step = conversation[i]
-
-      if (step.sender === "user") {
-        setMessages((prev) => [...prev, { sender: "user", text: "", isTyping: true }])
-        await typeMessage(step.text, i)
-      } else {
-        setMessages((prev) => [...prev, { sender: "arca", text: "...", isTyping: true }])
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        setMessages((prev) => {
-          const next = [...prev]
-          next[i] = { sender: "arca", text: step.text }
-          return next
-        })
-        await new Promise((resolve) => setTimeout(resolve, 800))
-      }
-    }
-  }
-
-  const typeMessage = (fullText: string, index: number): Promise<void> => {
+  function typeMessage(fullText: string, index: number): Promise<void> {
     return new Promise((resolve) => {
       let currentText = ""
       let charIdx = 0
@@ -85,6 +50,45 @@ export default function AiSection() {
       }, 55)
     })
   }
+
+  async function runSimulation() {
+    for (let i = 0; i < conversation.length; i++) {
+      const step = conversation[i]
+
+      if (step.sender === "user") {
+        setMessages((prev) => [...prev, { sender: "user", text: "", isTyping: true }])
+        await typeMessage(step.text, i)
+      } else {
+        setMessages((prev) => [...prev, { sender: "arca", text: "...", isTyping: true }])
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        setMessages((prev) => {
+          const next = [...prev]
+          next[i] = { sender: "arca", text: step.text }
+          return next
+        })
+        await new Promise((resolve) => setTimeout(resolve, 800))
+      }
+    }
+  }
+
+  useEffect(() => {
+    const trigger = ScrollTrigger.create({
+      trigger: containerRef.current,
+      start: "top 70%",
+      onEnter: () => {
+        if (!hasStarted) {
+          setHasStarted(true)
+          runSimulation()
+        }
+      },
+    })
+
+    return () => trigger.kill()
+  }, [hasStarted])
+
+
+
+
 
   return (
     <section

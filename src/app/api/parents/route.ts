@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage, errorStatus } from "@/lib/error-message"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { NextRequest, NextResponse } from "next/server"
 import { ROLES } from "@/constants/roles"
@@ -56,8 +57,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Try creating the auth user
-    let authData: any = null
-    let authError: any = null
+    let authData = null
+    let authError = null
 
     try {
       const createRes = await adminClient.auth.admin.createUser({
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       })
       authData = createRes.data
       authError = createRes.error
-    } catch (err: any) {
+    } catch (err: unknown) {
       authError = err
     }
 
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
       // If auth user already exists in auth.users, resolve their ID
-      if (authError.message?.toLowerCase().includes("already") || authError.status === 422) {
+      if (readErrorMessage(authError).toLowerCase().includes("already") || errorStatus(authError) === 422) {
         const { data: userList } = await adminClient.auth.admin.listUsers()
         const existingAuthUser = userList?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
         if (existingAuthUser) {
@@ -137,7 +138,7 @@ export async function GET(request: NextRequest) {
         .select("id")
         .eq("department_id", departmentId)
       
-      const programIds = (deptPrograms ?? []).map((p: any) => p.id)
+      const programIds = (deptPrograms ?? []).map((p) => p.id)
       
       if (programIds.length > 0) {
         const { data: deptStudents } = await adminClient
@@ -145,7 +146,7 @@ export async function GET(request: NextRequest) {
           .select("id")
           .in("program_id", programIds)
         
-        const studentIds = (deptStudents ?? []).map((s: any) => s.id)
+        const studentIds = (deptStudents ?? []).map((s) => s.id)
         
         if (studentIds.length > 0) {
           const { data: relations } = await adminClient
@@ -153,7 +154,7 @@ export async function GET(request: NextRequest) {
             .select("parent_id")
             .in("student_id", studentIds)
           
-          targetParentIds = Array.from(new Set((relations ?? []).map((r: any) => r.parent_id)))
+          targetParentIds = Array.from(new Set((relations ?? []).map((r) => r.parent_id)))
         } else {
           targetParentIds = []
         }
@@ -179,7 +180,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([])
     }
 
-    const parentIds = parents.map((p: any) => p.id)
+    const parentIds = parents.map((p) => p.id)
     const adminClient = createSupabaseAdminClient()
 
     // Fetch relations
@@ -196,9 +197,9 @@ export async function GET(request: NextRequest) {
     if (relError) throw relError
 
     // Fetch all student details
-    const studentIds = Array.from(new Set((relations ?? []).map((r: any) => r.student_id)))
-    let studentUsers: any[] = []
-    let studentRecords: any[] = []
+    const studentIds = Array.from(new Set((relations ?? []).map((r) => r.student_id)))
+    let studentUsers: Array<{ id: string; name: string | null; email: string | null }> = []
+    let studentRecords: Array<{ id: string; registration_number: string | null }> = []
 
     if (studentIds.length > 0) {
       const [usersRes, studentsRes] = await Promise.all([
@@ -209,11 +210,11 @@ export async function GET(request: NextRequest) {
       studentRecords = studentsRes.data || []
     }
 
-    const parentList = parents.map((parent: any) => {
-      const parentRelations = (relations ?? []).filter((r: any) => r.parent_id === parent.id)
-      const linkedStudents = parentRelations.map((r: any) => {
-        const userDet = studentUsers.find((u: any) => u.id === r.student_id)
-        const recDet = studentRecords.find((s: any) => s.id === r.student_id)
+    const parentList = parents.map((parent) => {
+      const parentRelations = (relations ?? []).filter((r) => r.parent_id === parent.id)
+      const linkedStudents = parentRelations.map((r) => {
+        const userDet = studentUsers.find((u) => u.id === r.student_id)
+        const recDet = studentRecords.find((s) => s.id === r.student_id)
         return {
           id: r.student_id,
           name: userDet?.name || "Unknown",

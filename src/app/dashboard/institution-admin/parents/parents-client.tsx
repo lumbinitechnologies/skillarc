@@ -10,8 +10,10 @@ import { PageShell, PageHeader, SearchBar, FilterSelect, itemVariants } from "@/
 import { motion } from "framer-motion"
 import type { Parent } from "@/modules/parents"
 
+type RegistryParent = Parent & { _departmentIds?: string[]; _programIds?: string[]; _sectionIds?: string[]; _childCount?: number }
+
 interface ParentsClientPageProps {
-  initialParents: any[]
+  initialParents: RegistryParent[]
   institutionId: string
   departments: Array<{ id: string; name: string }>
   programs: Array<{ id: string; name: string; department_id: string }>
@@ -19,7 +21,7 @@ interface ParentsClientPageProps {
 }
 
 export function ParentsClientPage({ initialParents, institutionId, departments, programs, sections }: ParentsClientPageProps) {
-  const [parents, setParents] = useState<any[]>(initialParents)
+  const [parents, setParents] = useState<RegistryParent[]>(initialParents)
   const [search, setSearch] = useState("")
   const [deptFilter, setDeptFilter] = useState("")
   const [progFilter, setProgFilter] = useState("")

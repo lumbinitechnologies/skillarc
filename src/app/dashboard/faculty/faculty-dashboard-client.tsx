@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import Link from "next/link"
 import { motion } from "framer-motion"
 import {
@@ -35,8 +38,9 @@ const PERIOD_LABELS: Record<number, string> = {
   5: "2:00 – 3:00 PM",
 }
 
-function getGreeting() {
-  const hr = new Date().getHours()
+function getGreeting(now: number) {
+  if (!now) return "Welcome"
+  const hr = new Date(now).getHours()
   if (hr < 12) return "Good Morning"
   if (hr < 17) return "Good Afternoon"
   return "Good Evening"
@@ -57,8 +61,9 @@ export default function FacultyDashboardClient({
   studentCount: number
   timetableSlots: TimetableSlot[]
 }) {
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long" })
-  const greeting = getGreeting()
+  const now = useCurrentTime()
+  const today = now ? new Date(now).toLocaleDateString("en-US", { weekday: "long" }) : ""
+  const greeting = getGreeting(now)
   const t = useTerms()
 
   const todaySchedule = timetableSlots
@@ -194,7 +199,7 @@ export default function FacultyDashboardClient({
           whileHover={{ y: -6 }}
           className="group bg-[#FFFFFF] rounded-3xl border border-[#3A6DAF]/20 p-5 shadow-[0_8px_24px_rgba(20,35,75,0.08)] transition-all duration-300 flex flex-col justify-between min-h-[140px]">
           <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold text-[#94BAC4] uppercase tracking-wider">Today's Snapshot</span>
+            <span className="text-[10px] font-bold text-[#94BAC4] uppercase tracking-wider">Today&apos;s Snapshot</span>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-[#FFB020] flex items-center justify-center">
               <Compass className="w-5 h-5" />
             </div>
@@ -217,7 +222,7 @@ export default function FacultyDashboardClient({
           <div className="flex items-center justify-between gap-4 pb-2">
             <div>
               <span className="text-[9px] font-bold uppercase tracking-widest text-[#94BAC4]">Classroom Schedule</span>
-              <h2 className="text-xl font-bold text-[#14234B] mt-0.5">Today's Teaching Plan</h2>
+              <h2 className="text-xl font-bold text-[#14234B] mt-0.5">Today&apos;s Teaching Plan</h2>
             </div>
             <span className="bg-[#E57D37]/10 text-[#E57D37] text-[10px] font-bold tracking-widest uppercase px-2.5 py-1 rounded-full animate-pulse">
               Live Feed
@@ -329,7 +334,7 @@ export default function FacultyDashboardClient({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Subject Roster</span>
-            <h2 className="text-xl font-bold text-slate-900 mt-0.5">Courses You're Teaching</h2>
+            <h2 className="text-xl font-bold text-slate-900 mt-0.5">Courses You&apos;re Teaching</h2>
           </div>
           <span className="bg-gray-100 border border-gray-200/30 text-gray-600 text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full font-['Space_Grotesk'] self-start sm:self-center">
             {subjects.length} Subjects Assigned

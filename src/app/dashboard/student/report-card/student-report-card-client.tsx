@@ -1,5 +1,8 @@
 "use client"
 
+import type { TableRow } from "@/lib/database-row"
+
+
 import React, { useState } from "react"
 import Link from "next/link"
 import {
@@ -39,10 +42,10 @@ interface StudentReportCardClientProps {
     name: string
     code: string
   }>
-  assignments: Array<any>
-  submissions: Array<any>
-  gradeColumns?: Array<any>
-  gradeEntries?: Array<any>
+  assignments: Array<Pick<TableRow<"assignments">, "id" | "subject_id" | "title" | "max_score" | "type">>
+  submissions: Array<Pick<TableRow<"submissions">, "assignment_id" | "grade" | "status" | "feedback" | "submitted_at">>
+  gradeColumns?: Array<Pick<TableRow<"grade_columns">, "id" | "subject_id" | "title" | "type" | "max_score" | "display_order">>
+  gradeEntries?: Array<Pick<TableRow<"grade_entries">, "column_id" | "score" | "feedback" | "graded_at">>
 }
 
 const CLASS_COLORS = ["#4f46e5", "#0d9488", "#e11d48", "#d97706", "#7c3aed"]
@@ -56,12 +59,12 @@ function getGrade(pct: number) {
   return { label: "F", color: "text-red-600 bg-red-50 border-red-200" }
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: readonly { dataKey?: string | number; name?: string; value?: string | number }[]; label?: React.ReactNode }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-3 text-left">
         <p className="text-xs font-semibold text-slate-500 mb-1">{label}</p>
-        {payload.map((p: any) => (
+        {payload.map((p) => (
           <p key={p.dataKey} className="text-sm font-bold text-slate-800">
             {p.name}: {p.value}{p.name === "Performance" ? "%" : " pts"}
           </p>
@@ -91,9 +94,9 @@ export function StudentReportCardClient({
       s.grade !== null
     )
 
-    const subjectGradeColumns = (gradeColumns || []).filter((column: any) => column.subject_id === subj.id)
-    const subjectGradeEntries = (gradeEntries || []).filter((entry: any) =>
-      subjectGradeColumns.some((column: any) => column.id === entry.column_id)
+    const subjectGradeColumns = (gradeColumns || []).filter((column) => column.subject_id === subj.id)
+    const subjectGradeEntries = (gradeEntries || []).filter((entry) =>
+      subjectGradeColumns.some((column) => column.id === entry.column_id)
     )
 
     const gradedItems = mySubmissions
@@ -115,12 +118,12 @@ export function StudentReportCardClient({
           submittedAt: sub.submitted_at,
         }
       })
-      .filter(Boolean) as Array<any>
+      .filter((item) => item !== null)
 
     const customGradedItems = subjectGradeColumns
-      .map((column: any) => {
-        const entry = subjectGradeEntries.find((item: any) => item.column_id === column.id)
-        if (entry?.score == null || entry?.score === "") return null
+      .map((column) => {
+        const entry = subjectGradeEntries.find((item) => item.column_id === column.id)
+        if (entry?.score == null) return null
         const score = Number(entry.score)
         const maxScore = Number(column.max_score ?? 100)
         const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : null
@@ -137,7 +140,7 @@ export function StudentReportCardClient({
           submittedAt: entry?.graded_at ?? null,
         }
       })
-      .filter(Boolean) as Array<any>
+      .filter((item) => item !== null)
 
     const allItems = [...gradedItems, ...customGradedItems]
 
@@ -183,7 +186,7 @@ export function StudentReportCardClient({
     Assignment: "#10b981",
     Quiz: "#8b5cf6",
     "Coding Assignment": "#3b82f6",
-  } as any
+  }
 
   return (
     <div className="max-w-5xl w-full mx-auto p-8 space-y-8 font-sans text-left">

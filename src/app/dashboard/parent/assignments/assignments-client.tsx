@@ -42,16 +42,16 @@ const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transiti
 
 export default function ParentAssignmentsClient({
   parentName,
-  children,
+  students,
 }: {
   parentName: string
-  children: ChildWithAssignments[]
+  students: ChildWithAssignments[]
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [filter, setFilter] = useState<"all" | "submitted" | "pending" | "missing">("all")
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const child = children[selectedIdx] ?? null
+  const child = students[selectedIdx] ?? null
   const filtered = child?.assignments.filter((a) => {
     if (filter === "submitted") return a.submitted
     if (filter === "missing") return a.overdue && !a.submitted
@@ -67,13 +67,13 @@ export default function ParentAssignmentsClient({
         title="Assignments"
         subtitle="Track submitted and pending assignments for your child."
         actions={
-          children.length > 1 ? (
+          students.length > 1 ? (
             <select
               value={selectedIdx}
               onChange={(e) => setSelectedIdx(Number(e.target.value))}
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[var(--primary)] transition"
             >
-              {children.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
+              {students.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
             </select>
           ) : undefined
         }
@@ -106,7 +106,7 @@ export default function ParentAssignmentsClient({
               ].map(({ key, label, count, cls }) => (
                 <button
                   key={key}
-                  onClick={() => setFilter(key as any)}
+                  onClick={() => setFilter(key as typeof filter)}
                   className={`rounded-2xl border p-4 text-left transition-all shadow-sm hover:scale-[1.02] ${cls} ${filter === key ? "ring-2 ring-[var(--primary)]/30" : ""}`}
                 >
                   <p className="text-2xl font-black text-slate-900 font-['Space_Grotesk']">{count}</p>

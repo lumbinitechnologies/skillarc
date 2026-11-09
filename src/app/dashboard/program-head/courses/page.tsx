@@ -18,8 +18,8 @@ export default async function PHCoursesPage() {
       .eq("institution_id", institutionId),
   ])
 
-  const subjects = (subjectsRes.data ?? []) as any[]
-  const fsRows = (facultySubjectsRes.data ?? []) as any[]
+  const subjects = (subjectsRes.data ?? [])
+  const fsRows = (facultySubjectsRes.data ?? [])
 
   const courses = subjects.map((s) => {
     const prog = Array.isArray(s.programs) ? s.programs[0] : s.programs

@@ -1,5 +1,7 @@
 "use server"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 
@@ -54,9 +56,9 @@ export async function createMeetingAction(input: CreateMeetingInput) {
     revalidatePath(`/dashboard/student/subjects/${input.subject_id}`)
     
     return { success: true, meeting: data }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating meeting:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -80,9 +82,9 @@ export async function endMeetingAction(meetingId: string, subjectId: string) {
     revalidatePath(`/dashboard/student/subjects/${subjectId}`)
 
     return { success: true, meeting: data }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error ending meeting:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -104,9 +106,9 @@ export async function getMeetingByCodeAction(meetingCode: string) {
 
     if (error) throw error
     return { success: true, meeting }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching meeting:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -126,9 +128,9 @@ export async function getActiveMeetingsAction(subjectId: string, sectionId: stri
 
     if (error) throw error
     return { success: true, meetings: meetings || [] }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching active meetings:", error)
-    return { success: false, error: error.message, meetings: [] }
+    return { success: false, error: readErrorMessage(error), meetings: [] }
   }
 }
 
@@ -156,9 +158,9 @@ export async function postMeetingMessageAction(
 
     if (error) throw error
     return { success: true, message: data }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error posting meeting message:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -174,9 +176,9 @@ export async function getMeetingMessagesAction(meetingId: string) {
 
     if (error) throw error
     return { success: true, messages: messages || [] }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching meeting messages:", error)
-    return { success: false, error: error.message, messages: [] }
+    return { success: false, error: readErrorMessage(error), messages: [] }
   }
 }
 
@@ -201,9 +203,9 @@ export async function recordJoinMeetingAction(meetingId: string, userId: string)
 
     if (error) throw error
     return { success: true, participant: data }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error recording join:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -224,9 +226,9 @@ export async function recordLeaveMeetingAction(meetingId: string, userId: string
 
     if (error) throw error
     return { success: true, participant: data }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error recording leave:", error)
-    return { success: false, error: error.message }
+    return { success: false, error: readErrorMessage(error) }
   }
 }
 
@@ -245,8 +247,8 @@ export async function getMeetingAnalyticsAction(meetingId: string) {
 
     if (error) throw error
     return { success: true, logs: logs || [] }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching meeting analytics:", error)
-    return { success: false, error: error.message, logs: [] }
+    return { success: false, error: readErrorMessage(error), logs: [] }
   }
 }

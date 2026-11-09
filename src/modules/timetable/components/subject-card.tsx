@@ -1,6 +1,7 @@
 "use client"
 
 import { useDraggable } from "@dnd-kit/core"
+import type { Subject } from "../types/timetable.types"
 
 // All colors as inline style values — never purged by Tailwind
 const COLORS: Record<string, { bg: string; border: string; badgeBg: string; badgeText: string }> = {
@@ -23,7 +24,7 @@ const COLORS: Record<string, { bg: string; border: string; badgeBg: string; badg
 const DEFAULT = { bg: "#f8fafc", border: "#cbd5e1", badgeBg: "#e2e8f0", badgeText: "#334155" }
 const LAB_STYLE = { bg: "#ffedd5", border: "#fed7aa", badgeBg: "#ffedd5", badgeText: "#c2410c" }
 
-export default function SubjectCard({ subject }: { subject: any }) {
+export default function SubjectCard({ subject }: { subject: Subject }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `subject-draggable-${subject.id}`,
     data: { subject },
@@ -34,7 +35,7 @@ export default function SubjectCard({ subject }: { subject: any }) {
     : {}
 
   const c = COLORS[subject.code] ?? DEFAULT
-  const isLab = subject.subject_type === "LAB" || subject.type === "LAB"
+  const isLab = subject.subject_type === "LAB"
   const badgeC = isLab ? LAB_STYLE : c
 
   return (

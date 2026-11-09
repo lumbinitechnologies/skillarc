@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import HodDashboardClient from "./hod-dashboard-client"
@@ -38,12 +39,12 @@ export default async function HodDashboardPage() {
   const faculty = facultyRes.data ?? []
   const subjects = subjectsRes.data ?? []
 
-  const formattedSubjects = (subjects ?? []).map((s: any) => ({
+  const formattedSubjects = (subjects ?? []).map((s) => ({
     id: s.id,
     name: s.name,
     code: s.code,
     facultyId: s.faculty_id,
-    facultyName: s.users?.name ?? "Unassigned",
+    facultyName: relationOne(s.users)?.name ?? "Unassigned",
   }))
 
   return (

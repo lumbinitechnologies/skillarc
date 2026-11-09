@@ -38,6 +38,9 @@ test("parent timetable guidance uses the parent dashboard link", () => {
 test("navigation contains only validated role-appropriate routes", () => {
   assert.deepEqual(getNavigationContext(principal("FACULTY")), [
     { label: "Dashboard", href: "/dashboard/faculty" },
+    { label: "My Subjects", href: "/dashboard/faculty/subjects" },
+    { label: "Attendance", href: "/dashboard/faculty/attendance" },
     { label: "Project Groups", href: "/dashboard/project-groups" },
+    { label: "My Profile", href: "/dashboard/faculty/profile" },
   ])
 })

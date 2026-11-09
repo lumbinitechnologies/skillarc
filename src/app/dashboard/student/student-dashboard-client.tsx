@@ -242,7 +242,7 @@ export default function StudentPage({
         >
           <div className="flex items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">Today's classes</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">Today&apos;s classes</p>
               <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900 sm:text-2xl font-heading">Your Schedule</h2>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700 animate-pulse">Live</span>

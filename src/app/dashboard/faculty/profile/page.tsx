@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { BookOpen, Mail, School, UserCircle2, Calendar, UserCheck, Settings, ArrowRight } from "lucide-react"
@@ -24,7 +25,7 @@ export default async function FacultyProfilePage() {
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) redirect("/dashboard")
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)) redirect("/dashboard")
 
   const [institutionResult, assignmentResult, subjectsResult, timetableResult] = await measureServer("dashboard.faculty.profile.data", () => Promise.all([
     supabase.from("institutions").select("name").eq("id", profile.institution_id).single(),
@@ -44,19 +45,19 @@ export default async function FacultyProfilePage() {
   const institution = institutionResult.data
   const assignmentRows = assignmentResult.data
   const assignedSubjectIds = new Set(
-    ((assignmentRows ?? []).map((row: any) => row.subject_id).filter(Boolean) as string[]),
+    ((assignmentRows ?? []).map((row) => row.subject_id).filter(Boolean) as string[]),
   )
 
   const subjects = Array.isArray(subjectsResult.data)
-    ? subjectsResult.data.filter((subject: any) => subject.faculty_id === profile.id || assignedSubjectIds.has(subject.id))
+    ? subjectsResult.data.filter((subject) => subject.faculty_id === profile.id || assignedSubjectIds.has(subject.id))
     : []
 
   const timetableRows = timetableResult.data ?? []
 
   const sectionNames = Array.from(
     new Set(
-      (timetableRows as Array<any>)
-        .map((slot) => slot.sections?.name)
+      timetableRows
+        .map((slot) => relationOne(slot.sections)?.name)
         .filter(Boolean) as string[],
     ),
   )
@@ -178,7 +179,7 @@ export default async function FacultyProfilePage() {
 
           {subjects.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
-              {subjects.slice(0, 5).map((s: any) => (
+              {subjects.slice(0, 5).map((s) => (
                 <span
                   key={s.id}
                   className="rounded-lg border border-slate-100 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700"

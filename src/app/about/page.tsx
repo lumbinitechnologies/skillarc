@@ -147,7 +147,7 @@ export default function AboutPage() {
             className="lg:col-span-6 space-y-6 page-section-stagger"
           >
             <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase font-bold">
-              // The system ethos
+              {"//"} The system ethos
             </span>
             <h3 className="text-3xl font-sans font-black uppercase text-[#F4F4F0] tracking-tight">
               We believe education deserves modern, logical software.
@@ -168,7 +168,7 @@ export default function AboutPage() {
             className="lg:col-span-6 space-y-6 page-section-stagger"
           >
             <span className="text-[10px] font-mono tracking-[0.25em] text-white/30 uppercase block font-bold">
-              // Operations by the numbers
+              {"//"} Operations by the numbers
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {metrics.map((metric, index) => (
@@ -199,7 +199,7 @@ export default function AboutPage() {
             className="text-center max-w-xl mx-auto space-y-4 page-section-stagger"
           >
             <span className="text-[10px] font-mono tracking-[0.25em] text-[#38BDF8] uppercase font-bold">
-              // Telemetry contact
+              {"//"} Telemetry contact
             </span>
             <h4 className="text-2xl font-sans font-black uppercase text-[#F4F4F0]">Get in touch with us</h4>
           </motion.div>

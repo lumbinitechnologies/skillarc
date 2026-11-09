@@ -1,5 +1,10 @@
 "use server"
 
+import { relationOne } from "@/lib/academic-content-types"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -405,7 +410,7 @@ export async function getAdminAttendanceAction({
     const records = Object.fromEntries(
       (fallbackRecords as Array<{ student_id: string; status: string }>).map((row) => [row.student_id, formatStatus(row.status)])
     )
-    const facultyName = (existingSession as any).faculty?.name || "Unknown Faculty"
+    const facultyName = relationOne(existingSession.faculty)?.name || "Unknown Faculty"
     return { success: true, exists: true, sessionId: existingSession.id, records, notes: {}, sessionNotes: existingSession.session_notes || "", facultyName }
   }
 
@@ -417,7 +422,7 @@ export async function getAdminAttendanceAction({
     (existingRecords as Array<{ student_id: string; status: string; notes?: string }>).filter(r => r.notes).map((row) => [row.student_id, row.notes || ""])
   )
 
-  const facultyName = (existingSession as any).faculty?.name || "Unknown Faculty"
+  const facultyName = relationOne(existingSession.faculty)?.name || "Unknown Faculty"
 
   return { success: true, exists: true, sessionId: existingSession.id, records, notes, sessionNotes: existingSession.session_notes || "", facultyName }
 }
@@ -694,7 +699,7 @@ export async function getStudentCumulativeAttendanceAction({
     }
 
     return { success: true, rates }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to compute cumulative attendance:", err)
     return { success: false, rates: {} }
   }
@@ -744,9 +749,9 @@ export async function saveWarningLetterAction({
     if (error) throw error
 
     return { success: true, warning: data }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Failed to save warning letter:", err)
-    return { success: false, error: err.message }
+    return { success: false, error: readErrorMessage(err) }
   }
 }
 
@@ -788,7 +793,7 @@ export async function getInstitutionAllAttendanceAnalyticsAction(institutionId: 
   }
 
   // 3. Map into aggregated format
-  const stats = sessions.map((s: any) => {
+  const stats = sessions.map((s) => {
     const records = (s.attendance_records as Array<{ status: string }>) || []
     const present = records.filter(r => r.status === "PRESENT").length
     const absent = records.filter(r => r.status === "ABSENT").length

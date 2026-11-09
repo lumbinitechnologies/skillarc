@@ -4,10 +4,10 @@ import ParentTimetableClient from "./timetable-client"
 export const dynamic = "force-dynamic"
 
 export default async function ParentTimetablePage() {
-  const { profile, children, admin } = await getParentContext()
+  const { profile, children: students, admin } = await getParentContext()
 
-  const sectionIds = [...new Set(children.map((c) => c.sectionId).filter(Boolean))] as string[]
-  const institutionIds = [...new Set(children.map((c) => c.institutionId).filter(Boolean))] as string[]
+  const sectionIds = [...new Set(students.map((c) => c.sectionId).filter(Boolean))] as string[]
+  const institutionIds = [...new Set(students.map((c) => c.institutionId).filter(Boolean))] as string[]
 
   const slotsData = sectionIds.length && institutionIds.length
     ? await admin
@@ -21,9 +21,9 @@ export default async function ParentTimetablePage() {
         .in("institution_id", institutionIds)
     : { data: [] }
 
-  const rawSlots = (slotsData.data ?? []) as any[]
+  const rawSlots = (slotsData.data ?? [])
 
-  const childTimetables = children.map((child) => {
+  const childTimetables = students.map((child) => {
     const slots = rawSlots
       .filter((s) => s.section_id === child.sectionId)
       .map((s) => {
@@ -44,7 +44,7 @@ export default async function ParentTimetablePage() {
   return (
     <ParentTimetableClient
       parentName={profile.name ?? "Parent"}
-      children={childTimetables}
+      students={childTimetables}
     />
   )
 }

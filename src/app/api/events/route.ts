@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -5,7 +6,7 @@ import { ROLES } from "@/constants/roles"
 
 export const dynamic = "force-dynamic"
 
-const ALLOWED_ROLES = new Set([
+const ALLOWED_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.ORG_ADMIN,
   ROLES.INSTITUTION_ADMIN,
@@ -40,8 +41,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(data ?? [])
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!ALLOWED_ROLES.has(profile.role as any)) {
+    if (!ALLOWED_ROLES.has(profile.role)) {
       return NextResponse.json(
         { error: "Forbidden: You do not have permission to create events." },
         { status: 403 }
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createSupabaseAdminClient()
 
-    const eventPayload: Record<string, any> = {
+    const eventPayload: Record<string, unknown> = {
       title: body.title,
       description: typeof body.description === "string" ? body.description : JSON.stringify(body.description || {}),
       event_date: body.event_date || new Date().toISOString(),
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(data, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }

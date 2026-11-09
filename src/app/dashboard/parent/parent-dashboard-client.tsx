@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -47,8 +50,9 @@ const item = {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function greeting(name: string) {
-  const h = new Date().getHours()
+function greeting(name: string, now: number) {
+  if (!now) return `Welcome, ${name.split(" ")[0]}`
+  const h = new Date(now).getHours()
   const time = h < 12 ? "Good Morning" : h < 17 ? "Good Afternoon" : "Good Evening"
   return `${time}, ${name.split(" ")[0]} 👋`
 }
@@ -81,8 +85,9 @@ export default function ParentDashboardClient({
   parent: { name: string; email: string; institution: string }
   childrenList: Child[]
 }) {
+  const now = useCurrentTime()
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [timetableDay, setTimetableDay] = useState(
+  const [timetableDay, setTimetableDay] = useState(() =>
     new Date().toLocaleDateString("en-US", { weekday: "long" })
   )
   const [subjectExpanded, setSubjectExpanded] = useState<string | null>(null)
@@ -119,7 +124,7 @@ export default function ParentDashboardClient({
                 Parent Console · {parent.institution}
               </p>
               <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">
-                {greeting(parent.name)}
+                {greeting(parent.name, now)}
               </h1>
               <p className="mt-0.5 text-sm text-slate-500">{parent.email}</p>
             </div>
@@ -311,7 +316,7 @@ export default function ParentDashboardClient({
                   <div className="flex gap-1 flex-wrap mb-5">
                     {DAYS.map((day) => {
                       const hasClass = child.schedule.some((s) => s.day === day)
-                      const isToday = day === new Date().toLocaleDateString("en-US", { weekday: "long" })
+                      const isToday = now > 0 && day === new Date(now).toLocaleDateString("en-US", { weekday: "long" })
                       return (
                         <button
                           key={day}

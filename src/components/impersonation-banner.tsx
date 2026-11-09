@@ -60,14 +60,19 @@ export default function ImpersonationBanner({ profile: initialProfile }: { profi
 
   const modalRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
+  const [previousSource0, setPreviousSource0] = useState<readonly unknown[] | null>(null)
+  const nextSource0 = [profile?.is_super_admin, profile?.role, profile?.organization_id, profile?.institution_id, profile?.is_impersonating, profile?.id]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     if (!profile?.is_super_admin) return
 
     setTargetRole(profile.role)
     setSelectedOrgId(profile.organization_id || "")
     setSelectedInstId(profile.institution_id || "")
     setSelectedUserId(profile.is_impersonating ? profile.id : "")
-  }, [profile?.is_super_admin, profile?.role, profile?.organization_id, profile?.institution_id, profile?.is_impersonating, profile?.id])
+  })()
+  }
 
   // Fetch dropdown options when modal is opened
   useEffect(() => {
@@ -86,11 +91,16 @@ export default function ImpersonationBanner({ profile: initialProfile }: { profi
     loadOptions()
   }, [isOpen, profile])
 
+  const [previousTargetRole, setPreviousTargetRole] = useState(targetRole)
+  if (previousTargetRole !== targetRole) {
+    setPreviousTargetRole(targetRole)
+    setUsers([])
+  }
+
   // Fetch matching users dynamically based on role/inst/org selection
   useEffect(() => {
     if (!isOpen || !profile?.is_super_admin) return
     if (!["FACULTY", "STUDENT", "PARENT", "HOD", "PROGRAM_HEAD"].includes(targetRole)) {
-      setUsers([])
       return
     }
 

@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -19,7 +20,7 @@ export async function GET() {
 
   const admin = createSupabaseAdminClient()
 
-  let coreProfile: any = null
+  let coreProfile = null
   try {
     const { data } = await admin
       .from("users")
@@ -31,7 +32,7 @@ export async function GET() {
     console.warn("Could not query users table:", err)
   }
 
-  let settings: any = null
+  let settings = null
   try {
     const { data } = await admin
       .from("user_account_settings")
@@ -45,10 +46,10 @@ export async function GET() {
 
   const identities = user.identities?.map((i) => ({
     provider: i.provider,
-    identifier: (i.identity_data as any)?.email ?? (i.identity_data as any)?.sub ?? "—",
+    identifier: (i.identity_data)?.email ?? (i.identity_data)?.sub ?? "—",
   })) ?? []
 
-  const fullName = coreProfile?.name || (user.user_metadata as any)?.full_name || (user.user_metadata as any)?.name || user.email?.split("@")[0] || ""
+  const fullName = coreProfile?.name || (user.user_metadata)?.full_name || (user.user_metadata)?.name || user.email?.split("@")[0] || ""
   const email = coreProfile?.email || user.email || ""
 
   return NextResponse.json({
@@ -93,8 +94,8 @@ export async function PUT(request: NextRequest) {
     if (error) {
       console.warn("Could not upsert user_account_settings:", error.message)
     }
-  } catch (err: any) {
-    console.warn("Error updating account settings table:", err?.message || err)
+  } catch (err: unknown) {
+    console.warn("Error updating account settings table:", readErrorMessage(err) || err)
   }
 
   return NextResponse.json({ success: true })

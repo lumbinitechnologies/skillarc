@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 
-function isMissingTableError(error: any) {
+function isMissingTableError(error: { message?: string; code?: string } | null) {
   if (!error) return false
 
   const message = String(error.message || "")
@@ -75,7 +75,7 @@ export async function updateGradeColumnAction(data: {
 }) {
   const supabase = await createSupabaseServerClient()
 
-  const payload: Record<string, any> = {}
+  const payload: Record<string, unknown> = {}
 
   if (data.title !== undefined) payload.title = data.title.trim()
   if (data.type !== undefined) payload.type = data.type
@@ -225,10 +225,10 @@ export async function getGradeColumnsBySubjectAction(subject_id: string) {
 
   if (error) {
     if (isMissingTableError(error)) {
-      return [] as any[]
+      return []
     }
     console.error("Error fetching grade columns:", error)
-    return [] as any[]
+    return []
   }
 
   return data || []
@@ -244,7 +244,7 @@ export async function getGradeEntriesBySubjectAction(subject_id: string) {
     .eq("is_active", true)
 
   if (error || !data?.length) {
-    return [] as any[]
+    return []
   }
 
   const columnIds = data.map((col) => col.id)
@@ -256,10 +256,10 @@ export async function getGradeEntriesBySubjectAction(subject_id: string) {
 
   if (entryError) {
     if (isMissingTableError(entryError)) {
-      return [] as any[]
+      return []
     }
     console.error("Error fetching grade entries:", entryError)
-    return [] as any[]
+    return []
   }
 
   return entries || []

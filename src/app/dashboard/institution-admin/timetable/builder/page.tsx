@@ -1,5 +1,8 @@
 "use client"
 
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
+import { relationOne } from "@/lib/academic-content-types"
+
 import { useEffect, useState, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
@@ -100,6 +103,14 @@ function AssignSlotDetailsDialog({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [conflictWarnings, setConflictWarnings] = useState<string[]>([])
+  const draftKey = `${pending.institutionId}:${pending.subject.id}`
+  const [previousDraftKey, setPreviousDraftKey] = useState(draftKey)
+  if (previousDraftKey !== draftKey) {
+    setPreviousDraftKey(draftKey)
+    setLoading(true)
+    setSelectedFacultyId("")
+    setRoom("")
+  }
 
   useEffect(() => {
     let isActive = true
@@ -121,8 +132,8 @@ function AssignSlotDetailsDialog({
         if (!isActive) return
 
         const options = (facultyRes.data ?? [])
-          .map((row: any) => row.faculty)
-          .filter(Boolean) as FacultyOption[]
+          .map((row) => relationOne(row.faculty))
+          .filter((faculty): faculty is FacultyOption => faculty !== null)
 
         setFacultyOptions(options)
         if (options.length > 0) {
@@ -134,7 +145,7 @@ function AssignSlotDetailsDialog({
         const distinctRooms = Array.from(
           new Set(
             (roomRes.data ?? [])
-              .map((r: any) => r.room?.trim())
+              .map((r) => r.room?.trim())
               .filter(Boolean)
           )
         )
@@ -146,9 +157,6 @@ function AssignSlotDetailsDialog({
       }
     }
 
-    setLoading(true)
-    setSelectedFacultyId("")
-    setRoom("")
     fetchData()
 
     return () => {
@@ -509,8 +517,8 @@ function Builder() {
         .then(({ data }) => {
           if (data) {
             setSectionName(data.name || "Section A")
-            if ((data as any).program?.name) {
-              setProgramName((data as any).program.name)
+            if (relationOne(data.program)?.name) {
+              setProgramName(relationOne(data.program)?.name ?? "")
             }
           }
         })
@@ -523,17 +531,18 @@ function Builder() {
     })
   )
 
-  function getSubjectFromActive(active: any): Subject | null {
-    if (!active?.data?.current) return null
-    return active.data.current.subject || active.data.current
+  function getSubjectFromActive(active: DragStartEvent["active"]): Subject | null {
+    const current = active.data.current as { subject?: Subject } & Partial<Subject> | undefined
+    if (!current) return null
+    return current.subject ?? ("id" in current && "code" in current && "name" in current ? current as Subject : null)
   }
 
-  function handleDragStart(event: any) {
+  function handleDragStart(event: DragStartEvent) {
     const subject = getSubjectFromActive(event.active)
     if (subject) setActiveSubject(subject)
   }
 
-  function handleDragEnd(event: any) {
+  function handleDragEnd(event: DragEndEvent) {
     const { over, active } = event
     setActiveSubject(null)
 
