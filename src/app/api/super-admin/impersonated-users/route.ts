@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ users: users || [] })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Impersonated users API error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

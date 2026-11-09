@@ -1,9 +1,10 @@
+import type { StudentWithSection } from "../types/student.types"
 import StudentCard from "./StudentCard"
 import StudentEmptyState from "./StudentEmptyState"
 
 interface Props {
-  students: any[]
-  onEdit: (student: any) => void
+  students: StudentWithSection[]
+  onEdit: (student: StudentWithSection) => void
   onDelete: (id: string) => void
 }
 

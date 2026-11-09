@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DefaultChatTransport, type UIMessage } from "ai"
 import { useChat } from "@ai-sdk/react"
@@ -116,6 +119,7 @@ function formatConversationDate(value: string): string {
 }
 
 export function ChatbotWidget() {
+  const currentTime = useCurrentTime()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState("")
   const [profile, setProfile] = useState<ChatProfile | null>(null)
@@ -245,11 +249,16 @@ export function ChatbotWidget() {
     window.localStorage.setItem(storageKey, JSON.stringify({ threadId, messages }))
   }, [messages, profileStatus, storageKey, threadId])
 
+  const [historyScope, setHistoryScope] = useState("")
+  const nextHistoryScope = `${historyOpen}:${profileStatus}`
+  if (historyScope !== nextHistoryScope) {
+    setHistoryScope(nextHistoryScope)
+    setHistoryLoading(historyOpen && profileStatus === "authenticated")
+    setHistoryError(null)
+  }
   useEffect(() => {
     if (!historyOpen || profileStatus !== "authenticated") return
     let cancelled = false
-    setHistoryLoading(true)
-    setHistoryError(null)
     void fetch("/api/assistant/threads", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("Conversation history is unavailable right now.")
@@ -395,7 +404,7 @@ export function ChatbotWidget() {
                             <div className="mt-3 flex flex-wrap gap-1 border-t border-white/10 pt-2.5">{navigation.map((item) => <a key={item.href} href={item.href} className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-300 hover:bg-amber-500/20 transition-colors">{item.label}</a>)}</div>
                           )}
                         </MessageContent>
-                        <span className="block px-1 text-[9px] text-slate-500">{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+
                       </div>
                       {isUser && <MessageAvatar className="border border-slate-800 bg-slate-900 text-[#ECDFCB] shadow-sm"><User size={12} /></MessageAvatar>}
                     </Message>

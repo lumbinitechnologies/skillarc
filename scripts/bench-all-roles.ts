@@ -1,6 +1,5 @@
-// @ts-nocheck
+import { errorMessage as readErrorMessage } from "../src/lib/error-message"
 import { createClient } from "@supabase/supabase-js"
-import ws from "ws"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -8,7 +7,7 @@ const appUrl = "http://localhost:3001"
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   realtime: {
-    transport: ws,
+    transport: WebSocket,
   },
 })
 
@@ -39,7 +38,7 @@ async function getAuthCookie(user: { id: string; email: string; role: string; in
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const authClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false },
-    realtime: { transport: ws },
+    realtime: { transport: WebSocket },
   })
 
   const { data, error } = await authClient.auth.signInWithPassword({
@@ -95,8 +94,8 @@ async function main() {
     try {
       const auth = await getAuthCookie(parent)
       await testRoute("Parent Dashboard", "/dashboard/parent", auth.cookie, 4)
-    } catch (e: any) {
-      console.error("Parent test error:", e.message)
+    } catch (e: unknown) {
+      console.error("Parent test error:", readErrorMessage(e))
     }
   }
 
@@ -109,8 +108,8 @@ async function main() {
       await testRoute("Student Timetable", "/dashboard/student/timetable", auth.cookie, 3)
       await testRoute("Student Subjects", "/dashboard/student/subjects", auth.cookie, 3)
       await testRoute("Student Report Card", "/dashboard/student/report-card", auth.cookie, 3)
-    } catch (e: any) {
-      console.error("Student test error:", e.message)
+    } catch (e: unknown) {
+      console.error("Student test error:", readErrorMessage(e))
     }
   }
 
@@ -121,8 +120,8 @@ async function main() {
       await testRoute("Faculty Dashboard", "/dashboard/faculty", auth.cookie, 4)
       await testRoute("Faculty Attendance", "/dashboard/faculty/attendance", auth.cookie, 3)
       await testRoute("Faculty Timetable", "/dashboard/faculty/timetable", auth.cookie, 3)
-    } catch (e: any) {
-      console.error("Faculty test error:", e.message)
+    } catch (e: unknown) {
+      console.error("Faculty test error:", readErrorMessage(e))
     }
   }
 
@@ -138,8 +137,8 @@ async function main() {
       await testRoute("Inst Admin Programs", "/dashboard/institution-admin/programs", auth.cookie, 3)
       await testRoute("Inst Admin Sections", "/dashboard/institution-admin/sections", auth.cookie, 3)
       await testRoute("Inst Admin Subjects", "/dashboard/institution-admin/subjects", auth.cookie, 3)
-    } catch (e: any) {
-      console.error("Inst Admin test error:", e.message)
+    } catch (e: unknown) {
+      console.error("Inst Admin test error:", readErrorMessage(e))
     }
   }
 
@@ -148,8 +147,8 @@ async function main() {
     try {
       const auth = await getAuthCookie(superAdmin)
       await testRoute("Super Admin Dashboard", "/dashboard/super-admin", auth.cookie, 4)
-    } catch (e: any) {
-      console.error("Super Admin test error:", e.message)
+    } catch (e: unknown) {
+      console.error("Super Admin test error:", readErrorMessage(e))
     }
   }
 }

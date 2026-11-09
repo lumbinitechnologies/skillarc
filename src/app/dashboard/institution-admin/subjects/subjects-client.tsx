@@ -1,5 +1,8 @@
 "use client"
 
+import type { CatalogSubject, CatalogProgram, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState } from "react"
 import { Plus, BookMarked } from "lucide-react"
 import { motion } from "framer-motion"
@@ -40,10 +43,10 @@ export function SubjectsClientPage({
   departments,
   programs,
   institutionId,
-}: any) {
+}: { initialSubjects: CatalogSubject[]; departments: Array<{ id: string; name: string }>; programs: CatalogProgram[]; institutionId: string }) {
   const [subjects, setSubjects] = useState(initialSubjects)
   const [open, setOpen] = useState(false)
-  const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  const [selectedSubject, setSelectedSubject] = useState<CatalogSubject | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -55,7 +58,7 @@ export function SubjectsClientPage({
   const { toast } = useToast()
   const t = useTerms()
 
-  function handleOpenDialog(subject?: any) {
+  function handleOpenDialog(subject?: CatalogSubject) {
     if (subject) {
       setSelectedSubject(subject)
     } else {
@@ -64,7 +67,7 @@ export function SubjectsClientPage({
     setOpen(true)
   }
 
-  async function handleCreate(data: any) {
+  async function handleCreate(data: SubjectFormValues) {
     const res = await fetch("/api/subjects", {
       method: "POST",
       headers: {
@@ -88,8 +91,8 @@ export function SubjectsClientPage({
     const result = await res.json()
     const createdArray = Array.isArray(result) ? result : [result]
 
-    const formattedSubjects = createdArray.map((subject: any) => {
-      const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+    const formattedSubjects = createdArray.map((subject: CatalogSubject) => {
+      const selectedProgram = programs.find((p) => p.id === subject.program_id)
       return {
         ...subject,
         program: selectedProgram ? {
@@ -103,7 +106,7 @@ export function SubjectsClientPage({
       }
     })
 
-    setSubjects((prev: any) => [...prev, ...formattedSubjects])
+    setSubjects((prev) => [...prev, ...formattedSubjects])
     setOpen(false)
 
     toast({
@@ -112,7 +115,7 @@ export function SubjectsClientPage({
     })
   }
 
-  async function handleEdit(data: any) {
+  async function handleEdit(data: SubjectFormValues) {
     if (!selectedSubject) return
     const res = await fetch(`/api/subjects/${selectedSubject.id}`, {
       method: "PUT",
@@ -132,7 +135,7 @@ export function SubjectsClientPage({
     }
 
     const updated = await res.json()
-    const selectedProgram = programs.find((p: any) => p.id === updated.program_id)
+    const selectedProgram = programs.find((p) => p.id === updated.program_id)
     const formatted = {
       ...updated,
       program: selectedProgram ? {
@@ -145,7 +148,7 @@ export function SubjectsClientPage({
       } : null
     }
 
-    setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+    setSubjects((prev) => prev.map((s) => s.id === selectedSubject.id ? formatted : s))
     setOpen(false)
     setSelectedSubject(null)
 
@@ -170,7 +173,7 @@ export function SubjectsClientPage({
 
       if (!res.ok) throw new Error("Failed to delete subject")
 
-      setSubjects((prev: any) => prev.filter((s: any) => s.id !== deleteId))
+      setSubjects((prev) => prev.filter((s) => s.id !== deleteId))
       setDeleteOpen(false)
       setDeleteId(null)
       toast({
@@ -188,7 +191,7 @@ export function SubjectsClientPage({
     }
   }
 
-  const filteredSubjects = subjects.filter((s: any) => {
+  const filteredSubjects = subjects.filter((s) => {
     const nameMatch = s.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const codeMatch = s.code?.toLowerCase().includes(searchQuery.toLowerCase())
     const deptMatch = s.program?.department?.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -199,7 +202,7 @@ export function SubjectsClientPage({
     return searchOk && deptOk && progOk
   })
 
-  const filteredPrograms = programs.filter((p: any) => !deptFilter || p.department_id === deptFilter)
+  const filteredPrograms = programs.filter((p) => !deptFilter || p.department_id === deptFilter)
 
   return (
     <motion.div
@@ -256,13 +259,13 @@ export function SubjectsClientPage({
               label={`All ${t.department_plural}`}
               value={deptFilter}
               onChange={(v) => { setDeptFilter(v); setProgFilter("") }}
-              options={departments.map((d: any) => ({ value: d.id, label: d.name }))}
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
             />
             <FilterSelect
               label="All Programs"
               value={progFilter}
               onChange={setProgFilter}
-              options={filteredPrograms.map((p: any) => ({ value: p.id, label: p.name }))}
+              options={filteredPrograms.map((p) => ({ value: p.id, label: p.name }))}
             />
           </>
         }

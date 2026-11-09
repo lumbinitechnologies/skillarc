@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -28,6 +28,11 @@ import {
   FileSignature,
 } from "lucide-react"
 import { ROLES } from "@/constants/roles"
+
+const subscribePlatform = () => () => {}
+function readPlatform() {
+  return /(Mac|iPhone|iPod|iPad)/i.test(`${navigator.platform || ""} ${navigator.userAgent || ""}`)
+}
 
 type Role = typeof ROLES[keyof typeof ROLES]
 
@@ -112,31 +117,31 @@ export default function CommandPalette({ role }: { role: string }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
-  const [dataResults, setDataResults] = useState<SearchResult[]>([])
-  const [searching, setSearching] = useState(false)
+  const [searchResult, setSearchResult] = useState<{ query: string; results: SearchResult[] }>({ query: "", results: [] })
+  const dataResults = query.length >= 2 && searchResult.query === query ? searchResult.results : []
+  const [activeSearch, setActiveSearch] = useState<string | null>(null)
+  const searching = query.length >= 2 && activeSearch === query
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  const [isMac, setIsMac] = useState(true)
+  const isMac = useSyncExternalStore(subscribePlatform, readPlatform, () => true)
 
-  useEffect(() => {
-    if (typeof navigator !== "undefined") {
-      const uaData = (navigator as any).userAgentData
-      if (uaData?.platform) {
-        setIsMac(/mac/i.test(uaData.platform))
-      } else {
-        const str = `${navigator.platform || ""} ${navigator.userAgent || ""}`
-        setIsMac(/(Mac|iPhone|iPod|iPad)/i.test(str))
-      }
-    }
-  }, [])
+  function openPalette() {
+    setQuery("")
+    setSearchResult({ query: "", results: [] })
+    setActiveIndex(0)
+    setOpen(true)
+  }
 
   // ⌘K / Ctrl+K shortcut
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault()
+        setQuery("")
+        setSearchResult({ query: "", results: [] })
+        setActiveIndex(0)
         setOpen(prev => !prev)
       }
       if (e.key === "Escape") setOpen(false)
@@ -148,9 +153,6 @@ export default function CommandPalette({ role }: { role: string }) {
   // Focus input when opened
   useEffect(() => {
     if (open) {
-      setQuery("")
-      setDataResults([])
-      setActiveIndex(0)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
@@ -168,35 +170,33 @@ export default function CommandPalette({ role }: { role: string }) {
   // Debounced live data search
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.length < 2) {
-      setDataResults([])
-      return
-    }
-    setSearching(true)
+    if (query.length < 2) return
+    const controller = new AbortController()
     debounceRef.current = setTimeout(async () => {
+      setActiveSearch(query)
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
         if (res.ok) {
           const json = await res.json()
-          setDataResults(json.results ?? [])
+          if (!controller.signal.aborted) setSearchResult({ query, results: json.results ?? [] })
         }
       } catch {
         // ignore
       } finally {
-        setSearching(false)
+        if (!controller.signal.aborted) setActiveSearch(null)
       }
     }, 300)
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+    return () => { controller.abort(); if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [query])
 
   // Combine results
-  const allResults: { type: "nav" | "data"; item: any }[] = [
+  const allResults: Array<{ type: "nav"; item: NavItem } | { type: "data"; item: SearchResult }> = [
     ...filteredNav.map(item => ({ type: "nav" as const, item })),
     ...dataResults.map(item => ({ type: "data" as const, item })),
   ]
 
   // Keyboard navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault()
       setActiveIndex(i => Math.min(i + 1, allResults.length - 1))
@@ -210,7 +210,7 @@ export default function CommandPalette({ role }: { role: string }) {
       router.push(href)
       setOpen(false)
     }
-  }, [allResults, activeIndex, router])
+  }
 
   // Scroll active item into view
   useEffect(() => {
@@ -219,7 +219,12 @@ export default function CommandPalette({ role }: { role: string }) {
   }, [activeIndex])
 
   // Reset active index on query change
-  useEffect(() => { setActiveIndex(0) }, [query])
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [query]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+ setActiveIndex(0)
+  }
 
   function navigate(href: string) {
     router.push(href)
@@ -231,7 +236,7 @@ export default function CommandPalette({ role }: { role: string }) {
       {/* Trigger button in navbar */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openPalette}
         title={isMac ? "Search (⌘K)" : "Search (Ctrl+K)"}
         className="hidden sm:flex min-w-0 flex-1 items-center gap-3 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 transition hover:border-gray-300 hover:bg-white cursor-pointer group"
       >
@@ -252,7 +257,7 @@ export default function CommandPalette({ role }: { role: string }) {
       {/* Mobile search icon */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openPalette}
         className="sm:hidden inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-100"
         aria-label="Search"
       >

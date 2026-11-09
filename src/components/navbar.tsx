@@ -1,16 +1,38 @@
 "use client"
 
+
+
+import { useCurrentTime } from "@/hooks/use-current-time"
+
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Bell, LogOut, User, Settings, ChevronDown, KeyRound, Menu } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { ROLES } from "@/constants/roles"
 import type { UserContext } from "@/lib/user-context"
+import type { TableRow } from "@/lib/database-row"
 import CommandPalette from "@/components/command-palette"
 
 type Role = typeof ROLES[keyof typeof ROLES]
+type Notification = TableRow<"notifications">
+
+function asNotification(value: unknown): Notification | null {
+  if (!value || typeof value !== "object") return null
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== "string" || typeof record.title !== "string" || typeof record.message !== "string") return null
+  return {
+    id: record.id,
+    title: record.title,
+    message: record.message,
+    created_at: typeof record.created_at === "string" ? record.created_at : null,
+    is_read: typeof record.is_read === "boolean" ? record.is_read : null,
+    link: typeof record.link === "string" ? record.link : null,
+    user_id: typeof record.user_id === "string" ? record.user_id : null,
+  }
+}
 
 export default function Navbar({ profile: initialProfile }: { profile: UserContext | null }) {
+  const now = useCurrentTime()
   const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -24,7 +46,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
       }
     : null
 
-  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
 
   // Fetch notifications via server API (uses admin client to bypass RLS issues)
   useEffect(() => {
@@ -36,7 +58,9 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         const res = await fetch("/api/notifications", { cache: "no-store" })
         if (res.ok) {
           const json = await res.json()
-          if (!cancelled && json.notifications) setNotifications(json.notifications)
+          if (!cancelled && Array.isArray(json.notifications)) {
+            setNotifications(json.notifications.map((item: unknown) => asNotification(item)).filter((item: Notification | null): item is Notification => item !== null))
+          }
         }
       } catch {
         // Silently ignore — notifications are non-critical
@@ -58,7 +82,8 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         },
         (payload) => {
           if (!cancelled) {
-            setNotifications((prev) => [payload.new, ...prev].slice(0, 30))
+            const notification = asNotification(payload.new)
+            if (notification) setNotifications((prev) => [notification, ...prev].slice(0, 30))
           }
         }
       )
@@ -131,7 +156,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
           ? dateStr
           : `${dateStr}Z`
       const date = new Date(normalized)
-      const diffMs = Date.now() - date.getTime()
+      const diffMs = now - date.getTime()
       if (isNaN(diffMs)) return ""
 
       const diffMin = Math.floor(diffMs / 60000)
@@ -163,12 +188,12 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
         <div>
           <h1 className="font-['Space_Grotesk'] text-xs sm:text-sm font-bold uppercase tracking-[0.24em] text-gray-900">Dashboard</h1>
           <p className="hidden sm:block mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-gray-600">
-            {new Date().toLocaleDateString("en-US", {
+            {now ? new Date(now).toLocaleDateString("en-US", {
               weekday: "long",
               year: "numeric",
               month: "long",
               day: "numeric",
-            })}
+            }) : ""}
           </p>
         </div>
 
@@ -226,7 +251,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                       <button
                         key={notification.id}
                         type="button"
-                        onClick={() => markAsRead(notification.id, notification.link)}
+                        onClick={() => markAsRead(notification.id, notification.link ?? undefined)}
                         className={`flex w-full items-start gap-3 px-4 py-3.5 text-left text-sm transition cursor-pointer ${
                           !notification.is_read ? "bg-amber-50/40 hover:bg-amber-50/70" : "hover:bg-gray-50"
                         }`}
@@ -241,7 +266,7 @@ export default function Navbar({ profile: initialProfile }: { profile: UserConte
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-gray-900 text-xs leading-snug">{notification.title}</p>
                           <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{notification.message}</p>
-                          <p className="mt-1 text-[10px] font-semibold text-gray-400">{fmtTime(notification.created_at)}</p>
+                          <p className="mt-1 text-[10px] font-semibold text-gray-400">{notification.created_at ? fmtTime(notification.created_at) : "Time unavailable"}</p>
                         </div>
                       </button>
                     ))

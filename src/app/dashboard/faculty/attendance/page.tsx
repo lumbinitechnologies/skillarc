@@ -6,17 +6,17 @@ import { getCurrentDashboardSession } from "@/lib/dashboard-session"
 import { measureServer } from "@/lib/perf"
 
 export default async function AttendancePage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentDashboardSession()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.faculty.attendance.context", () => getCurrentDashboardSession())
+
 
   if (!context) redirect("/auth/login")
 
   const supabase = await createSupabaseServerClient()
   const profile = context
 
-  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].includes(profile.role as any)) {
+  if (!profile || ![ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD].some(role => role === profile.role)) {
     redirect("/dashboard")
   }
 
@@ -24,7 +24,7 @@ export default async function AttendancePage() {
   const institutionId = profile.institution_id
 
   // Consolidated parallel batch: Fetch faculty assignments, programs, sections, subjects, joined students, and leave applications in ONE single Promise.all
-  const tBatchStart = performance.now()
+
   const [
     assignmentsRes,
     programsRes,
@@ -77,23 +77,23 @@ export default async function AttendancePage() {
         .order("created_at", { ascending: false }),
     ])
   )
-  const batchMs = performance.now() - tBatchStart
+
 
   const facultyAssignments = assignmentsRes.data ?? []
   const programs = programsRes.data ?? []
   const sections = sectionsRes.data ?? []
   const allSubjects = subjectsRes.data ?? []
-  const rawStudents = (studentsRes.data ?? []) as any[]
+  const rawStudents = (studentsRes.data ?? [])
   const rawLeaves = leavesRes.data ?? []
 
-  const assignedSubjectIds = new Set(facultyAssignments.map((row: any) => row.subject_id))
-  const assignedSectionIds = new Set(facultyAssignments.map((row: any) => row.section_id).filter(Boolean))
+  const assignedSubjectIds = new Set(facultyAssignments.map((row) => row.subject_id))
+  const assignedSectionIds = new Set(facultyAssignments.map((row) => row.section_id).filter(Boolean))
 
   const subjects = assignedSubjectIds.size > 0
-    ? allSubjects.filter((s: any) => assignedSubjectIds.has(s.id))
+    ? allSubjects.filter((s) => assignedSubjectIds.has(s.id))
     : allSubjects
 
-  const students = rawStudents.map((s: any) => {
+  const students = rawStudents.map((s) => {
     const user = Array.isArray(s.users) ? s.users[0] : s.users
     return {
       ...s,
@@ -106,13 +106,13 @@ export default async function AttendancePage() {
 
   // Filter by section if faculty teaches specific sections
   const filteredStudents = assignedSectionIds.size > 0
-    ? students.filter((s: any) => assignedSectionIds.has(s.section_id))
+    ? students.filter((s) => assignedSectionIds.has(s.section_id))
     : students
 
-  const studentMap = new Map(students.map((s: any) => [s.id, s]))
-  const sectionMap = new Map((sections ?? []).map((sec: any) => [sec.id, sec.name]))
+  const studentMap = new Map(students.map((s) => [s.id, s]))
+  const sectionMap = new Map((sections ?? []).map((sec) => [sec.id, sec.name]))
 
-  const leaveApplications = (rawLeaves ?? []).map((leave: any) => {
+  const leaveApplications = (rawLeaves ?? []).map((leave) => {
     const st = studentMap.get(leave.student_id)
     return {
       ...leave,
@@ -124,10 +124,8 @@ export default async function AttendancePage() {
     }
   })
 
-  const totalMs = performance.now() - tPageStart
-  console.info(
-    `[DashboardFacultyAttendance] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} facultyId=${profile.id}`
-  )
+
+
 
   return (
     <AttendanceClient

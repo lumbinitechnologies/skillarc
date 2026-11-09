@@ -5,6 +5,8 @@ import { StudentSubjectDetailClient } from "./student-subject-detail-client"
 import { getStudentProjectGroupsAction } from "@/app/actions/project-groups"
 import { getSubjectAnnouncementsAction } from "@/app/actions/announcements"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
+import type { AcademicAssignment, AcademicStudent, AttendanceEntry } from "@/lib/academic-content-types"
 
 export const dynamic = "force-dynamic"
 
@@ -19,8 +21,17 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
   const context = await getCurrentDashboardSession()
   if (!context) redirect("/auth/login")
 
-  const adminClient = createSupabaseAdminClient()
   if (context.role !== ROLES.STUDENT) redirect("/dashboard")
+
+  const sessionClient = await createSupabaseServerClient()
+  const { data: visibleSubject, error: subjectAccessError } = await sessionClient
+    .from("subjects")
+    .select("id")
+    .eq("id", subjectId)
+    .maybeSingle()
+  if (subjectAccessError || !visibleSubject) redirect("/dashboard/student/subjects")
+
+  const adminClient = createSupabaseAdminClient()
 
   const { data: studentData } = await adminClient
     .from("students")
@@ -29,6 +40,10 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     .single()
 
   const profile = { ...context, ...studentData }
+  const { data: visibleProfileSection } = profile.section_id
+    ? await sessionClient.from("sections").select("id").eq("id", profile.section_id).maybeSingle()
+    : { data: null }
+  const studentSectionId = visibleProfileSection?.id ?? null
 
   // 1. Fetch Subject Info
   const { data: subject } = await adminClient
@@ -44,60 +59,74 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
   // 2. Fetch Faculty details: check faculty_subjects first, fallback to timetable_slots
   let facultyName = "Faculty pending"
 
-  const { data: fsRows } = await adminClient
+  const { data: fsRows } = await sessionClient
     .from("faculty_subjects")
-    .select("faculty_id, section_id, users:faculty_id(name)")
-    .eq("institution_id", profile.institution_id)
+    .select("faculty_id, section_id")
     .eq("subject_id", subjectId)
 
   if (fsRows && fsRows.length > 0) {
-    const secMatch = fsRows.find((r: any) => r.section_id === profile.section_id)
+    const secMatch = fsRows.find((r) => r.section_id === studentSectionId)
     const targetRow = secMatch || fsRows[0]
-    const u = Array.isArray(targetRow?.users) ? targetRow?.users[0] : targetRow?.users
-    if (u?.name) {
-      facultyName = u.name
+    if (targetRow?.faculty_id) {
+      const { data: facultyProfile } = await adminClient
+        .from("users")
+        .select("name")
+        .eq("id", targetRow.faculty_id)
+        .maybeSingle()
+      if (facultyProfile?.name) facultyName = facultyProfile.name
     }
   }
 
   if (facultyName === "Faculty pending") {
-    const { data: slots } = await adminClient
+    const { data: slots } = await sessionClient
       .from("timetable_slots")
-      .select("faculty_id, users:faculty_id(name)")
-      .eq("institution_id", profile.institution_id)
-      .eq("section_id", profile.section_id)
+      .select("faculty_id")
       .eq("subject_id", subjectId)
       .not("faculty_id", "is", null)
       .limit(1)
 
-    const u = Array.isArray(slots?.[0]?.users) ? slots?.[0]?.users[0] : slots?.[0]?.users
-    if (u?.name) {
-      facultyName = u.name
+    const facultyId = slots?.[0]?.faculty_id
+    if (facultyId) {
+      const { data: facultyProfile } = await adminClient
+        .from("users")
+        .select("name")
+        .eq("id", facultyId)
+        .maybeSingle()
+      if (facultyProfile?.name) facultyName = facultyProfile.name
     }
   }
 
-  // 3. Fetch Assignments for this subject
-  const { data: assignments = [] } = await adminClient
+  // Authorize each assignment through student RLS before loading display joins.
+  const { data: authorizedAssignments } = await sessionClient
     .from("assignments")
-    .select(`
-      *,
-      faculty:faculty_id(
-        id,
-        name
-      )
-    `)
+    .select("id")
     .eq("subject_id", subjectId)
-    .order("created_at", { ascending: false })
+  const authorizedAssignmentIds = (authorizedAssignments ?? []).map((assignment) => assignment.id)
+  const { data: assignments = [] } = authorizedAssignmentIds.length
+    ? await adminClient
+        .from("assignments")
+        .select(`
+          id, subject_id, faculty_id, title, description, due_date, created_at,
+          updated_at, type, max_score, language, section_ids, files,
+          faculty:faculty_id(name)
+        `)
+        .in("id", authorizedAssignmentIds)
+        .order("created_at", { ascending: false })
+    : { data: [] }
 
   const subjectAnnouncements = await getSubjectAnnouncementsAction(subjectId)
 
-  // Filter assignments targeted to this student's section (or globally assigned)
-  const studentSectionId = profile.section_id
-  const activeAssignments = (assignments ?? []).filter((a: any) => {
-    if (!a.section_ids || a.section_ids.length === 0) return true
-    return a.section_ids.includes(studentSectionId)
-  })
+  // The session RLS query above has already applied formal enrollment or the
+  // validated section relationship. Do not re-filter against a stale profile section.
+  const activeAssignments = assignments ?? []
+  const studentAssignments: AcademicAssignment[] = activeAssignments.map((assignment) => ({
+    ...assignment,
+    questions: null,
+    test_cases: null,
+    faculty: Array.isArray(assignment.faculty) ? assignment.faculty[0] ?? null : assignment.faculty ?? null,
+  }))
 
-  const assignmentIds = activeAssignments.map((a: any) => a.id)
+  const assignmentIds = activeAssignments.map((a) => a.id)
 
   // 4. Fetch Student's Submissions for these assignments
   const { data: submissions = [] } = assignmentIds.length
@@ -109,21 +138,24 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     : { data: [] }
 
   // 5. Fetch Classmates in the same section
-  let classmates: any[] = []
+  let classmates: AcademicStudent[] = []
   if (studentSectionId) {
     const { data: classmateStudents } = await adminClient
       .from("students")
       .select("id")
       .eq("section_id", studentSectionId)
 
-    const classmateIds = (classmateStudents ?? []).map((s: any) => s.id)
+    const classmateIds = (classmateStudents ?? []).map((s) => s.id)
     if (classmateIds.length) {
       const { data: usersData } = await adminClient
         .from("users")
         .select("id, name, email")
         .in("id", classmateIds)
         .order("name")
-      classmates = usersData ?? []
+      classmates = (usersData ?? []).map((student) => ({
+        ...student,
+        email: student.email ?? undefined,
+      }))
     }
   }
 
@@ -136,7 +168,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
     .order("created_at", { ascending: false })
 
   // 7. Fetch Attendance records for this subject + section
-  let attendanceEntries: any[] = []
+  let attendanceEntries: AttendanceEntry[] = []
   let attendanceSummary = {
     total: 0,
     present: 0,
@@ -154,7 +186,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       .order("attendance_date", { ascending: false })
       .order("period")
 
-    const sessionIds = (sessions ?? []).map((session: any) => session.id)
+    const sessionIds = (sessions ?? []).map((session) => session.id)
 
     const { data: records = [] } = sessionIds.length
       ? await adminClient
@@ -164,29 +196,29 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
           .in("session_id", sessionIds)
       : { data: [] }
 
-    const recordMap = new Map((records ?? []).map((record: any) => [record.session_id, record]))
+    const recordMap = new Map((records ?? []).map((record) => [record.session_id, record]))
 
-    const facultyIds = Array.from(new Set((sessions ?? []).map((s: any) => s.faculty_id).filter(Boolean))) as string[]
-    let facultyMap = new Map<string, string>()
+    const facultyIds = Array.from(new Set((sessions ?? []).map((s) => s.faculty_id).filter(Boolean))) as string[]
+    const facultyMap = new Map<string, string>()
     if (facultyIds.length) {
       const { data: faculties = [] } = await adminClient
         .from("users")
         .select("id, name")
         .in("id", facultyIds)
 
-      ;(faculties ?? []).forEach((fac: any) => {
+      ;(faculties ?? []).forEach((fac) => {
         facultyMap.set(fac.id, fac.name)
       })
     }
 
-    attendanceEntries = (sessions ?? []).map((session: any) => {
+    attendanceEntries = (sessions ?? []).map((session) => {
       const record = recordMap.get(session.id)
       const facName = session.faculty_id ? facultyMap.get(session.faculty_id) : undefined
 
       return {
         id: session.id,
         date: session.attendance_date,
-        period: session.period,
+        period: String(session.period),
         facultyName: facName ?? "Faculty pending",
         status: record?.status ?? "NOT_MARKED",
       }
@@ -210,10 +242,10 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
   // 8. Fetch Project Groups for this student and subject
   const studentGroupsAll = await getStudentProjectGroupsAction(context.id)
-  const projectGroups = (studentGroupsAll || []).filter((sg: any) => sg.project?.subject_id === subjectId)
+  const projectGroups = (studentGroupsAll || []).filter((sg) => sg.project?.subject_id === subjectId)
 
-  let gradeColumns: any[] = []
-  let gradeEntries: any[] = []
+  let gradeColumns = []
+  let gradeEntries = []
 
   try {
     const { data: columns, error: columnsError } = await adminClient
@@ -225,7 +257,7 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
 
     if (!columnsError && columns?.length) {
       gradeColumns = columns
-      const columnIds = columns.map((column: any) => column.id)
+      const columnIds = columns.map((column) => column.id)
 
       const { data: entries, error: entriesError } = await adminClient
         .from("grade_entries")
@@ -249,13 +281,13 @@ export default async function StudentSubjectDetailPage({ params }: PageProps) {
       studentSectionId={studentSectionId}
       subject={subject}
       facultyName={facultyName}
-      assignments={activeAssignments}
+      assignments={studentAssignments}
       submissions={submissions ?? []}
       classmates={classmates ?? []}
       meetings={meetings ?? []}
       attendanceEntries={attendanceEntries}
       attendanceSummary={attendanceSummary}
-      projectGroups={projectGroups ?? []}
+      projectGroups={projectGroups.map(allocation => ({ id: allocation.group.id, project: allocation.project, project_group: { ...allocation.group, group_members: allocation.members } }))}
       subjectAnnouncements={subjectAnnouncements ?? []}
       gradeColumns={gradeColumns}
       gradeEntries={gradeEntries}

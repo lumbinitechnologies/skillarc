@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import React, { useState, useEffect, use } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
@@ -228,8 +230,8 @@ export default function InstitutionApplyPage({
         program_name: data.application.program_name,
         intake_name: data.application.intake_name,
       })
-    } catch (err: any) {
-      setErrorMsg(err.message || "An error occurred while submitting your application.")
+    } catch (err: unknown) {
+      setErrorMsg(readErrorMessage(err) || "An error occurred while submitting your application.")
     } finally {
       setSubmitting(false)
     }
@@ -334,7 +336,7 @@ export default function InstitutionApplyPage({
                   Welcome to {institution?.name || "the College"}!
                 </h2>
                 <p className="text-xs text-slate-300 font-sans leading-relaxed">
-                  Your admission file has been logged in the institution's Admissions Desk. Keep your reference code safe to track your review status and sign your upcoming offer letter.
+                  Your admission file has been logged in the institution&apos;s Admissions Desk. Keep your reference code safe to track your review status and sign your upcoming offer letter.
                 </p>
               </div>
 

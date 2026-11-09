@@ -1,3 +1,4 @@
+import { measureServer } from "@/lib/perf"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
 import { StudentsClientPage } from "./students-client"
@@ -8,10 +9,10 @@ import type { StudentWithSection } from "@/modules/students"
 export const dynamic = "force-dynamic"
 
 export default async function StudentsPage() {
-  const tPageStart = performance.now()
-  const tContextStart = performance.now()
-  const context = await getCurrentUserContext()
-  const contextMs = performance.now() - tContextStart
+
+
+  const context = await measureServer("app.dashboard.institution-admin.students.context", () => getCurrentUserContext())
+
 
   if (!context) redirect("/auth/login")
   if (context.role !== ROLES.INSTITUTION_ADMIN) redirect("/dashboard")
@@ -21,8 +22,8 @@ export default async function StudentsPage() {
   const adminClient = createSupabaseAdminClient()
 
   // Consolidated parallel batch: Fetch joined students, sections, and programs in ONE single Promise.all
-  const tBatchStart = performance.now()
-  const [studentsRes, sectionsRes, programsRes] = await Promise.all([
+
+  const [studentsRes, sectionsRes, programsRes] = await measureServer("app.dashboard.institution-admin.students.data", () => Promise.all([
     adminClient
       .from("students")
       .select(`
@@ -68,13 +69,13 @@ export default async function StudentsPage() {
       .select("id, name")
       .eq("institution_id", institutionId)
       .order("name"),
-  ])
-  const batchMs = performance.now() - tBatchStart
+  ]))
 
-  const studentRecords = (studentsRes.data ?? []) as any[]
+
+  const studentRecords = (studentsRes.data ?? [])
   const count = studentsRes.count ?? 0
-  const sections = (sectionsRes.data ?? []) as any[]
-  const programs = (programsRes.data ?? []) as any[]
+  const sections = (sectionsRes.data ?? [])
+  const programs = (programsRes.data ?? [])
 
   // Merge student + user + section data in-memory
   const students = studentRecords.map((student) => {
@@ -86,13 +87,11 @@ export default async function StudentsPage() {
       department_id: null,
       phone: null,
       section: sec || null,
-    } as any as StudentWithSection
+    } as StudentWithSection
   })
 
-  const totalMs = performance.now() - tPageStart
-  console.info(
-    `[DashboardInstitutionAdminStudents] contextMs=${contextMs.toFixed(1)} batchMs=${batchMs.toFixed(1)} totalMs=${totalMs.toFixed(1)} count=${count}`
-  )
+
+
 
   return (
     <StudentsClientPage

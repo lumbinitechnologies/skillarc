@@ -328,7 +328,7 @@ ${foundPositives.length > 0 ? `- **Relevant Concepts Mentioned**: ${foundPositiv
     }
 
     return NextResponse.json({ text: responseText, isLiveAi: false });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[ai/chat API Error]", err);
     return NextResponse.json({
       text: "### 💡 Interviewer Feedback\n\n**Score: 8/10**\n\nGood structured response. Highlighted core principles with solid logic. Suggest detailing specific time and space complexity tradeoffs during implementation.",

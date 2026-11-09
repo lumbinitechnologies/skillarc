@@ -13,7 +13,7 @@ export default async function HodFacultyPage() {
     .in("role", ["FACULTY", "HOD", "PROGRAM_HEAD"])
     .order("name")
 
-  const faculty = (facultyRes.data ?? []) as any[]
+  const faculty = (facultyRes.data ?? [])
   const facultyIds = faculty.map((f) => f.id)
 
   const [subjectsRes, usersRoleRes] = await Promise.all([
@@ -31,8 +31,8 @@ export default async function HodFacultyPage() {
       : Promise.resolve({ data: [] }),
   ])
 
-  const fsRows = (subjectsRes.data ?? []) as any[]
-  const roleMap = Object.fromEntries(((usersRoleRes.data ?? []) as any[]).map((u) => [u.id, u.role]))
+  const fsRows = (subjectsRes.data ?? [])
+  const roleMap = Object.fromEntries(((usersRoleRes.data ?? [])).map((u) => [u.id, u.role]))
 
   const enriched = faculty.map((f) => {
     const assignments = fsRows.filter((r) => r.faculty_id === f.id).map((r) => {

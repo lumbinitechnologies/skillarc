@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
 import assert from "node:assert/strict"
 import test from "node:test"
 import { cascadeDeleteInstitution, cascadeDeleteOrganization } from "./cascade-delete"
@@ -6,7 +7,7 @@ test("cascadeDeleteInstitution handles non-existent mock client gracefully via p
   const deletedTables: string[] = []
   const updatedTables: string[] = []
 
-  const mockClient: any = {
+  const mockClient = {
     from: (tableName: string) => {
       return {
         select: () => ({
@@ -43,7 +44,7 @@ test("cascadeDeleteInstitution handles non-existent mock client gracefully via p
     },
   }
 
-  const result = await cascadeDeleteInstitution(mockClient, "test-inst-123")
+  const result = await cascadeDeleteInstitution(mockClient as unknown as SupabaseClient, "test-inst-123")
   assert.equal(result.success, true)
   assert.ok(deletedTables.includes("institutions"))
 })
@@ -51,7 +52,7 @@ test("cascadeDeleteInstitution handles non-existent mock client gracefully via p
 test("cascadeDeleteOrganization handles deletion sequence via fallback", async () => {
   const deletedTables: string[] = []
 
-  const mockClient: any = {
+  const mockClient = {
     from: (tableName: string) => {
       return {
         select: () => ({
@@ -86,7 +87,7 @@ test("cascadeDeleteOrganization handles deletion sequence via fallback", async (
     },
   }
 
-  const result = await cascadeDeleteOrganization(mockClient, "test-org-123")
+  const result = await cascadeDeleteOrganization(mockClient as unknown as SupabaseClient, "test-org-123")
   assert.equal(result.success, true)
   assert.ok(deletedTables.includes("institutions"))
   assert.ok(deletedTables.includes("organizations"))
@@ -94,7 +95,7 @@ test("cascadeDeleteOrganization handles deletion sequence via fallback", async (
 
 test("cascadeDeleteInstitution uses RPC fast-path when available", async () => {
   let rpcCalled = false
-  const mockClient: any = {
+  const mockClient = {
     rpc: async (name: string) => {
       if (name === "delete_institution_cascade") {
         rpcCalled = true
@@ -114,7 +115,7 @@ test("cascadeDeleteInstitution uses RPC fast-path when available", async () => {
     },
   }
 
-  const result = await cascadeDeleteInstitution(mockClient, "test-inst-rpc")
+  const result = await cascadeDeleteInstitution(mockClient as unknown as SupabaseClient, "test-inst-rpc")
   assert.equal(result.success, true)
   assert.equal(rpcCalled, true)
 })

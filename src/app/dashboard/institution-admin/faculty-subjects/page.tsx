@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
@@ -53,20 +54,20 @@ export default async function FacultySubjectsPage() {
       .eq("institution_id", institutionId),
   ])
 
-  const faculty = (facultyRes.data ?? []).map((f: any) => ({
+  const faculty = (facultyRes.data ?? []).map((f) => ({
     id: f.id,
     name: f.name,
     department_id: f.department_id ?? null,
-    department: (f.department as any)?.name ?? null,
+    department: relationOne(f.department)?.name ?? null,
   }))
 
   const departments = departmentsRes.data ?? []
   const programs = programsRes.data ?? []
 
   // Build a map: program_id → department_id
-  const programDeptMap = new Map(programs.map((p: any) => [p.id, p.department_id]))
+  const programDeptMap = new Map(programs.map((p) => [p.id, p.department_id]))
 
-  const subjects = (subjectsRes.data ?? []).map((s: any) => ({
+  const subjects = (subjectsRes.data ?? []).map((s) => ({
     id: s.id,
     name: s.name,
     code: s.code,

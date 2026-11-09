@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  theme: {
     colors: {
       transparent: 'transparent',
       current: 'currentColor',
@@ -60,5 +61,5 @@ module.exports = {
       '2xl': '1536px'
     }
   },
-  plugins: [require('@tailwindcss/forms')],
+  plugins: [],
 }

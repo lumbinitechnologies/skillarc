@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { dispatchNotification, NotificationCategory } from "@/lib/notification-service"
@@ -43,8 +44,8 @@ export async function POST(request: NextRequest) {
       hasResendKey,
       message: `Test notification dispatched for ${user.email}`,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Test notification failed:", err)
-    return NextResponse.json({ error: err?.message || "Failed to dispatch test notification" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(err) || "Failed to dispatch test notification" }, { status: 500 })
   }
 }

@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import React from "react"
 import { Printer, X, Award, CheckCircle2, ClipboardList, BookOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -57,6 +60,7 @@ export default function StudentGradePrintModal({
   gradeEntries = [],
   gradeSummary,
 }: StudentGradePrintModalProps) {
+  const currentTime = useCurrentTime()
   if (!isOpen) return null
 
   const handlePrint = () => {
@@ -109,7 +113,7 @@ export default function StudentGradePrintModal({
             </div>
             <div className="text-right text-xs space-y-1">
               <div className="font-bold text-slate-700 font-['Space_Grotesk']">
-                Date: {new Date().toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
+                Date: {currentTime ? new Date(currentTime).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "Date unavailable"}
               </div>
               <div className="text-emerald-700 font-bold text-[10px] uppercase font-mono">STATUS: CERTIFIED RECORD</div>
             </div>

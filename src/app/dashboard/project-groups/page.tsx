@@ -21,9 +21,9 @@ export default async function ProjectGroupsPage() {
     return <div className="p-8 text-center text-slate-500">Failed to resolve active profile.</div>
   }
 
-  let projects: any[] = []
-  let subjects: any[] = []
-  let studentGroups: any[] = []
+  let projects: Awaited<ReturnType<typeof getProjectsByFacultyAction>> = []
+  let subjects: Array<{ id: string; name: string; code: string; section_id: string; section_name: string }> = []
+  let studentGroups: Awaited<ReturnType<typeof getStudentProjectGroupsAction>> = []
 
   if (profile.role === ROLES.FACULTY) {
     const { data: slots } = await supabase
@@ -36,13 +36,14 @@ export default async function ProjectGroupsPage() {
       `)
       .eq("faculty_id", user.id)
 
-    const uniqueSubjectsMap = new Map()
-    for (const slot of (slots || []) as any[]) {
+    const uniqueSubjectsMap = new Map<string, { id: string; name: string; code: string; section_id: string; section_name: string }>()
+    for (const slot of (slots || [])) {
       if (!slot.subject_id || !slot.section_id) continue
       const key = `${slot.subject_id}-${slot.section_id}`
       if (!uniqueSubjectsMap.has(key)) {
         const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
         const sec = Array.isArray(slot.sections) ? slot.sections[0] : slot.sections
+        if (!sub || !sec) continue
         uniqueSubjectsMap.set(key, {
           id: sub?.id,
           name: sub?.name,

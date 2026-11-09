@@ -1,9 +1,14 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import React, { useState, useMemo } from "react"
 import { Printer, X, FileText, CheckSquare, Award, BarChart3, ChevronRight, ChevronLeft, SlidersHorizontal, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { printIsolatedElement } from "@/lib/print-document"
+
+const EMPTY_DEFAULT_OPTIONS: [] = []
 
 export interface GradebookColumnItem {
   id: string
@@ -29,7 +34,7 @@ interface GradebookPrintModalProps {
     email: string
     roll_number?: string
   }>
-  assignmentGrades: Record<string, Record<string, any>>
+  assignmentGrades: Record<string, Record<string, string | number | null>>
   customGrades: Record<string, Record<string, string>>
 }
 
@@ -51,9 +56,9 @@ export default function GradebookPrintModal({
   facultyName = "Course Instructor",
   academicTerm = "Academic Session 2026",
   gradeWeightMode = "percentage",
-  assignmentColumns = [],
-  customColumns = [],
-  students = [],
+  assignmentColumns = EMPTY_DEFAULT_OPTIONS,
+  customColumns = EMPTY_DEFAULT_OPTIONS,
+  students = EMPTY_DEFAULT_OPTIONS,
   assignmentGrades = {},
   customGrades = {},
 }: GradebookPrintModalProps) {
@@ -69,10 +74,16 @@ export default function GradebookPrintModal({
     allAvailableColumns.map((c) => c.id)
   )
 
-  React.useEffect(() => {
+  const [previousSource0, setPreviousSource0] = React.useState<readonly unknown[] | null>(null)
+  const nextSource0 = [allAvailableColumns.length]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     setSelectedColumnIds(allAvailableColumns.map((c) => c.id))
-  }, [allAvailableColumns.length])
+  })()
+  }
 
+  const currentTime = useCurrentTime()
   if (!isOpen) return null
 
   const handlePrint = () => {
@@ -265,7 +276,7 @@ export default function GradebookPrintModal({
             </div>
             <div className="text-right text-xs space-y-1">
               <div className="font-bold text-slate-700 font-['Space_Grotesk']">
-                Date: {new Date().toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}
+                Date: {currentTime ? new Date(currentTime).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "Date unavailable"}
               </div>
               <div className="text-slate-500 text-[10px] uppercase font-mono">
                 STATUS: {printMode === "BLANK" ? "BLANK FORM" : "FINALIZED MARKS"}

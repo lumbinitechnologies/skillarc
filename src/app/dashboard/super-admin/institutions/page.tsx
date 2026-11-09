@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { deleteInstitution } from "../actions"
 import InstitutionsClient from "./institutions-client"
@@ -12,7 +13,7 @@ export default async function InstitutionsPage() {
       name,
       domain,
       organization_id,
-      organizations(name)
+      created_at, organizations(name)
     `)
     .order("name")
 
@@ -34,15 +35,15 @@ export default async function InstitutionsPage() {
     }
   }
 
-  const institutions = (institutionsRaw ?? []).map((inst: any) => ({
+  const institutions = (institutionsRaw ?? []).map((inst) => ({
     id: inst.id,
     name: inst.name ?? "",
     code: inst.domain ?? "general",
     type: "college" as const,
     active: true,
-    created_at: new Date().toISOString(),
+    created_at: inst.created_at ?? "",
     organization_id: inst.organization_id ?? "",
-    organization_name: (inst.organizations as any)?.name ?? "—",
+    organization_name: relationOne(inst.organizations)?.name ?? "—",
     user_count: countMap[inst.id] ?? 0,
   }))
 

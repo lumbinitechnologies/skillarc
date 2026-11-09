@@ -161,14 +161,19 @@ export function BulkImportDialog({ open, onOpenChange, entity, institutionId, on
   const { toast } = useToast()
   const meta = ENTITY_META[entity]
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [open]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     if (!open) {
       setRows([])
       setFileName("")
       setError(null)
       setIsImporting(false)
     }
-  }, [open])
+
+  }
 
   const previewCount = useMemo(() => rows.length, [rows])
 

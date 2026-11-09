@@ -13,7 +13,7 @@ export default async function HodAttendancePage() {
     .eq("institution_id", institutionId)
     .order("name")
 
-  const rawSections = (sectionsRes.data ?? []) as any[]
+  const rawSections = (sectionsRes.data ?? [])
   const sectionIds = rawSections.map((s) => s.id)
 
   // All students in these sections
@@ -24,7 +24,7 @@ export default async function HodAttendancePage() {
         .in("section_id", sectionIds)
     : { data: [] }
 
-  const students = (studentsRes.data ?? []) as any[]
+  const students = (studentsRes.data ?? [])
   const studentIds = students.map((s) => s.id)
 
   // Attendance records
@@ -36,7 +36,7 @@ export default async function HodAttendancePage() {
         .not("status", "eq", "NOT_MARKED")
     : { data: [] }
 
-  const records = (recordsRes.data ?? []) as any[]
+  const records = (recordsRes.data ?? [])
 
   // Build per-section attendance summary
   const sectionStats = rawSections.map((sec) => {

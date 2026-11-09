@@ -22,10 +22,10 @@ export const getCachedSections = unstable_cache(
     const admin = createSupabaseAdminClient()
     const { data } = await admin
       .from("sections")
-      .select("id, name, semester, program_id, programs:program_id(id, name), faculty_advisor_id")
+      .select("id, name, semester, program_id, programs:program_id(id, name), faculty_advisor_id, advisor:users!sections_faculty_advisor_id_fkey(name, email)")
       .eq("institution_id", institutionId)
       .order("name")
-    return (data ?? []) as any[]
+    return (data ?? [])
   },
   ["institution-sections"],
   { revalidate: TTL, tags: ["sections"] }
@@ -40,7 +40,7 @@ export const getCachedPrograms = unstable_cache(
       .select("id, name, duration_years, department_id")
       .eq("institution_id", institutionId)
       .order("name")
-    return (data ?? []) as any[]
+    return (data ?? [])
   },
   ["institution-programs"],
   { revalidate: TTL, tags: ["programs"] }
@@ -55,7 +55,7 @@ export const getCachedSubjects = unstable_cache(
       .select("id, name, code, program_id, faculty_id, users:faculty_id(id, name)")
       .eq("institution_id", institutionId)
       .order("name")
-    return (data ?? []) as any[]
+    return (data ?? [])
   },
   ["institution-subjects"],
   { revalidate: TTL, tags: ["subjects"] }
@@ -71,7 +71,7 @@ export const getCachedFaculty = unstable_cache(
       .eq("institution_id", institutionId)
       .in("role", [ROLES.FACULTY, ROLES.HOD, ROLES.PROGRAM_HEAD])
       .order("name")
-    return (data ?? []) as any[]
+    return (data ?? [])
   },
   ["institution-faculty"],
   { revalidate: TTL, tags: ["faculty"] }
@@ -86,7 +86,7 @@ export const getCachedDepartments = unstable_cache(
       .select("id, name, code, hod_id")
       .eq("institution_id", institutionId)
       .order("name")
-    return (data ?? []) as any[]
+    return (data ?? [])
   },
   ["institution-departments"],
   { revalidate: TTL, tags: ["departments"] }

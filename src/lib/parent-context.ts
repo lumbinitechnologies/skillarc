@@ -60,8 +60,8 @@ export async function getParentContext() {
       .in("id", studentIds),
   ])
 
-  const users = (usersRes.data ?? []) as any[]
-  const students = (studentsRes.data ?? []) as any[]
+  const users = (usersRes.data ?? [])
+  const students = (studentsRes.data ?? [])
 
   const children: ParentChild[] = (relations ?? []).map((rel) => {
     const user = users.find((u) => u.id === rel.student_id)

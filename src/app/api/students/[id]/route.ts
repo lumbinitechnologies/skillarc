@@ -70,7 +70,7 @@ export async function PUT(
       parentRelationship,
     } = body
 
-    const userUpdate: Record<string, any> = {}
+    const userUpdate: Record<string, unknown> = {}
     if (name !== undefined) userUpdate.name = name
     if (phone !== undefined) userUpdate.phone = phone || null
 

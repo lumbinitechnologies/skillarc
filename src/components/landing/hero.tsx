@@ -158,7 +158,7 @@ export default function Hero() {
             >
               <div>
                 <div className="text-xs text-[#3A6DAF] tracking-[0.2em] uppercase mb-2 flex items-center gap-2 font-bold">
-                  <span className="text-[#E57D37]">//</span>
+                  <span className="text-[#E57D37]">{"//"}</span>
                   <span>HOW IT WORKS</span>
                 </div>
                 <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tight text-[#0B132B]">

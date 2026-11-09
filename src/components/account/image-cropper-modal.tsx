@@ -42,13 +42,18 @@ export function ImageCropperModal({
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // Reset state when a new image is loaded
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [isOpen, imageSrc]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     if (isOpen && imageSrc) {
       setZoom(1)
       setRotation(0)
       setPosition({ x: 0, y: 0 })
     }
-  }, [isOpen, imageSrc])
+
+  }
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget

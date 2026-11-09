@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { facultySubjectService } from "@/modules/faculty-subjects/services/facultySubjectService"
@@ -162,20 +164,13 @@ export function FacultySubjectsClientPage({
   const activeFacultyDeptId = activeFaculty?.department_id ?? null
   const deptMap = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments])
 
-  const filteredSubjects = useMemo(() => {
-    if (showAllDepts || !activeFacultyDeptId) return subjects
-    // Show subjects that belong to the faculty's department (via program) OR have no department
-    return subjects.filter((s) => !s.department_id || s.department_id === activeFacultyDeptId)
-  }, [subjects, activeFacultyDeptId, showAllDepts])
+  const filteredSubjects = showAllDepts || !activeFacultyDeptId ? subjects : subjects.filter((s) => !s.department_id || s.department_id === activeFacultyDeptId)
 
   // Cross-dept subjects already selected
-  const crossDeptSelected = useMemo(() => {
-    if (!activeFacultyDeptId) return []
-    return selectedSubjects.filter((sid) => {
+  const crossDeptSelected = !activeFacultyDeptId ? [] : selectedSubjects.filter((sid) => {
       const sub = subjects.find((s) => s.id === sid)
       return sub?.department_id && sub.department_id !== activeFacultyDeptId
-    })
-  }, [selectedSubjects, subjects, activeFacultyDeptId])
+  })
 
   function selectFaculty(f: Faculty) {
     if (hasChanges) {
@@ -235,9 +230,9 @@ export function FacultySubjectsClientPage({
       setSavedSubjects(selectedSubjects)
       setToast({ type: "success", message: "Assignments saved" })
       router.refresh()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setToast({ type: "error", message: `Failed to save: ${err.message || "Unknown error"}` })
+      setToast({ type: "error", message: `Failed to save: ${readErrorMessage(err) || "Unknown error"}` })
     } finally {
       setSaving(false)
     }
