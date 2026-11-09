@@ -1,8 +1,12 @@
 "use client"
 
+import type { CatalogSubject, CatalogProgram, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState } from "react"
-import { Plus, BookMarked, Search } from "lucide-react"
+import { Plus, BookMarked } from "lucide-react"
 import { motion } from "framer-motion"
+import { useTerms } from "@/lib/org-type-context"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -32,25 +36,29 @@ import { CreateSubjectDialog } from "@/components/subjects/create-subject-dialog
 import { BulkImportDialog } from "@/components/import/bulk-import-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog"
+import { SearchBar, FilterSelect } from "@/components/ui/page-shell"
 
 export function SubjectsClientPage({
   initialSubjects,
   departments,
   programs,
   institutionId,
-}: any) {
+}: { initialSubjects: CatalogSubject[]; departments: Array<{ id: string; name: string }>; programs: CatalogProgram[]; institutionId: string }) {
   const [subjects, setSubjects] = useState(initialSubjects)
   const [open, setOpen] = useState(false)
-  const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  const [selectedSubject, setSelectedSubject] = useState<CatalogSubject | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deptFilter, setDeptFilter] = useState("")
+  const [progFilter, setProgFilter] = useState("")
 
   const { toast } = useToast()
+  const t = useTerms()
 
-  function handleOpenDialog(subject?: any) {
+  function handleOpenDialog(subject?: CatalogSubject) {
     if (subject) {
       setSelectedSubject(subject)
     } else {
@@ -59,7 +67,7 @@ export function SubjectsClientPage({
     setOpen(true)
   }
 
-  async function handleCreate(data: any) {
+  async function handleCreate(data: SubjectFormValues) {
     const res = await fetch("/api/subjects", {
       method: "POST",
       headers: {
@@ -83,8 +91,8 @@ export function SubjectsClientPage({
     const result = await res.json()
     const createdArray = Array.isArray(result) ? result : [result]
 
-    const formattedSubjects = createdArray.map((subject: any) => {
-      const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+    const formattedSubjects = createdArray.map((subject: CatalogSubject) => {
+      const selectedProgram = programs.find((p) => p.id === subject.program_id)
       return {
         ...subject,
         program: selectedProgram ? {
@@ -98,7 +106,7 @@ export function SubjectsClientPage({
       }
     })
 
-    setSubjects((prev: any) => [...prev, ...formattedSubjects])
+    setSubjects((prev) => [...prev, ...formattedSubjects])
     setOpen(false)
 
     toast({
@@ -107,7 +115,7 @@ export function SubjectsClientPage({
     })
   }
 
-  async function handleEdit(data: any) {
+  async function handleEdit(data: SubjectFormValues) {
     if (!selectedSubject) return
     const res = await fetch(`/api/subjects/${selectedSubject.id}`, {
       method: "PUT",
@@ -127,7 +135,7 @@ export function SubjectsClientPage({
     }
 
     const updated = await res.json()
-    const selectedProgram = programs.find((p: any) => p.id === updated.program_id)
+    const selectedProgram = programs.find((p) => p.id === updated.program_id)
     const formatted = {
       ...updated,
       program: selectedProgram ? {
@@ -140,7 +148,7 @@ export function SubjectsClientPage({
       } : null
     }
 
-    setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+    setSubjects((prev) => prev.map((s) => s.id === selectedSubject.id ? formatted : s))
     setOpen(false)
     setSelectedSubject(null)
 
@@ -165,7 +173,7 @@ export function SubjectsClientPage({
 
       if (!res.ok) throw new Error("Failed to delete subject")
 
-      setSubjects((prev: any) => prev.filter((s: any) => s.id !== deleteId))
+      setSubjects((prev) => prev.filter((s) => s.id !== deleteId))
       setDeleteOpen(false)
       setDeleteId(null)
       toast({
@@ -183,13 +191,18 @@ export function SubjectsClientPage({
     }
   }
 
-  const filteredSubjects = subjects.filter((s: any) => {
+  const filteredSubjects = subjects.filter((s) => {
     const nameMatch = s.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const codeMatch = s.code?.toLowerCase().includes(searchQuery.toLowerCase())
     const deptMatch = s.program?.department?.name?.toLowerCase().includes(searchQuery.toLowerCase())
     const progMatch = s.program?.name?.toLowerCase().includes(searchQuery.toLowerCase())
-    return nameMatch || codeMatch || deptMatch || progMatch
+    const searchOk = nameMatch || codeMatch || deptMatch || progMatch
+    const deptOk = !deptFilter || s.program?.department?.id === deptFilter
+    const progOk = !progFilter || s.program_id === progFilter
+    return searchOk && deptOk && progOk
   })
+
+  const filteredPrograms = programs.filter((p) => !deptFilter || p.department_id === deptFilter)
 
   return (
     <motion.div
@@ -214,7 +227,7 @@ export function SubjectsClientPage({
                 {subjects.length} Total
               </span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">Manage academic subjects, syllabus configuration, and department settings.</p>
+            <p className="mt-2 text-sm text-slate-500">Manage academic subjects, syllabus configuration, and {t.department_plural.toLowerCase()} settings.</p>
           </div>
         </div>
 
@@ -235,20 +248,28 @@ export function SubjectsClientPage({
         </div>
       </motion.div>
 
-      {/* Search Filter Bar */}
-      <motion.div
-        variants={itemVariants}
-        className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 shadow-[0_2px_8px_rgba(15,23,42,0.01)] max-w-md"
-      >
-        <Search className="w-4 h-4 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Search subjects, codes, or programs..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full text-sm text-slate-800 placeholder-slate-400 outline-none bg-transparent"
-        />
-      </motion.div>
+      {/* Search & Filter Bar */}
+      <SearchBar
+        value={searchQuery}
+        onChange={setSearchQuery}
+        placeholder="Search subjects, codes, or programs…"
+        filters={
+          <>
+            <FilterSelect
+              label={`All ${t.department_plural}`}
+              value={deptFilter}
+              onChange={(v) => { setDeptFilter(v); setProgFilter("") }}
+              options={departments.map((d) => ({ value: d.id, label: d.name }))}
+            />
+            <FilterSelect
+              label="All Programs"
+              value={progFilter}
+              onChange={setProgFilter}
+              options={filteredPrograms.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          </>
+        }
+      />
 
       {/* Main Subjects Display list */}
       <motion.div variants={itemVariants} className="pt-2">

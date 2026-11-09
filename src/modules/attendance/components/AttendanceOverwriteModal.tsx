@@ -115,7 +115,7 @@ export default function AttendanceOverwriteModal({
                   Original Session Notes
                 </span>
                 <p className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 italic text-[11px] leading-relaxed">
-                  "{loggedSessionNotes}"
+                  &quot;{loggedSessionNotes}&quot;
                 </p>
               </div>
             )}

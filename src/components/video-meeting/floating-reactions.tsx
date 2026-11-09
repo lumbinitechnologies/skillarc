@@ -24,7 +24,7 @@ export default function FloatingReactions({ reactions }: FloatingReactionsProps)
             animate={{ 
               opacity: [0, 1, 1, 0], 
               y: "-10vh",
-              x: [`${r.x}vw`, `${r.x + (Math.random() * 10 - 5)}vw`, `${r.x + (Math.random() * 20 - 10)}vw`],
+              x: [`${r.x}vw`, `${r.x + ((r.id.length % 11) - 5)}vw`, `${r.x + ((r.id.charCodeAt(r.id.length - 1) % 21) - 10)}vw`],
               scale: [0.8, 1.2, 1.2, 0.8]
             }}
             exit={{ opacity: 0 }}

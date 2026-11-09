@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, Clock } from "lucide-react"
@@ -40,20 +43,21 @@ interface ChildWithTimetable {
 
 export default function ParentTimetableClient({
   parentName,
-  children,
+  students,
 }: {
   parentName: string
-  children: ChildWithTimetable[]
+  students: ChildWithTimetable[]
 }) {
+  const now = useCurrentTime()
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const [selectedDay, setSelectedDay] = useState(
+  const [selectedDay, setSelectedDay] = useState(() =>
     new Date().toLocaleDateString("en-US", { weekday: "long" })
   )
   const [view, setView] = useState<"day" | "week">("day")
 
-  const child = children[selectedIdx] ?? null
+  const child = students[selectedIdx] ?? null
   const daySlots = child?.slots.filter((s) => s.day === selectedDay).sort((a, b) => a.period - b.period) ?? []
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long" })
+  const today = now ? new Date(now).toLocaleDateString("en-US", { weekday: "long" }) : ""
 
   // Build week grid: period rows × day cols
   const maxPeriod = child ? Math.max(0, ...child.slots.map((s) => s.period)) : 0
@@ -66,13 +70,13 @@ export default function ParentTimetableClient({
         title="Timetable"
         subtitle="View your child's class schedule by day or week."
         actions={
-          children.length > 1 ? (
+          students.length > 1 ? (
             <select
               value={selectedIdx}
               onChange={(e) => setSelectedIdx(Number(e.target.value))}
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[var(--primary)] transition"
             >
-              {children.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
+              {students.map((c, i) => <option key={c.id} value={i}>{c.name}</option>)}
             </select>
           ) : undefined
         }

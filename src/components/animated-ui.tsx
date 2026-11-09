@@ -70,13 +70,13 @@ export function AnimatedCounter({
 }
 
 // Animated list with staggered items
-export function AnimatedList({
+export function AnimatedList<T>({
   items,
   children,
   staggerDelay = 0.08,
 }: {
-  items: any[]
-  children: (item: any, index: number) => ReactNode
+  items: T[]
+  children: (item: T, index: number) => ReactNode
   staggerDelay?: number
 }) {
   return (

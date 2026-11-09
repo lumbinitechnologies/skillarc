@@ -1,6 +1,10 @@
 "use client"
 
+import type { CatalogSubject } from "@/lib/catalog-types"
+
+
 import { Trash2, BookMarked, GraduationCap, BookOpen, Target, Edit2, Building2, Layers } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 const typeConfig: Record<string, { label: string; icon: string; textClass: string; bgClass: string; gradientClass: string }> = {
   THEORY:   { label: "Theory",   icon: "📖", textClass: "text-[var(--primary)]", bgClass: "bg-[var(--primary-50)]", gradientClass: "from-[var(--primary)] to-[var(--secondary)]" },
@@ -27,7 +31,9 @@ function getProgramStyle(name: string | undefined): { text: string; bg: string }
   return palette[hash % palette.length]
 }
 
-export function SubjectsList({ subjects, onDelete, onEdit }: any) {
+export function SubjectsList({ subjects, onDelete, onEdit }: { subjects: CatalogSubject[]; onDelete: (id: string) => void; onEdit: (subject: CatalogSubject) => void }) {
+  const t = useTerms()
+  const isSchool = useIsSchool()
   if (!subjects?.length) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 rounded-3xl bg-slate-50/50">
@@ -42,8 +48,8 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {subjects.map((subject: any) => {
-        const type = typeConfig[subject.subject_type] ?? typeConfig.THEORY
+      {subjects.map((subject) => {
+        const type = typeConfig[subject.subject_type ?? "THEORY"] ?? typeConfig.THEORY
         const progStyle = getProgramStyle(subject.program?.name)
 
         return (
@@ -82,7 +88,7 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                   <div className="flex items-center gap-3 bg-slate-50/50 rounded-xl p-3">
                     <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Department</p>
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{t.department}</p>
                       <p className="text-xs font-semibold text-slate-700 truncate mt-0.5">
                         {subject.program.department.name}
                       </p>
@@ -101,14 +107,15 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                   </div>
                 </div>
 
-                {/* Semester & Credits Grid */}
+                {/* Semester & Credits — college only */}
+                {!isSchool && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex items-center gap-3 bg-slate-50/50 rounded-xl p-3">
                     <BookOpen className="w-4 h-4 text-slate-400 flex-shrink-0" />
                     <div>
-                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Semester</p>
+                      <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{t.semester}</p>
                       <p className="text-xs font-bold text-slate-700 mt-0.5 font-['Space_Grotesk']">
-                        Semester {subject.semester}
+                        {t.semester} {subject.semester}
                       </p>
                     </div>
                   </div>
@@ -123,8 +130,10 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Credits visual progress */}
+                {!isSchool && (
                 <div className="flex items-center justify-between gap-3 bg-slate-50/50 rounded-xl p-3">
                   <div className="flex items-center gap-2">
                     <Layers className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -135,12 +144,13 @@ export function SubjectsList({ subjects, onDelete, onEdit }: any) {
                       <div
                         key={i}
                         className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                          i < subject.credits ? "bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] scale-110 shadow-sm" : "bg-slate-200"
+                          i < (subject.credits ?? 0) ? "bg-gradient-to-br from-[#6C63FF] to-[#8B5CF6] scale-110 shadow-sm" : "bg-slate-200"
                         }`}
                       />
                     ))}
                   </div>
                 </div>
+                )}
               </div>
             </div>
 

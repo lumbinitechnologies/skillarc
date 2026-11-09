@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawLookup)
     const isEmail = rawLookup.includes("@")
 
-    let appData: any = null
+    let appData = null
 
     // 1. Direct UUID Lookup
     if (isUuid) {
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ application: fullApplication })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Public status check error:", err)
     return NextResponse.json({ error: "Failed to retrieve application status" }, { status: 500 })
   }
@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
         ? "Congratulations! Your offer acceptance has been received. The admissions office will now finalize your enrolment and activate your student portal."
         : "Offer declined successfully.",
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Public offer decision error:", err)
     return NextResponse.json({ error: "Failed to submit offer response" }, { status: 500 })
   }

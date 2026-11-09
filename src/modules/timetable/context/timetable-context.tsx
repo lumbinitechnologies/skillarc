@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { createContext, useContext, useEffect, useState, useCallback } from "react"
 import { Subject, Faculty, Slot, TimetableWeek, AcademicEvent, TimetableClash } from "../types/timetable.types"
 import { timetableService } from "../services/timetableService"
@@ -93,7 +95,7 @@ export function TimetableProvider({
     } finally {
       setIsScanningClashes(false)
     }
-  }, [institutionId, selectedWeek?.id])
+  }, [institutionId, selectedWeek])
 
   // Load weeks
   const reloadWeeks = useCallback(async () => {
@@ -178,8 +180,8 @@ export function TimetableProvider({
         // Initial clash scan
         const detected = await clashDetectionService.scanInstitutionClashes(id, initialWeekId)
         setClashes(detected)
-      } catch (err: any) {
-        console.error("Failed to load timetable data:", err?.message || err)
+      } catch (err: unknown) {
+        console.error("Failed to load timetable data:", readErrorMessage(err) || err)
       } finally {
         setLoading(false)
         finishTiming()
@@ -193,7 +195,6 @@ export function TimetableProvider({
   const reloadSlots = useCallback(async () => {
     if (!institutionId || !sectionId || !semester) return
     try {
-      setLoading(true)
       const weekId = selectedWeek ? selectedWeek.id : null
       const fetchedSlots = await timetableService.getSlots(
         institutionId,
@@ -210,8 +211,14 @@ export function TimetableProvider({
     }
   }, [institutionId, sectionId, semester, selectedWeek, scanClashes])
 
+  const selectedWeekId = selectedWeek?.id ?? null
+  const [previousWeekId, setPreviousWeekId] = useState(selectedWeekId)
+  if (previousWeekId !== selectedWeekId) {
+    setPreviousWeekId(selectedWeekId)
+    setLoading(true)
+  }
   useEffect(() => {
-    if (!loading && institutionId && sectionId && semester) {
+    if (institutionId && sectionId && semester) {
       reloadSlots()
     }
   }, [selectedWeek]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -288,7 +295,7 @@ export function TimetableProvider({
             }
             scanClashes()
           })
-          .catch((err: any) => {
+          .catch((err) => {
             const detail = err?.message || err?.details || (typeof err === "object" ? JSON.stringify(err) : String(err))
             console.error("Failed to save slot to database:", detail)
           })

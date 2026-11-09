@@ -6,6 +6,7 @@ import { DashboardSessionProvider } from "@/components/dashboard-session-provide
 import { DashboardDataProvider } from "@/components/dashboard-data-provider"
 import { CourseProvider } from "@/modules/courses/course-context"
 import { getCurrentDashboardSession } from "@/lib/dashboard-session"
+import { OrgTypeProvider } from "@/lib/org-type-context"
 
 export default async function DashboardLayout({
   children,
@@ -26,16 +27,18 @@ export default async function DashboardLayout({
           impersonationId: userContext?.isImpersonating ? userContext.originalProfile.id : null,
         }}
       >
-        <CourseProvider>
-          <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(108,99,255,0.16),_transparent_22%),radial-gradient(circle_at_top_right,_rgba(139,92,246,0.14),_transparent_18%),radial-gradient(circle_at_bottom_left,_rgba(0,194,168,0.12),_transparent_18%),linear-gradient(180deg,#f8fafc,#eff6ff)] text-slate-950">
-            <Sidebar profile={userContext} />
-            <div className="flex flex-col flex-1 min-w-0">
-              <Navbar profile={userContext} />
-              <DashboardRouteTransition>{children}</DashboardRouteTransition>
+        <OrgTypeProvider type={userContext?.org_type ?? 'college'}>
+          <CourseProvider>
+            <div className="flex min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(108,99,255,0.16),_transparent_22%),radial-gradient(circle_at_top_right,_rgba(139,92,246,0.14),_transparent_18%),radial-gradient(circle_at_bottom_left,_rgba(0,194,168,0.12),_transparent_18%),linear-gradient(180deg,#f8fafc,#eff6ff)] text-slate-950">
+              <Sidebar profile={userContext} />
+              <div className="flex flex-col flex-1 min-w-0">
+                <Navbar profile={userContext} />
+                <DashboardRouteTransition>{children}</DashboardRouteTransition>
+              </div>
+              <ImpersonationBanner profile={userContext} />
             </div>
-            <ImpersonationBanner profile={userContext} />
-          </div>
-        </CourseProvider>
+          </CourseProvider>
+        </OrgTypeProvider>
       </DashboardDataProvider>
     </DashboardSessionProvider>
   )

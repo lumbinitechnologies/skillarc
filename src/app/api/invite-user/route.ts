@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { inviteUser, resolveAppOrigin } from "@/lib/invite-user"
 import { NextResponse } from "next/server"
 
@@ -22,8 +23,8 @@ export async function POST(req: Request) {
     })
 
     return NextResponse.json(result)
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("🔴 Unexpected error in /api/invite-user:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }

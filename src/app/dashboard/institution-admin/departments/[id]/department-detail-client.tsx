@@ -1,10 +1,15 @@
 "use client"
 
+import type { ComponentProps } from "react"
+import type { CatalogSubject, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { useTerms } from "@/lib/org-type-context"
 import {
   ArrowLeft,
   Building2,
@@ -57,8 +62,8 @@ interface Props {
   initialStudents: StudentWithSection[]
   initialTotalStudents: number
   allFacultyAdvisors: Array<{ id: string; name: string; email: string }>
-  initialSubjects: any[]
-  initialAssignments: any[]
+  initialSubjects: CatalogSubject[]
+  initialAssignments: Awaited<ReturnType<typeof facultySubjectService.getFacultyAssignments>>
   departments: Array<{ id: string; name: string }>
   institutionId: string
   organizationId: string
@@ -80,14 +85,15 @@ export function DepartmentDetailClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("programs")
   const { toast } = useToast()
+  const t = useTerms()
 
   // --- Entity States ---
   const [programs, setPrograms] = useState<ProgramWithDepartment[]>(initialPrograms)
   const [sections, setSections] = useState<SectionWithFacultyAdvisor[]>(initialSections)
   const [faculty, setFaculty] = useState<FacultyWithStats[]>(initialFaculty)
   const [students, setStudents] = useState<StudentWithSection[]>(initialStudents)
-  const [subjects, setSubjects] = useState<any[]>(initialSubjects)
-  const [assignments, setAssignments] = useState<any[]>(initialAssignments)
+  const [subjects, setSubjects] = useState<CatalogSubject[]>(initialSubjects)
+  const [assignments, setAssignments] = useState(initialAssignments)
   const [parents, setParents] = useState<Parent[]>([])
 
   // --- Pagination & Filters for Students ---
@@ -117,7 +123,7 @@ export function DepartmentDetailClient({
   const [selectedParent, setSelectedParent] = useState<Parent | null>(null)
 
   const [isSubjectOpen, setIsSubjectOpen] = useState(false)
-  const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  const [selectedSubject, setSelectedSubject] = useState<CatalogSubject | null>(null)
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("")
 
   const [isImportOpen, setIsImportOpen] = useState(false)
@@ -246,7 +252,7 @@ export function DepartmentDetailClient({
 
   const loadStudents = useCallback(
     async (targetPage = studentPage, targetLimit = studentLimit) => {
-      setIsLoading(true)
+
       try {
         const params = new URLSearchParams({
           institution_id: institutionId,
@@ -273,7 +279,7 @@ export function DepartmentDetailClient({
   )
 
   const loadParents = async () => {
-    setIsLoading(true)
+
     try {
       const res = await fetch(`/api/parents?institution_id=${institutionId}&department_id=${department.id}`)
       if (!res.ok) throw new Error("Failed to load parents")
@@ -291,7 +297,7 @@ export function DepartmentDetailClient({
   }
 
   const loadSubjects = async () => {
-    setIsLoading(true)
+
     try {
       const res = await fetch(`/api/subjects?institution_id=${institutionId}&department_id=${department.id}`)
       if (!res.ok) throw new Error("Failed to load subjects")
@@ -309,17 +315,24 @@ export function DepartmentDetailClient({
   }
 
   const loadAssignments = async () => {
-    setIsLoading(true)
+
     try {
       const data = await facultySubjectService.getFacultyAssignments(institutionId)
       const deptSubjectIds = subjects.map((s) => s.id)
-      const filtered = (data || []).filter((rel: any) => deptSubjectIds.includes(rel.subject_id))
+      const filtered = (data || []).filter((rel) => deptSubjectIds.includes(rel.subject_id))
       setAssignments(filtered)
     } catch (error) {
       console.error("Failed to load assignments", error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const [loadingInputs, setLoadingInputs] = useState<readonly unknown[] | null>(null)
+  const nextLoadingInputs = [studentPage, studentLimit]
+  if (loadingInputs === null || nextLoadingInputs.some((value, index) => !Object.is(value, loadingInputs[index]))) {
+    setLoadingInputs(nextLoadingInputs)
+    setIsLoading(true)
   }
 
   // Load students when pagination updates
@@ -341,7 +354,7 @@ export function DepartmentDetailClient({
   // --- CRUD Handlers ---
 
   // 1. Programs CRUD
-  const handleCreateOrUpdateProgram = async (data: any) => {
+  const handleCreateOrUpdateProgram = async (data: Parameters<ComponentProps<typeof CreateProgramDialog>["onSubmit"]>[0]) => {
     setIsLoading(true)
     try {
       const method = selectedProgram ? "PUT" : "POST"
@@ -390,7 +403,7 @@ export function DepartmentDetailClient({
   }
 
   // 2. Sections CRUD
-  const handleCreateOrUpdateSection = async (data: any) => {
+  const handleCreateOrUpdateSection = async (data: Parameters<ComponentProps<typeof CreateSectionDialog>["onSubmit"]>[0]) => {
     setIsLoading(true)
     try {
       const method = selectedSection ? "PUT" : "POST"
@@ -442,7 +455,7 @@ export function DepartmentDetailClient({
   }
 
   // 3. Faculty CRUD
-  const handleCreateOrUpdateFaculty = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateFaculty = async (data: Parameters<ComponentProps<typeof CreateFacultyDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -494,7 +507,7 @@ export function DepartmentDetailClient({
   }
 
   // 4. Students CRUD
-  const handleCreateOrUpdateStudent = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateStudent = async (data: Parameters<ComponentProps<typeof CreateStudentDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -545,7 +558,7 @@ export function DepartmentDetailClient({
   }
 
   // 5. Parents CRUD
-  const handleCreateOrUpdateParent = async (data: any, isEdit: boolean) => {
+  const handleCreateOrUpdateParent = async (data: Parameters<ComponentProps<typeof CreateParentDialog>["onSubmit"]>[0], isEdit: boolean) => {
     setIsLoading(true)
     try {
       const response = await fetch(
@@ -594,7 +607,7 @@ export function DepartmentDetailClient({
   }
 
   // 6. Courses CRUD
-  const handleCreateOrUpdateSubject = async (data: any) => {
+  const handleCreateOrUpdateSubject = async (data: SubjectFormValues) => {
     setIsLoading(true)
     const isEdit = !!selectedSubject
     try {
@@ -616,7 +629,7 @@ export function DepartmentDetailClient({
       const result = await res.json()
       
       if (isEdit) {
-        const selectedProgram = programs.find((p: any) => p.id === result.program_id)
+        const selectedProgram = programs.find((p) => p.id === result.program_id)
         const formatted = {
           ...result,
           program: selectedProgram ? {
@@ -628,12 +641,12 @@ export function DepartmentDetailClient({
             } : null
           } : null
         }
-        setSubjects((prev: any) => prev.map((s: any) => s.id === selectedSubject.id ? formatted : s))
+        setSubjects((prev) => prev.map((s) => s.id === selectedSubject.id ? formatted : s))
         setSelectedSubject(null)
       } else {
         const createdArray = Array.isArray(result) ? result : [result]
-        const formattedSubjects = createdArray.map((subject: any) => {
-          const selectedProgram = programs.find((p: any) => p.id === subject.program_id)
+        const formattedSubjects = createdArray.map((subject) => {
+          const selectedProgram = programs.find((p) => p.id === subject.program_id)
           return {
             ...subject,
             program: selectedProgram ? {
@@ -646,7 +659,7 @@ export function DepartmentDetailClient({
             } : null
           }
         })
-        setSubjects((prev: any) => [...prev, ...formattedSubjects])
+        setSubjects((prev) => [...prev, ...formattedSubjects])
       }
 
       setIsSubjectOpen(false)
@@ -675,7 +688,7 @@ export function DepartmentDetailClient({
 
       if (!res.ok) throw new Error("Failed to delete subject")
 
-      setSubjects((prev: any) => prev.filter((s: any) => s.id !== id))
+      setSubjects((prev) => prev.filter((s) => s.id !== id))
       toast({
         title: "Deleted",
         description: "Subject removed successfully",
@@ -706,7 +719,7 @@ export function DepartmentDetailClient({
   })
 
   // --- Subject Filtering Logic ---
-  const filteredSubjects = subjects.filter((s: any) => {
+  const filteredSubjects = subjects.filter((s) => {
     const nameMatch = s.name?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
     const codeMatch = s.code?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
     const progMatch = s.program?.name?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
@@ -759,7 +772,7 @@ export function DepartmentDetailClient({
           className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-[#6C63FF] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to Departments
+          Back to {t.department_plural}
         </Link>
 
         <div className="flex flex-col gap-5 rounded-3xl bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between border border-slate-100">
@@ -769,7 +782,7 @@ export function DepartmentDetailClient({
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#6C63FF]">
-                Department Workspace
+                {t.department} Workspace
               </p>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 mt-1">
                 {department.name}
@@ -781,17 +794,17 @@ export function DepartmentDetailClient({
           <div className="flex items-center gap-6 text-sm text-slate-500 font-medium">
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{programs.length}</span>
-              <span>Programs</span>
+              <span>{t.program_plural}</span>
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{sections.length}</span>
-              <span>Sections</span>
+              <span>{t.section_plural}</span>
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div className="flex flex-col">
               <span className="text-lg font-bold text-slate-900 font-mono">{faculty.length}</span>
-              <span>Faculty</span>
+              <span>{t.faculty_plural}</span>
             </div>
           </div>
         </div>
@@ -800,11 +813,11 @@ export function DepartmentDetailClient({
       {/* Modern, elegant tabs selector */}
       <div className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-px">
         {[
-          { id: "programs", label: "Programs", count: programs.length, icon: BookOpenCheck },
-          { id: "sections", label: "Sections", count: sections.length, icon: BookOpen },
+                  { id: "programs", label: t.program_plural, count: programs.length, icon: BookOpenCheck },
+          { id: "sections", label: t.section_plural, count: sections.length, icon: BookOpen },
           { id: "courses", label: "Courses", count: subjects.length, icon: BookMarked },
           { id: "assign-courses", label: "Assign Courses", count: assignments.length, icon: BookOpen },
-          { id: "faculty", label: "Faculty", count: faculty.length, icon: Users },
+          { id: "faculty", label: t.faculty_plural, count: faculty.length, icon: Users },
           { id: "students", label: "Students", count: studentCount, icon: GraduationCap },
           { id: "parents", label: "Parents", count: parents.length, icon: Users },
         ].map((t) => {
@@ -841,7 +854,7 @@ export function DepartmentDetailClient({
         {activeTab === "programs" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-              <span className="text-sm font-medium text-slate-500">Manage all undergraduate & postgraduate programs.</span>
+              <span className="text-sm font-medium text-slate-500">Manage all {t.program_plural.toLowerCase()} in this {t.department.toLowerCase()}.</span>
               <Button
                 onClick={() => {
                   setSelectedProgram(null)
@@ -850,7 +863,7 @@ export function DepartmentDetailClient({
                 className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Program
+                New {t.program}
               </Button>
             </div>
             <Card className="p-6 shadow-sm border border-slate-100">
@@ -871,7 +884,7 @@ export function DepartmentDetailClient({
         {activeTab === "sections" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-              <span className="text-sm font-medium text-slate-500">Manage class sections and assign faculty advisors.</span>
+              <span className="text-sm font-medium text-slate-500">Manage class {t.section_plural.toLowerCase()} and assign {t.faculty_plural.toLowerCase()} advisors.</span>
               <Button
                 onClick={() => {
                   setSelectedSection(null)
@@ -880,7 +893,7 @@ export function DepartmentDetailClient({
                 className="rounded-2xl bg-gradient-to-r from-[var(--primary)] to-[var(--secondary)] text-white font-semibold hover:shadow-md transition"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                New Section
+                New {t.section}
               </Button>
             </div>
             <Card className="p-6 shadow-sm border border-slate-100">
@@ -939,7 +952,7 @@ export function DepartmentDetailClient({
               <SubjectsList
                 subjects={filteredSubjects}
                 onDelete={(id: string) => triggerDelete(id, "subject")}
-                onEdit={(s: any) => {
+                onEdit={(s) => {
                   setSelectedSubject(s)
                   setIsSubjectOpen(true)
                 }}
@@ -956,8 +969,9 @@ export function DepartmentDetailClient({
             </div>
             <FacultySubjectsClientPage
               faculty={facultyForAssignment}
-              subjects={subjects}
+              subjects={subjects.filter((subject): subject is typeof subject & { name: string; code: string; semester: number } => typeof subject.name === "string" && typeof subject.code === "string" && typeof subject.semester === "number").map(subject => ({ ...subject, credits: subject.credits ?? undefined, subject_type: subject.subject_type ?? undefined }))}
               assignments={assignments}
+              departments={[]}
             />
           </div>
         )}

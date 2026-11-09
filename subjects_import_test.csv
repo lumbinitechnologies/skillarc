@@ -1,5 +1,18 @@
 name,code,semester,program_name,credits,subject_type
-Database Management Systems,CS202,3,Computer Science,4,THEORY
-Computer Networks,CS203,3,Computer Science,4,THEORY
-Data Structures Lab,CS204,3,Computer Science,2,LAB
-Cloud Computing,CS305,5,Computer Science,3,ELECTIVE
+Web Technologies,IT201,3,B.Tech IT,4,THEORY
+Web Technologies Lab,IT202,3,B.Tech IT,2,LAB
+Operating Systems,IT203,4,B.Tech IT,4,THEORY
+Database Management Systems,IT204,4,B.Tech IT,4,THEORY
+Database Management Systems Lab,IT205,4,B.Tech IT,2,LAB
+Computer Networks,IT301,5,B.Tech IT,4,THEORY
+Information & Network Security,IT302,5,B.Tech IT,3,THEORY
+Cloud Computing & DevOps,IT303,5,B.Tech IT,3,ELECTIVE
+Mobile Application Development,IT304,6,B.Tech IT,3,ELECTIVE
+Software Engineering & Agile,IT305,6,B.Tech IT,3,THEORY
+Data Structures & Algorithms,CS101,2,CSE*,4,THEORY
+Data Structures Lab,CS102,2,CSE*,2,LAB
+Object Oriented Programming in Java,CS201,3,CSE*,4,THEORY
+Java Programming Lab,CS202,3,CSE*,2,LAB
+Design & Analysis of Algorithms,CS203,4,CSE*,4,THEORY
+Artificial Intelligence & Machine Learning,CS301,5,CSE*,4,THEORY
+Distributed Systems,CS302,6,CSE*,3,ELECTIVE

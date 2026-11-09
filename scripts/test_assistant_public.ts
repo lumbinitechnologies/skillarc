@@ -1,4 +1,4 @@
-// @ts-nocheck
+export {}
 const appUrl = "http://localhost:3001"
 
 async function testPublicAssistant() {

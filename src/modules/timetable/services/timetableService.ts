@@ -107,7 +107,7 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       const { data, error } = await supabase
@@ -123,15 +123,14 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       const seen = new Set<string>()
 
       const results = (data ?? [])
-        .map((row: any) => row.faculty)
-        .filter(Boolean)
-        .filter((faculty: any) => {
+        .flatMap((row) => Array.isArray(row.faculty) ? row.faculty : row.faculty ? [row.faculty] : [])
+        .filter((faculty) => {
           if (seen.has(faculty.id)) return false
           seen.add(faculty.id)
           return true
@@ -144,7 +143,7 @@ export const timetableService = {
           .eq("institution_id", institutionId)
           .in("role", ["FACULTY", "faculty", "TEACHER", "teacher"])
 
-        return (facultyUsers ?? []) as any[]
+        return (facultyUsers ?? [])
       }
 
       return results
@@ -216,7 +215,7 @@ export const timetableService = {
     weekId: string,
     updates: { title?: string; startDate?: string; endDate?: string; weekNumber?: number }
   ) {
-    const payload: Record<string, any> = { updated_at: new Date().toISOString() }
+    const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (updates.title !== undefined) payload.title = updates.title
     if (updates.startDate !== undefined) payload.start_date = updates.startDate
     if (updates.endDate !== undefined) payload.end_date = updates.endDate
@@ -330,7 +329,7 @@ export const timetableService = {
 
     if (!sourceSlots || sourceSlots.length === 0) return []
 
-    const newSlots = sourceSlots.map((s: any) => ({
+    const newSlots = sourceSlots.map((s) => ({
       institution_id: institutionId,
       section_id: sectionId,
       semester,
@@ -356,122 +355,140 @@ export const timetableService = {
 
   // ─── Slots Management (With Fallback) ───────────────────────────────────────
   async getSlots(institutionId: string, sectionId: string, semester: number, weekId?: string | null): Promise<Slot[]> {
+    const slotSelect = `
+      id,
+      day,
+      period,
+      subject_id,
+      faculty_id,
+      week_id,
+      room,
+      delivery_mode,
+      meeting_link,
+      notes,
+      faculty:faculty_id(id, name),
+      subjects(
+        id,
+        name,
+        code,
+        semester,
+        institution_id,
+        program_id,
+        credits,
+        subject_type
+      )
+    `
+    const slotSelectFallback = `
+      id,
+      day,
+      period,
+      subject_id,
+      faculty_id,
+      week_id,
+      faculty:faculty_id(id, name),
+      subjects(
+        id,
+        name,
+        code,
+        semester,
+        institution_id,
+        program_id,
+        credits,
+        subject_type
+      )
+    `
+
+    type TimetableSlotRow = {
+      id: string
+      day: string | null
+      period: number | null
+      faculty_id: string | null
+      week_id: string | null
+      room?: string | null
+      delivery_mode?: string | null
+      meeting_link?: string | null
+      notes?: string | null
+      faculty: { id: string; name: string } | Array<{ id: string; name: string }> | null
+      subjects: (Subject & { faculty_name?: string | null }) | Array<Subject & { faculty_name?: string | null }> | null
+    }
+
+    const mapRow = (s: TimetableSlotRow, useFallback = false): Slot => ({
+      id: s.id,
+      day: s.day ?? "",
+      period: `P${s.period ?? ""}`,
+      faculty_id: s.faculty_id ?? null,
+      faculty_name: (Array.isArray(s.faculty) ? s.faculty[0] : s.faculty)?.name ?? null,
+      week_id: s.week_id ?? null,
+      room: useFallback ? null : (s.room ?? null),
+      delivery_mode: useFallback ? "ON_CAMPUS" : (s.delivery_mode ?? "ON_CAMPUS"),
+      meeting_link: useFallback ? null : (s.meeting_link ?? null),
+      notes: useFallback ? null : (s.notes ?? null),
+      subject: (Array.isArray(s.subjects) ? s.subjects[0] : s.subjects)
+        ? { ...(Array.isArray(s.subjects) ? s.subjects[0] : s.subjects)!, faculty_name: (Array.isArray(s.faculty) ? s.faculty[0] : s.faculty)?.name ?? null }
+        : undefined,
+    })
+
     try {
-      let query = supabase
+      // Always fetch base slots (week_id = null) — these include CSV-imported slots
+      const baseQuery = supabase
         .from("timetable_slots")
-        .select(`
-          id,
-          day,
-          period,
-          subject_id,
-          faculty_id,
-          week_id,
-          room,
-          delivery_mode,
-          meeting_link,
-          notes,
-          faculty:faculty_id(id, name),
-          subjects(
-            id,
-            name,
-            code,
-            semester,
-            institution_id,
-            program_id,
-            credits,
-            subject_type
-          )
-        `)
+        .select(slotSelect)
         .eq("institution_id", institutionId)
         .eq("section_id", sectionId)
         .eq("semester", semester)
+        .is("week_id", null)
 
-      if (weekId) {
-        query = query.eq("week_id", weekId)
-      } else {
-        query = query.is("week_id", null)
-      }
+      const { data: baseData, error: baseError } = await baseQuery
 
-      const { data, error } = await query
-
-      if (error) {
-        // Fallback for when room / delivery_mode columns are not yet in DB schema
-        console.warn("getSlots: retrying with base schema fallback:", error.message)
-        let fallbackQuery = supabase
+      let baseSlots: Slot[] = []
+      if (!baseError && baseData) {
+        baseSlots = baseData.map((s) => mapRow(s, false))
+      } else if (baseError) {
+        // Fallback without extended columns
+        const { data: baseFallback } = await supabase
           .from("timetable_slots")
-          .select(`
-            id,
-            day,
-            period,
-            subject_id,
-            faculty_id,
-            week_id,
-            faculty:faculty_id(id, name),
-            subjects(
-              id,
-              name,
-              code,
-              semester,
-              institution_id,
-              program_id,
-              credits,
-              subject_type
-            )
-          `)
+          .select(slotSelectFallback)
           .eq("institution_id", institutionId)
           .eq("section_id", sectionId)
           .eq("semester", semester)
-
-        if (weekId) {
-          fallbackQuery = fallbackQuery.eq("week_id", weekId)
-        } else {
-          fallbackQuery = fallbackQuery.is("week_id", null)
-        }
-
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery
-        if (fallbackError) {
-          console.error("getSlots fallback failed:", fallbackError.message)
-          return []
-        }
-
-        return (fallbackData ?? []).map((s: any) => ({
-          id: s.id,
-          day: s.day,
-          period: `P${s.period}`,
-          faculty_id: s.faculty_id ?? null,
-          faculty_name: s.faculty?.name ?? null,
-          week_id: s.week_id ?? null,
-          room: null,
-          delivery_mode: "ON_CAMPUS",
-          meeting_link: null,
-          notes: null,
-          subject: s.subjects
-            ? {
-                ...s.subjects,
-                faculty_name: s.faculty?.name ?? null,
-              }
-            : undefined,
-        }))
+          .is("week_id", null)
+        baseSlots = (baseFallback ?? []).map((s) => mapRow(s, true))
       }
 
-      return (data ?? []).map((s: any) => ({
-        id: s.id,
-        day: s.day,
-        period: `P${s.period}`,
-        faculty_id: s.faculty_id ?? null,
-        faculty_name: s.faculty?.name ?? null,
-        week_id: s.week_id ?? null,
-        room: s.room ?? null,
-        delivery_mode: s.delivery_mode ?? "ON_CAMPUS",
-        meeting_link: s.meeting_link ?? null,
-        notes: s.notes ?? null,
-        subject: s.subjects
-          ? {
-              ...s.subjects,
-              faculty_name: s.faculty?.name ?? null,
-            }
-          : undefined,
-      }))
+      // If a specific week is selected, also fetch week-specific slots
+      // Week-specific slots take priority over base slots for the same day+period
+      if (weekId) {
+        const weekQuery = supabase
+          .from("timetable_slots")
+          .select(slotSelect)
+          .eq("institution_id", institutionId)
+          .eq("section_id", sectionId)
+          .eq("semester", semester)
+          .eq("week_id", weekId)
+
+        const { data: weekData, error: weekError } = await weekQuery
+
+        let weekSlots: Slot[] = []
+        if (!weekError && weekData) {
+          weekSlots = weekData.map((s) => mapRow(s, false))
+        } else if (weekError) {
+          const { data: weekFallback } = await supabase
+            .from("timetable_slots")
+            .select(slotSelectFallback)
+            .eq("institution_id", institutionId)
+            .eq("section_id", sectionId)
+            .eq("semester", semester)
+            .eq("week_id", weekId)
+          weekSlots = (weekFallback ?? []).map((s) => mapRow(s, true))
+        }
+
+        // Merge: week-specific slots override base slots for the same (day, period)
+        const overriddenCells = new Set(weekSlots.map((s) => `${s.day}-${s.period}`))
+        const mergedBaseSlots = baseSlots.filter((s) => !overriddenCells.has(`${s.day}-${s.period}`))
+        return [...mergedBaseSlots, ...weekSlots]
+      }
+
+      return baseSlots
     } catch (err) {
       console.error("getSlots exception:", err)
       return []
@@ -506,7 +523,7 @@ export const timetableService = {
     weekId?: string | null
   }) {
     // 1. Prepare payloads
-    const fullPayload: Record<string, any> = {
+    const fullPayload: Record<string, unknown> = {
       institution_id: institutionId,
       section_id: sectionId,
       semester,
@@ -522,7 +539,7 @@ export const timetableService = {
     if (meetingLink && meetingLink.trim()) fullPayload.meeting_link = meetingLink.trim()
     if (notes && notes.trim()) fullPayload.notes = notes.trim()
 
-    const tier2Payload: Record<string, any> = {
+    const tier2Payload: Record<string, unknown> = {
       institution_id: institutionId,
       section_id: sectionId,
       semester,
@@ -546,7 +563,7 @@ export const timetableService = {
     // 2. Check if a slot already exists in this logical cell
     let existingSlotId: string | null = null
     try {
-      let checkQuery = supabase
+      const checkQuery = supabase
         .from("timetable_slots")
         .select("id")
         .eq("institution_id", institutionId)
@@ -627,7 +644,7 @@ export const timetableService = {
     }
 
     // 4. If no slot exists, INSERT (with tier fallback)
-    let { data: inserted1, error: insertError1 } = await supabase
+    const { data: inserted1, error: insertError1 } = await supabase
       .from("timetable_slots")
       .insert(fullPayload)
       .select()
@@ -666,7 +683,7 @@ export const timetableService = {
       console.warn("saveSlot: Insert Tier 1 failed, trying Tier 2:", insertError1.message)
 
       // Tier 2: Base schema with week_id
-      let { data: inserted2, error: insertError2 } = await supabase
+      const { data: inserted2, error: insertError2 } = await supabase
         .from("timetable_slots")
         .insert(tier2Payload)
         .select()

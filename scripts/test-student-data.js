@@ -5,7 +5,7 @@
  * Usage: node scripts/test-student-data.js
  */
 
-const https = require("https");
+import https from "node:https";
 
 const SUPABASE_URL = "https://sjyotfnhdfmjkulyssps.supabase.co";
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

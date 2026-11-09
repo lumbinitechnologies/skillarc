@@ -2,6 +2,7 @@
 
 import type { SectionWithFacultyAdvisor } from "@/modules/sections"
 import { Trash2, Edit2, GraduationCap, BookOpen, Users, UserCheck, AlertTriangle } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 interface SectionsListProps {
   sections: SectionWithFacultyAdvisor[]
@@ -57,6 +58,9 @@ export function SectionsList({
   onEdit,
   onDelete,
 }: SectionsListProps) {
+  const t = useTerms()
+  const isSchool = useIsSchool()
+
   if (isLoading) {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 16 }}>
@@ -88,8 +92,8 @@ export function SectionsList({
         }}>
           <BookOpen size={24} color="#1d4ed8" />
         </div>
-        <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 4 }}>No sections yet</p>
-        <p style={{ fontSize: 13, color: "#9ca3af" }}>Create a section to get started</p>
+        <p style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 4 }}>No {t.section_plural.toLowerCase()} yet</p>
+        <p style={{ fontSize: 13, color: "#9ca3af" }}>Create a {t.section.toLowerCase()} to get started</p>
       </div>
     )
   }
@@ -102,11 +106,11 @@ export function SectionsList({
       fontFamily: font,
     }}>
       {sections.map((section) => {
-        const semColor = semesterColors[section.semester] ?? semesterColors[8]
+        // For schools: semester is always defaulted to 1 so use program colour for the accent bar instead
+        const semColor = isSchool ? getProgramColor(section.program?.name) : (semesterColors[section.semester] ?? semesterColors[8])
         const progColor = getProgramColor(section.program?.name)
         const hasAdvisor = !!section.faculty_advisor
         const enrolled = section.student_count ?? 0
-        const capacity = (section as any).capacity ?? 60
 
         return (
           <div
@@ -146,18 +150,21 @@ export function SectionsList({
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h3 style={{ fontSize: 15, fontWeight: 800, color: "#111827", letterSpacing: "-0.01em" }}>
-                    Section {section.name}
+                    {t.section} {section.name}
                   </h3>
-                  <span style={{
-                    display: "inline-block",
-                    fontSize: 10, fontWeight: 700,
-                    color: semColor.text, backgroundColor: semColor.bg,
-                    border: `1px solid ${semColor.border}`,
-                    padding: "2px 9px", borderRadius: 20, letterSpacing: "0.05em",
-                    marginTop: 2,
-                  }}>
-                    Semester {romanNumerals[section.semester] ?? section.semester}
-                  </span>
+                  {/* Schools don't have semester — hide the badge entirely */}
+                  {!isSchool && (
+                    <span style={{
+                      display: "inline-block",
+                      fontSize: 10, fontWeight: 700,
+                      color: semColor.text, backgroundColor: semColor.bg,
+                      border: `1px solid ${semColor.border}`,
+                      padding: "2px 9px", borderRadius: 20, letterSpacing: "0.05em",
+                      marginTop: 2,
+                    }}>
+                      {t.semester} {romanNumerals[section.semester] ?? section.semester}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -225,25 +232,8 @@ export function SectionsList({
                     <p style={{ fontSize: 10, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.05em" }}>Enrollment</p>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <p style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
-                        {enrolled} <span style={{ fontWeight: 400, color: "#9ca3af" }}>/ {capacity} capacity</span>
+                        {enrolled} <span style={{ fontWeight: 400, color: "#9ca3af" }}>students enrolled</span>
                       </p>
-                      <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        color: enrolled >= capacity ? "#ef4444" : enrolled >= capacity * 0.8 ? "#d97706" : "#16a34a",
-                        backgroundColor: enrolled >= capacity ? "#fee2e2" : enrolled >= capacity * 0.8 ? "#fffbeb" : "#f0fdf4",
-                        padding: "2px 7px", borderRadius: 20,
-                      }}>
-                        {enrolled >= capacity ? "Full" : enrolled >= capacity * 0.8 ? "Nearly Full" : "Open"}
-                      </span>
-                    </div>
-                    {/* Progress bar */}
-                    <div style={{ marginTop: 6, height: 4, backgroundColor: "#e5e7eb", borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{
-                        height: "100%", borderRadius: 99,
-                        width: `${Math.min((enrolled / capacity) * 100, 100)}%`,
-                        backgroundColor: enrolled >= capacity ? "#ef4444" : enrolled >= capacity * 0.8 ? "#f59e0b" : "#22c55e",
-                        transition: "width 0.4s ease",
-                      }} />
                     </div>
                   </div>
                 </div>

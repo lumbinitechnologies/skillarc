@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import React, { useState, useEffect, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -56,6 +58,11 @@ function StatusContent() {
   const searchParams = useSearchParams()
   const initialId = searchParams.get("id") || ""
 
+  return <StatusContentForId key={initialId} initialId={initialId} />
+}
+
+function StatusContentForId({ initialId }: { initialId: string }) {
+
   const [lookupQuery, setLookupQuery] = useState(initialId)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
@@ -67,35 +74,40 @@ function StatusContent() {
   const [signing, setSigning] = useState(false)
   const [decisionMsg, setDecisionMsg] = useState("")
 
-  async function fetchStatus(idOrEmail: string) {
-    if (!idOrEmail.trim()) return
-    setLoading(true)
-    setErrorMsg("")
-    setDecisionMsg("")
-
-    try {
-      const isEmail = idOrEmail.includes("@")
-      const param = isEmail ? `email=${encodeURIComponent(idOrEmail.trim())}` : `id=${encodeURIComponent(idOrEmail.trim())}`
-      const res = await fetch(`/api/admissions/public-status?${param}`)
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.error || "Application not found.")
-      }
-
-      setApplication(data.application)
-    } catch (err: any) {
-      setErrorMsg(err.message || "Failed to load application status.")
-      setApplication(null)
-    } finally {
-      setLoading(false)
+  async function fetchStatus(idOrEmail: string, signal?: AbortSignal): Promise<ApplicationData> {
+    if (!idOrEmail.trim()) throw new Error("Enter an application reference or email.")
+    const isEmail = idOrEmail.includes("@")
+    const param = isEmail ? `email=${encodeURIComponent(idOrEmail.trim())}` : `id=${encodeURIComponent(idOrEmail.trim())}`
+    const res = await fetch(`/api/admissions/public-status?${param}`, { signal })
+    const data: unknown = await res.json()
+    const payload = data && typeof data === "object" ? data as { error?: unknown; application?: unknown } : {}
+    if (!res.ok) {
+      throw new Error(typeof payload.error === "string" ? payload.error : "Application not found.")
     }
+    const application = payload.application
+    if (!application || typeof application !== "object" || !("id" in application) || !("status" in application)) {
+      throw new Error("Application status response is invalid.")
+    }
+    return application as ApplicationData
   }
 
   useEffect(() => {
-    if (initialId) {
-      fetchStatus(initialId)
-    }
+    if (!initialId) return
+    const controller = new AbortController()
+    fetchStatus(initialId, controller.signal)
+      .then((result) => {
+        setApplication(result)
+        setErrorMsg("")
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setErrorMsg(readErrorMessage(error) || "Failed to load application status.")
+        setApplication(null)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+    return () => controller.abort()
   }, [initialId])
 
   async function handleAcceptOffer(decision: "accept" | "decline") {
@@ -137,8 +149,8 @@ function StatusContent() {
 
       // Refresh status
       await fetchStatus(application.id)
-    } catch (err: any) {
-      setErrorMsg(err.message || "Error accepting offer.")
+    } catch (err: unknown) {
+      setErrorMsg(readErrorMessage(err) || "Error accepting offer.")
     } finally {
       setSigning(false)
     }
@@ -216,7 +228,16 @@ function StatusContent() {
             <form
               onSubmit={(e) => {
                 e.preventDefault()
+                setLoading(true)
+                setErrorMsg("")
+                setDecisionMsg("")
                 fetchStatus(lookupQuery)
+                  .then(setApplication)
+                  .catch((error: unknown) => {
+                    setErrorMsg(readErrorMessage(error) || "Failed to load application status.")
+                    setApplication(null)
+                  })
+                  .finally(() => setLoading(false))
               }}
               className="flex flex-col sm:flex-row gap-3 pt-2"
             >

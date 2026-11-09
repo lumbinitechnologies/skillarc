@@ -16,14 +16,14 @@ export default async function PHSectionsPage() {
     .eq("institution_id", institutionId)
     .order("name")
 
-  const rawSections = (sectionsRes.data ?? []) as any[]
+  const rawSections = (sectionsRes.data ?? [])
   const sectionIds = rawSections.map((s) => s.id)
 
   const studentCountRes = sectionIds.length
     ? await admin.from("students").select("section_id").in("section_id", sectionIds)
     : { data: [] }
 
-  const studentRows = (studentCountRes.data ?? []) as any[]
+  const studentRows = (studentCountRes.data ?? [])
   const countMap: Record<string, number> = {}
   for (const r of studentRows) countMap[r.section_id] = (countMap[r.section_id] ?? 0) + 1
 

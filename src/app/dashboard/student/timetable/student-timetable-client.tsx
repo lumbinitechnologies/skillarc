@@ -7,13 +7,6 @@ import TimetablePrintModal from "@/modules/timetable/components/timetable-print-
 import { AcademicEvent, Slot } from "@/modules/timetable/types/timetable.types"
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-const PERIOD_LABELS: Record<number, string> = {
-  1: "8:45 – 9:45",
-  2: "9:45 – 10:45",
-  3: "11:00 – 12:00",
-  4: "12:00 – 1:00",
-  5: "2:00 – 3:00",
-}
 
 const COLORS: Record<string, { bg: string; border: string; text: string; sub: string }> = {
   DAA:       { bg: "#dbeafe", border: "#bfdbfe", text: "#1e3a5f", sub: "#3b82f6" },
@@ -80,13 +73,7 @@ export default function StudentTimetableClient({
   timetableRows,
   subjectMap,
   facultyMap,
-  periodTimings = [
-    { id: "P1", label: "Period 1", time: "8:45 – 9:45" },
-    { id: "P2", label: "Period 2", time: "9:45 – 10:45" },
-    { id: "P3", label: "Period 3", time: "11:00 – 12:00" },
-    { id: "P4", label: "Period 4", time: "12:00 – 1:00" },
-    { id: "P5", label: "Period 5", time: "2:00 – 3:00" },
-  ],
+  periodTimings = [],
   weeks = [],
   academicEvents = [],
   multiWeekEnabled = false,
@@ -95,12 +82,7 @@ export default function StudentTimetableClient({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
 
   // Auto-select current week or week 1
-  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(() => {
-    if (!multiWeekEnabled || weeks.length === 0) return null
-    const today = new Date().toISOString().split("T")[0]
-    const matched = weeks.find((w) => w.start_date <= today && today <= w.end_date)
-    return matched ? matched.id : weeks[0]?.id ?? null
-  })
+  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null)
 
   // Filter timetable rows for current week or static template
   const activeRows = multiWeekEnabled && weeks.length > 0
@@ -119,7 +101,7 @@ export default function StudentTimetableClient({
     })
   }
 
-  const finalPeriodLabels = Object.keys(periodLabelsMap).length > 0 ? periodLabelsMap : PERIOD_LABELS
+  const finalPeriodLabels = periodLabelsMap
 
   // List format grouped by day
   const timetableByDay = DAY_ORDER.map((day) => ({
@@ -137,7 +119,7 @@ export default function StudentTimetableClient({
           room: slot.room || null,
           deliveryMode: slot.delivery_mode || "ON_CAMPUS",
           meetingLink: slot.meeting_link || null,
-          time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "TBD"}`,
+          time: `Period ${slot.period} · ${finalPeriodLabels[slot.period] ?? "Time unavailable"}`,
         }
       })
       .sort((a, b) => a.period - b.period),
@@ -305,7 +287,7 @@ export default function StudentTimetableClient({
                   <th key={p} className="pb-3 px-2 text-center min-w-[140px]">
                     <div className="text-slate-700 font-extrabold text-xs">Period {p}</div>
                     <div className="text-[10px] text-slate-400 font-normal">
-                      {finalPeriodLabels[p] ?? `Period ${p}`}
+                      {finalPeriodLabels[p] ?? "Time unavailable"}
                     </div>
                   </th>
                 ))}

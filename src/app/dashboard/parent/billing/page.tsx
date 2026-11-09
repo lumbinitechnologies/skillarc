@@ -1,12 +1,13 @@
 import { getParentContext } from "@/lib/parent-context"
+import { getServerTime } from "@/lib/server-time"
 import ParentBillingClient from "./billing-client"
 
 export const dynamic = "force-dynamic"
 
 export default async function ParentBillingPage() {
-  const { profile, children, admin } = await getParentContext()
+  const { profile, children: students, admin } = await getParentContext()
 
-  const studentIds = children.map((c) => c.id)
+  const studentIds = students.map((c) => c.id)
 
   // Correct schema: payment_plans → invoices (same as student billing + admin billing desk)
   const plansRes = studentIds.length
@@ -20,14 +21,15 @@ export default async function ParentBillingPage() {
         .order("created_at", { ascending: false })
     : { data: [] }
 
-  const raw = (plansRes.data ?? []) as any[]
+  const renderedAt = (await getServerTime()).getTime()
+  const raw = (plansRes.data ?? [])
 
-  const childBilling = children.map((child) => {
+  const childBilling = students.map((child) => {
     const plans = raw.filter((p) => p.student_id === child.id)
 
-    const records = plans.flatMap((plan: any) => {
+    const records = plans.flatMap((plan) => {
       const invoices = Array.isArray(plan.invoices) ? plan.invoices : plan.invoices ? [plan.invoices] : []
-      return invoices.map((inv: any) => ({
+      return invoices.map((inv) => ({
         id: inv.id,
         feeType: "Tuition",
         description: "Payment Plan",
@@ -42,7 +44,7 @@ export default async function ParentBillingPage() {
     const totalDue = records.reduce((a, r) => a + r.amount, 0)
     const totalPaid = records.filter((r) => r.status === "PAID").reduce((a, r) => a + r.amount, 0)
     const outstanding = totalDue - totalPaid
-    const overdue = records.filter((r) => r.status !== "PAID" && r.dueDate && new Date(r.dueDate) < new Date()).length
+    const overdue = records.filter((r) => r.status !== "PAID" && r.dueDate && Date.parse(r.dueDate) < renderedAt).length
 
     return { ...child, records, stats: { totalDue, totalPaid, outstanding, overdue } }
   })
@@ -50,7 +52,8 @@ export default async function ParentBillingPage() {
   return (
     <ParentBillingClient
       parentName={profile.name ?? "Parent"}
-      children={childBilling}
+      students={childBilling}
+      renderedAt={renderedAt}
     />
   )
 }

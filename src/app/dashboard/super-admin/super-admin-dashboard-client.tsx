@@ -338,7 +338,7 @@ export default function SuperAdminDashboardClient({
         }),
       })
       if (res.ok) {
-        window.location.href = "/dashboard"
+        window.location.assign("/dashboard")
       } else {
         showToast("Failed to enter organization", "error")
       }
@@ -360,7 +360,7 @@ export default function SuperAdminDashboardClient({
         }),
       })
       if (res.ok) {
-        window.location.href = "/dashboard"
+        window.location.assign("/dashboard")
       } else {
         showToast("Failed to impersonate admin", "error")
       }

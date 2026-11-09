@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { NextRequest, NextResponse } from "next/server"
@@ -17,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, email, department_id, institution_id } = body
+    const { name, email, department_id, institution_id, phone, employee_id } = body
 
     if (!name || !email || !institution_id) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -39,12 +40,13 @@ export async function POST(request: NextRequest) {
       origin,
     })
 
-    // Patch in the extra faculty fields (name, department) that invite-user doesn't set
+    // Patch in the extra faculty fields (name, department, phone) that invite-user doesn't set
     const { data: faculty, error } = await adminSupabase
       .from("users")
       .update({
         name,
         department_id: department_id || null,
+        phone: phone || null,
       })
       .eq("email", email)
       .select()
@@ -52,10 +54,22 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json(faculty)
-  } catch (error: any) {
+    // Save employee_id to staff table if provided
+    if (employee_id && faculty?.id) {
+      await adminSupabase.from("staff").upsert({
+        id: faculty.id,
+        institution_id,
+        employee_id: String(employee_id).trim(),
+      }, { onConflict: "id" })
+    }
+
+    return NextResponse.json({
+      ...faculty,
+      employee_id: employee_id ? String(employee_id).trim() : null,
+    })
+  } catch (error: unknown) {
     console.error("Faculty creation error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(error) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -90,7 +104,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     // Load timetable builder permissions
-    let { data: perm } = await supabase
+    const { data: perm } = await supabase
       .from("permissions")
       .select("id")
       .eq("name", "timetable_builder")
@@ -105,9 +119,22 @@ export async function GET(request: NextRequest) {
 
     const builderUserIds = new Set((userPerms || []).map(up => up.user_id))
 
+    // Fetch employee IDs from staff table
+    const facultyIds = (data || []).map((u) => u.id)
+    const adminSupabase = createSupabaseAdminClient()
+    const { data: staffRecords = [] } = facultyIds.length
+      ? await adminSupabase
+          .from("staff")
+          .select("id, employee_id")
+          .in("id", facultyIds)
+      : { data: [] }
+
+    const staffMap = new Map((staffRecords || []).map((s) => [s.id, s.employee_id]))
+
     const mapped = (data || []).map((u) => ({
       ...u,
       is_timetable_builder: builderUserIds.has(u.id),
+      employee_id: staffMap.get(u.id) ?? null,
     }))
 
     return NextResponse.json(mapped)

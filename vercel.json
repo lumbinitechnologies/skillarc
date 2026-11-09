@@ -4,5 +4,8 @@
       "path": "/api/internal/knowledge/worker",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }

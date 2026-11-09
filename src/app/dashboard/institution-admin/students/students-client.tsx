@@ -51,9 +51,15 @@ export function StudentsClientPage({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const { toast } = useToast()
 
+  const [loadingInputs, setLoadingInputs] = useState<readonly unknown[] | null>(null)
+  const nextLoadingInputs = [page, limit, institutionId]
+  if (loadingInputs === null || nextLoadingInputs.some((value, index) => !Object.is(value, loadingInputs[index]))) {
+    setLoadingInputs(nextLoadingInputs)
+    setIsLoading(true)
+  }
+
   // ── Fetch page from server ──────────────────────────────────────────────
   const loadStudents = useCallback(async (targetPage = page, targetLimit = limit) => {
-    setIsLoading(true)
     try {
       const params = new URLSearchParams({
         institution_id: institutionId,

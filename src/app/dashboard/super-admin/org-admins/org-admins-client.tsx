@@ -1,5 +1,7 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
 import { useState, useTransition } from "react"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -63,6 +65,7 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function OrgAdminsPage({ orgAdmins: initial = [], organizations = [], onCreateAdmin, onDeleteAdmin, onResetPassword }: Props) {
+  const now = useCurrentTime()
   const [admins, setAdmins] = useState(initial ?? [])
   const [search, setSearch] = useState("")
   const [filterOrg, setFilterOrg] = useState("")
@@ -154,7 +157,7 @@ export default function OrgAdminsPage({ orgAdmins: initial = [], organizations =
           {[
             { label:"Total Admins", value:admins.length, bg:"#ede9fe", color:"#6d28d9" },
             { label:"Organizations Covered", value:new Set(admins.map(a=>a.organization_id)).size, bg:"#dbeafe", color:"#1d4ed8" },
-            { label:"Active Last 30d", value:admins.filter(a=>a.last_login && (Date.now()-new Date(a.last_login).getTime())<30*864e5).length, bg:"#d1fae5", color:"#065f46" },
+            { label:"Active Last 30d", value:admins.filter(a=>a.last_login && (now-new Date(a.last_login).getTime())<30*864e5).length, bg:"#d1fae5", color:"#065f46" },
           ].map(s => (
             <div key={s.label} style={{ background:"#fff", border:"1px solid #e5e7eb", borderRadius:12, padding:"16px 20px", display:"flex", alignItems:"center", gap:12 }}>
               <div style={{ width:40, height:40, borderRadius:99, background:s.bg, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -266,7 +269,7 @@ export default function OrgAdminsPage({ orgAdmins: initial = [], organizations =
         <Modal title="Remove Admin" subtitle="This removes admin access." onClose={() => setDeleteTarget(null)}>
           <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 16px", marginBottom:20 }}>
             <p style={{ margin:0, fontSize:14, color:"#991b1b", fontWeight:500 }}>
-              Remove <strong>"{deleteTarget.name}"</strong> from <strong>{deleteTarget.organization_name}</strong>? Their auth account will be deleted.
+              Remove <strong>&quot;{deleteTarget.name}&quot;</strong> from <strong>{deleteTarget.organization_name}</strong>? Their auth account will be deleted.
             </p>
           </div>
           <div style={{ display:"flex", gap:10 }}>

@@ -13,11 +13,13 @@ interface SignaturePadProps {
 export function SignaturePad({ signerName, onSignatureChange, disabled = false }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
-  const [hasSignature, setHasSignature] = useState(false)
+  const [hasDrawnSignature, setHasSignature] = useState(false)
   const [mode, setMode] = useState<"DRAW" | "TYPE">("DRAW")
   const [typedName, setTypedName] = useState(signerName || "")
   const [agreed, setAgreed] = useState(false)
   const [selectedFont, setSelectedFont] = useState<"cursive" | "serif" | "monospace">("cursive")
+
+  const hasSignature = mode === "TYPE" ? Boolean(typedName.trim()) : hasDrawnSignature
 
   // Initialize canvas
   useEffect(() => {
@@ -63,10 +65,8 @@ export function SignaturePad({ signerName, onSignatureChange, disabled = false }
       ctx.fillText(typedName, rect.width / 2, rect.height / 2)
 
       const dataUrl = canvas.toDataURL("image/png")
-      setHasSignature(true)
       onSignatureChange(dataUrl, agreed)
     } else if (mode === "TYPE" && !typedName.trim()) {
-      setHasSignature(false)
       onSignatureChange(null, agreed)
     }
   }, [mode, typedName, selectedFont, agreed, onSignatureChange])
@@ -209,7 +209,7 @@ export function SignaturePad({ signerName, onSignatureChange, disabled = false }
                 <button
                   key={f.id}
                   type="button"
-                  onClick={() => setSelectedFont(f.id as any)}
+                  onClick={() => setSelectedFont(f.id as typeof selectedFont)}
                   className={`flex-1 rounded-xl py-2 text-xs font-bold transition-all border ${
                     selectedFont === f.id
                       ? "border-[#EAAD62] bg-[#EAAD62]/10 text-[#EAAD62]"

@@ -1,5 +1,8 @@
 "use client"
 
+import { useCurrentTime } from "@/hooks/use-current-time"
+
+
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { BookOpen, Users, Clock, ChevronRight, GraduationCap, LayoutGrid } from "lucide-react"
@@ -20,7 +23,8 @@ export default function TeacherDashboardClient({
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const hour = new Date().getHours()
+  const currentTime = useCurrentTime()
+  const hour = new Date(currentTime).getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
 
   useEffect(() => {

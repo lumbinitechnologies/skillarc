@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       organizations: orgsRes.data || [],
       institutions: instsRes.data || [],
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Impersonate options API error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { getCurrentUserContext } from "@/lib/user-context"
@@ -5,7 +6,7 @@ import { ROLES } from "@/constants/roles"
 
 export const dynamic = "force-dynamic"
 
-const ALLOWED_ROLES = new Set([
+const ALLOWED_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.ORG_ADMIN,
   ROLES.INSTITUTION_ADMIN,
@@ -26,7 +27,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!ALLOWED_ROLES.has(profile.role as any)) {
+    if (!ALLOWED_ROLES.has(profile.role)) {
       return NextResponse.json(
         { error: "Forbidden: You do not have permission to edit events." },
         { status: 403 }
@@ -35,7 +36,7 @@ export async function PATCH(
 
     const admin = createSupabaseAdminClient()
     const body = await request.json()
-    const updatePayload: Record<string, any> = {}
+    const updatePayload: Record<string, unknown> = {}
 
     if (body.title !== undefined) updatePayload.title = body.title
     if (body.description !== undefined) {
@@ -71,8 +72,8 @@ export async function PATCH(
     }
 
     return NextResponse.json(data)
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }
 
@@ -88,7 +89,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (!ALLOWED_ROLES.has(profile.role as any)) {
+    if (!ALLOWED_ROLES.has(profile.role)) {
       return NextResponse.json(
         { error: "Forbidden: You do not have permission to delete events." },
         { status: 403 }
@@ -107,7 +108,7 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal server error" }, { status: 500 })
   }
 }

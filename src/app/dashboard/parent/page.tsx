@@ -78,16 +78,16 @@ export default async function ParentDashboardPage() {
       : Promise.resolve({ data: [] }),
   ])
 
-  const users = (usersRes.data ?? []) as any[]
-  const students = (studentsRes.data ?? []) as any[]
-  const institution = institutionRes.data as any
-  const attendance = (attendanceRes.data ?? []) as any[]
-  const timetableSlots = (timetableRes.data ?? []) as any[]
+  const users = (usersRes.data ?? [])
+  const students = (studentsRes.data ?? [])
+  const institution = institutionRes.data
+  const attendance = (attendanceRes.data ?? [])
+  const timetableSlots = (timetableRes.data ?? [])
 
-  const childrenList = (relations ?? []).map((rel) => {
+  const childrenList = (relations ?? []).flatMap((rel) => {
     const user = users.find((u) => u.id === rel.student_id)
     const student = students.find((s) => s.id === rel.student_id)
-    if (!user || !student) return null
+    if (!user || !student) return []
 
     const section = Array.isArray(student.sections) ? student.sections[0] : student.sections
     const program = Array.isArray(student.programs) ? student.programs[0] : student.programs
@@ -97,12 +97,12 @@ export default async function ParentDashboardPage() {
 
     // Timetable for this section
     const sectionSlots = section?.id
-      ? timetableSlots.filter((s: any) => s.section_id === section.id)
+      ? timetableSlots.filter((s) => s.section_id === section.id)
       : []
 
     // Unique subjects
     const subjectMap = new Map<string, { id: string; name: string; code: string; facultyName: string }>()
-    sectionSlots.forEach((slot: any) => {
+    sectionSlots.forEach((slot) => {
       const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
       const fac = Array.isArray(slot.faculty) ? slot.faculty[0] : slot.faculty
       if (sub?.id && !subjectMap.has(sub.id)) {
@@ -116,7 +116,7 @@ export default async function ParentDashboardPage() {
     })
 
     // Schedule
-    const schedule = sectionSlots.map((slot: any) => {
+    const schedule = sectionSlots.map((slot) => {
       const sub = Array.isArray(slot.subjects) ? slot.subjects[0] : slot.subjects
       const fac = Array.isArray(slot.faculty) ? slot.faculty[0] : slot.faculty
       return {
@@ -129,16 +129,16 @@ export default async function ParentDashboardPage() {
     })
 
     // Attendance stats for this student
-    const studentAttendance = attendance.filter((a: any) => a.student_id === rel.student_id)
+    const studentAttendance = attendance.filter((a) => a.student_id === rel.student_id)
     const total = studentAttendance.length
-    const present = studentAttendance.filter((a: any) => a.status === "PRESENT").length
-    const absent = studentAttendance.filter((a: any) => a.status === "ABSENT").length
-    const late = studentAttendance.filter((a: any) => a.status === "LATE").length
+    const present = studentAttendance.filter((a) => a.status === "PRESENT").length
+    const absent = studentAttendance.filter((a) => a.status === "ABSENT").length
+    const late = studentAttendance.filter((a) => a.status === "LATE").length
     const attendanceRate = total > 0 ? Math.round(((present + late) / total) * 100) : 0
 
     // Per-subject attendance
     const subjectAttendance: Record<string, { total: number; present: number; absent: number }> = {}
-    studentAttendance.forEach((a: any) => {
+    studentAttendance.forEach((a) => {
       if (!a.subject_id) return
       if (!subjectAttendance[a.subject_id]) {
         subjectAttendance[a.subject_id] = { total: 0, present: 0, absent: 0 }
@@ -153,7 +153,7 @@ export default async function ParentDashboardPage() {
       attendance: subjectAttendance[sub.id] ?? { total: 0, present: 0, absent: 0 },
     }))
 
-    return {
+    return [{
       id: rel.student_id,
       relationship: rel.relationship ?? "Guardian",
       name: user.name ?? "Student",
@@ -170,8 +170,8 @@ export default async function ParentDashboardPage() {
       subjects,
       schedule,
       attendance: { rate: attendanceRate, total, present, absent, late },
-    }
-  }).filter(Boolean) as any[]
+    }]
+  })
 
   return (
     <ParentDashboardClient

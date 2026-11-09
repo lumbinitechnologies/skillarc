@@ -1,6 +1,27 @@
 import { supabase } from "@/lib/supabase"
 import { TimetableClash, ClashType } from "../types/timetable.types"
 
+type Relation<T> = T | T[] | null
+type ClashSlotRow = {
+  id: string
+  day: string | null
+  period: number | null
+  subject_id: string | null
+  faculty_id: string | null
+  section_id: string | null
+  room?: string | null
+  delivery_mode?: string | null
+  week_id: string | null
+  faculty: Relation<{ id: string; name: string | null; email?: string | null }>
+  sections: Relation<{ id: string; name: string | null; semester?: number | null }>
+  subjects: Relation<{ id: string; name: string | null; code: string | null }>
+}
+
+function relationOne<T>(value: Relation<T>): T | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return (value ?? null) as T | null
+}
+
 export const clashDetectionService = {
   /**
    * Scan all timetable slots for an entire institution (optionally scoped to a specific week)
@@ -33,7 +54,7 @@ export const clashDetectionService = {
         query = query.or(`week_id.eq.${weekId},week_id.is.null`)
       }
 
-      let rawSlots: any[] = []
+      let rawSlots: ClashSlotRow[] = []
       const { data, error } = await query
 
       if (error) {
@@ -59,29 +80,46 @@ export const clashDetectionService = {
         }
 
         const fallbackResult = await fallbackQuery
-        rawSlots = (fallbackResult.data ?? []) as any[]
+        rawSlots = (fallbackResult.data ?? [])
       } else {
-        rawSlots = (data ?? []) as any[]
+        rawSlots = (data ?? [])
       }
 
       if (!rawSlots || rawSlots.length === 0) {
         return []
       }
 
-      const slots = rawSlots.map((s: any) => ({
+      const slots = rawSlots.map((s) => {
+        const faculty = relationOne(s.faculty)
+        const section = relationOne(s.sections)
+        const subject = relationOne(s.subjects)
+        return ({
         id: s.id,
-        day: s.day,
-        period: s.period,
+        day: s.day ?? "Unknown",
+        period: s.period ?? 0,
         subject_id: s.subject_id,
-        subject_code: s.subjects?.code ?? "Unit",
-        subject_name: s.subjects?.name ?? "Unit",
+        subject_code: subject?.code ?? "Unit",
+        subject_name: subject?.name ?? "Unit",
         faculty_id: s.faculty_id,
-        faculty_name: s.faculty?.name ?? "Unassigned",
+        faculty_name: faculty?.name ?? "Unassigned",
         section_id: s.section_id,
-        section_name: s.sections?.name ?? `Section (${s.sections?.semester ?? 1})`,
+        section_name: section?.name ?? `Section (${section?.semester ?? 1})`,
         room: s.room ? String(s.room).trim() : null,
         delivery_mode: s.delivery_mode || "ON_CAMPUS",
         week_id: s.week_id,
+      })})
+
+      const toClashSlots = (rows: typeof slots): TimetableClash["conflictingSlots"] => rows.map((slot) => ({
+        id: slot.id,
+        day: slot.day,
+        period: slot.period,
+        section_id: slot.section_id ?? undefined,
+        section_name: slot.section_name,
+        subject_code: slot.subject_code,
+        subject_name: slot.subject_name,
+        faculty_name: slot.faculty_name,
+        room: slot.room,
+        week_id: slot.week_id,
       }))
 
       const clashes: TimetableClash[] = []
@@ -127,7 +165,7 @@ export const clashDetectionService = {
               period,
               faculty_id: facultyId,
               faculty_name: facultyName,
-              conflictingSlots: facultySlots,
+              conflictingSlots: toClashSlots(facultySlots),
             })
           }
         }
@@ -158,7 +196,7 @@ export const clashDetectionService = {
               day,
               period,
               room: displayRoom,
-              conflictingSlots: roomSlots,
+              conflictingSlots: toClashSlots(roomSlots),
             })
           }
         }
@@ -188,7 +226,7 @@ export const clashDetectionService = {
               period,
               section_id: sectionId,
               section_name: sectionName,
-              conflictingSlots: sectionSlots,
+              conflictingSlots: toClashSlots(sectionSlots),
             })
           }
         }
@@ -257,7 +295,7 @@ export const clashDetectionService = {
         query = query.neq("id", excludeSlotId)
       }
 
-      let existingSlots: any[] = []
+      let existingSlots: ClashSlotRow[] = []
       const { data, error } = await query
 
       if (error) {
@@ -284,16 +322,16 @@ export const clashDetectionService = {
         }
 
         const fallbackRes = await fallbackQuery
-        existingSlots = (fallbackRes.data ?? []) as any[]
+        existingSlots = (fallbackRes.data ?? [])
       } else {
-        existingSlots = (data ?? []) as any[]
+        existingSlots = (data ?? [])
       }
 
       if (!existingSlots || existingSlots.length === 0) {
         return { hasClash: false, warnings: [], clashes: [] }
       }
 
-      for (const slot of existingSlots as any[]) {
+      for (const slot of existingSlots) {
         // Skip current slot in current section if it's the same record
         if (slot.section_id === sectionId && (!excludeSlotId || slot.id === excludeSlotId)) {
           continue
@@ -301,9 +339,10 @@ export const clashDetectionService = {
 
         // Trainer conflict check across all sections
         if (facultyId && slot.faculty_id && slot.faculty_id === facultyId) {
-          const facultyName = slot.faculty?.name || "This trainer"
-          const secName = slot.sections?.name ? `Section ${slot.sections.name}` : "another section"
-          const subCode = slot.subjects?.code || "another unit"
+          const facultyName = relationOne(slot.faculty)?.name || "This trainer"
+          const sectionName = relationOne(slot.sections)?.name
+          const secName = sectionName ? `Section ${sectionName}` : "another section"
+          const subCode = relationOne(slot.subjects)?.code || "another unit"
           const msg = `⚠️ Trainer Clash: ${facultyName} is already teaching ${subCode} in ${secName} on ${day}, Period ${period}.`
           warnings.push(msg)
           clashes.push({
@@ -316,15 +355,16 @@ export const clashDetectionService = {
             period,
             faculty_id: facultyId,
             faculty_name: facultyName,
-            conflictingSlots: [slot],
+            conflictingSlots: [{ id: slot.id, day: slot.day ?? day, period: slot.period ?? period, section_id: slot.section_id ?? undefined, section_name: sectionName ?? undefined, subject_code: subCode, faculty_name: facultyName, room: slot.room ?? null, week_id: slot.week_id }],
           })
         }
 
         // Room conflict check across all sections
         if (room && room.trim() && deliveryMode !== "ONLINE" && slot.delivery_mode !== "ONLINE" && slot.room) {
           if (String(slot.room).trim().toLowerCase() === room.trim().toLowerCase()) {
-            const secName = slot.sections?.name ? `Section ${slot.sections.name}` : "another section"
-            const subCode = slot.subjects?.code || "another unit"
+            const sectionName = relationOne(slot.sections)?.name
+            const secName = sectionName ? `Section ${sectionName}` : "another section"
+            const subCode = relationOne(slot.subjects)?.code || "another unit"
             const msg = `⚠️ Room Clash: "${room.trim()}" is already booked for ${subCode} in ${secName} on ${day}, Period ${period}.`
             warnings.push(msg)
             clashes.push({
@@ -336,7 +376,7 @@ export const clashDetectionService = {
               day,
               period,
               room: room.trim(),
-              conflictingSlots: [slot],
+              conflictingSlots: [{ id: slot.id, day: slot.day ?? day, period: slot.period ?? period, section_id: slot.section_id ?? undefined, section_name: sectionName ?? undefined, subject_code: subCode, room: slot.room ?? null, week_id: slot.week_id }],
             })
           }
         }

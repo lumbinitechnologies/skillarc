@@ -1,8 +1,12 @@
 "use client"
 
+import type { CatalogSubject, SubjectFormValues } from "@/lib/catalog-types"
+
+
 import { useState, useMemo, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { X, BookMarked } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
 
 const subjectTypes = [
   { value: "THEORY",   label: "Theory",   icon: "📖", textClass: "text-[#6C63FF]", bgClass: "bg-[#6C63FF]/5", borderClass: "border-[#6C63FF]/20" },
@@ -70,10 +74,10 @@ interface Program    { id: string; name: string; department_id: string }
 export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments, programs, subject }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (data: any) => Promise<void>
+  onSubmit: (data: SubjectFormValues) => Promise<void>
   departments: Department[]
   programs: Program[]
-  subject?: any
+  subject?: CatalogSubject | null
 }) {
   const defaultForm = {
     department_id: "",
@@ -87,10 +91,16 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
   }
   const [formData, setFormData] = useState(defaultForm)
   const [loading, setLoading] = useState(false)
+  const t = useTerms()
+  const isSchool = useIsSchool()
 
   const isEdit = !!subject
 
-  useEffect(() => {
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [open, subject]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
     if (open) {
       if (subject) {
         setFormData({
@@ -107,9 +117,10 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
         setFormData(defaultForm)
       }
     }
-  }, [open, subject])
 
-  function set(key: string, value: any) {
+  }
+
+  function set<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
     setFormData(prev => ({ ...prev, [key]: value }))
   }
 
@@ -179,11 +190,11 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
 
         {/* Body */}
         <div className="px-6 py-5 space-y-5 max-h-[65vh] overflow-y-auto">
-          {/* Department */}
+          {/* Department / Stream */}
           <div>
-            <FieldLabel>Department</FieldLabel>
+            <FieldLabel>{t.department}</FieldLabel>
             <StyledSelect value={formData.department_id} onChange={handleDepartmentChange}>
-              <option value="">Select Department</option>
+              <option value="">Select {t.department}</option>
               {departments.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
@@ -195,11 +206,11 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             <FieldLabel>{isEdit ? "Program *" : "Programs *"}</FieldLabel>
             {!formData.department_id ? (
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
-                Select a department first
+                Select a {t.department.toLowerCase()} first
               </div>
             ) : filteredPrograms.length === 0 ? (
               <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
-                No programs for this department
+                No programs for this {t.department.toLowerCase()}
               </div>
             ) : isEdit ? (
               <StyledSelect value={formData.program_id} onChange={v => set("program_id", v)}>
@@ -233,7 +244,8 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             )}
           </div>
 
-          {/* Semester */}
+          {/* Semester — hidden for schools */}
+          {!isSchool && (
           <div>
             <FieldLabel>Semester</FieldLabel>
             <StyledSelect
@@ -242,13 +254,14 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
               disabled={!formData.department_id}
             >
               {!formData.department_id
-                ? <option value="">Select a department first</option>
+                ? <option value="">Select a {t.department.toLowerCase()} first</option>
                 : [1,2,3,4,5,6,7,8].map(s => (
                     <option key={s} value={s}>Semester {s}</option>
                   ))
               }
             </StyledSelect>
           </div>
+          )}
 
           {/* Name + Code */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -262,7 +275,8 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
             </div>
           </div>
 
-          {/* Credits */}
+          {/* Credits — college only */}
+          {!isSchool && (
           <div>
             <FieldLabel>Credits</FieldLabel>
             <StyledSelect value={String(formData.credits)} onChange={v => set("credits", Number(v))}>
@@ -271,6 +285,7 @@ export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments,
               ))}
             </StyledSelect>
           </div>
+          )}
 
           {/* Subject Type */}
           <div>

@@ -1,5 +1,10 @@
 "use client"
 
+import type { AcademicOption, AttendanceStudent, LeaveApplication, AttendanceSessionStats } from "@/lib/academic-content-types"
+
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState, useEffect, useMemo } from "react"
 import { Printer, Calendar, Clock, Award, ShieldAlert, CheckCircle, BookOpen, Save, TrendingUp, BarChart3, PieChart, AlertCircle, Activity, LayoutGrid, ListTodo, FileText, AlertTriangle } from "lucide-react"
 import AttendanceFilters from "@/modules/attendance/components/AttendanceFilters"
@@ -15,15 +20,16 @@ import {
   saveWarningLetterAction,
 } from "../../faculty/attendance/actions"
 import { useToast } from "@/components/ui/use-toast"
+import { useTerms } from "@/lib/org-type-context"
 
 interface Props {
   institutionId: string
-  programs: any[]
-  sections: any[]
-  subjects: any[]
-  students: any[]
-  departments: any[]
-  allStats: any[]
+  programs: AcademicOption[]
+  sections: AcademicOption[]
+  subjects: AcademicOption[]
+  students: AttendanceStudent[]
+  departments: AcademicOption[]
+  allStats: AttendanceSessionStats[]
 }
 
 export default function AttendanceClient({
@@ -36,6 +42,7 @@ export default function AttendanceClient({
   allStats,
 }: Props) {
   const { toast } = useToast()
+  const t = useTerms()
   
   const [activeView, setActiveView] = useState<"sheets" | "analytics">("analytics")
 
@@ -45,7 +52,7 @@ export default function AttendanceClient({
   const [selectedSection, setSelectedSection] = useState("")
   const [selectedSubject, setSelectedSubject] = useState("")
   const [selectedPeriod, setSelectedPeriod] = useState("")
-  const [selectedDate, setSelectedDate] = useState(
+  const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10)
   )
 
@@ -53,7 +60,7 @@ export default function AttendanceClient({
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [sessionNotes, setSessionNotes] = useState("")
   const [studentCumulativeRates, setStudentCumulativeRates] = useState<Record<string, { rate: number; total: number; missed: number }>>({})
-  const [warningModalStudent, setWarningModalStudent] = useState<any | null>(null)
+  const [warningModalStudent, setWarningModalStudent] = useState<React.ComponentProps<typeof AttendanceWarningModal>["student"]>(null)
   const [markedBy, setMarkedBy] = useState<string | null>(null)
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -67,7 +74,7 @@ export default function AttendanceClient({
   } | null>(null)
 
   const filteredStudents = students.filter(
-    (student: any) =>
+    (student) =>
       !selectedSection ||
       student.section_id === selectedSection
   )
@@ -389,10 +396,10 @@ export default function AttendanceClient({
           variant: "destructive"
         })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Server Error",
-        description: err.message || "An unexpected error occurred.",
+        description: readErrorMessage(err) || "An unexpected error occurred.",
         variant: "destructive"
       })
     } finally {
@@ -471,7 +478,7 @@ export default function AttendanceClient({
             
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               <div>
-                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Department</label>
+                <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">{t.department}</label>
                 <select
                   value={analDept}
                   onChange={e => {
@@ -613,7 +620,7 @@ export default function AttendanceClient({
             {/* Department Wise Attendance Rate (Horizontal premium bar chart) */}
             <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-['Plus_Jakarta_Sans']">Department Performance</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider font-['Plus_Jakarta_Sans']">{t.department} Performance</h3>
                 <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">All-Time</span>
               </div>
               
@@ -938,11 +945,11 @@ export default function AttendanceClient({
         onClose={() => setWarningModalStudent(null)}
         student={warningModalStudent}
         onIssued={async (payload) => {
-          await saveWarningLetterAction({
+          const result = await saveWarningLetterAction({
             ...payload,
             institutionId,
-            renderedHtml: "",
           })
+          if (!result.success) throw new Error(result.error || "Could not save notice")
           toast({
             title: "Warning Notice Logged",
             description: "Official compliance warning notice recorded.",

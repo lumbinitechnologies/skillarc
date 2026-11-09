@@ -1,5 +1,7 @@
 "use server"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { NextResponse } from "next/server"
 
 // ---------------------------------------------------------------------------
@@ -169,8 +171,8 @@ export async function POST(req: Request) {
       { error: "AI detection unavailable — all models failed or timed out" },
       { status: 503 }
     )
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AI Detect] Unhandled error:", err)
-    return NextResponse.json({ error: err.message || "Internal error" }, { status: 500 })
+    return NextResponse.json({ error: readErrorMessage(err) || "Internal error" }, { status: 500 })
   }
 }

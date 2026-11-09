@@ -1,5 +1,7 @@
 "use client"
 
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { X, Settings, Clock, Save, Loader2, RefreshCw } from "lucide-react"
@@ -76,11 +78,16 @@ export function TimetableSettingsDialog({ open, onOpenChange }: {
   }
 
   // Auto-generate if timings are empty
-  useEffect(() => {
+  const [previousSource0, setPreviousSource0] = useState<readonly unknown[] | null>(null)
+  const nextSource0 = [open, loading, periodTimings.length]
+  if (previousSource0 === null || nextSource0.some((value, index) => !Object.is(value, previousSource0[index]))) {
+    setPreviousSource0(nextSource0)
+    ;(() => {
     if (periodTimings.length === 0 && open && !loading) {
       handleAutoGenerate()
     }
-  }, [open, loading, periodTimings.length])
+  })()
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -105,10 +112,10 @@ export function TimetableSettingsDialog({ open, onOpenChange }: {
       })
       onOpenChange(false)
       window.location.reload()
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Error",
-        description: err.message || "Failed to save settings",
+        description: readErrorMessage(err) || "Failed to save settings",
         variant: "destructive"
       })
     } finally {

@@ -66,16 +66,16 @@ const item = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0, transiti
 
 export default function ParentAttendanceClient({
   parentName,
-  children,
+  students,
 }: {
   parentName: string
-  children: ChildWithAttendance[]
+  students: ChildWithAttendance[]
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [expandedSubject, setExpandedSubject] = useState<string | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  const child = children[selectedIdx] ?? null
+  const child = students[selectedIdx] ?? null
 
   return (
     <PageShell>
@@ -85,13 +85,13 @@ export default function ParentAttendanceClient({
         title="Attendance"
         subtitle="Track your child's attendance across all subjects."
         actions={
-          children.length > 1 ? (
+          students.length > 1 ? (
             <select
               value={selectedIdx}
               onChange={(e) => setSelectedIdx(Number(e.target.value))}
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[var(--primary)] transition"
             >
-              {children.map((c, i) => (
+              {students.map((c, i) => (
                 <option key={c.id} value={i}>{c.name}</option>
               ))}
             </select>

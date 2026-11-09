@@ -1,4 +1,4 @@
-// @ts-nocheck
+export {}
 const apiKey = process.env.GROQ_API_KEY
 
 async function listModels() {

@@ -1,3 +1,4 @@
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
@@ -73,7 +74,7 @@ export async function GET() {
 
   const admin = createSupabaseAdminClient()
 
-  let userRole = (user.user_metadata as any)?.role || "STUDENT"
+  let userRole = (user.user_metadata)?.role || "STUDENT"
   try {
     const { data: profile } = await admin.from("users").select("role").eq("id", user.id).maybeSingle()
     if (profile?.role) userRole = profile.role
@@ -81,7 +82,7 @@ export async function GET() {
     // Ignore error
   }
 
-  let overrides: any[] = []
+  let overrides: Array<{ category: string; email_enabled: boolean; push_enabled: boolean }> = []
   try {
     const { data } = await admin
       .from("notification_preferences")
@@ -136,7 +137,7 @@ export async function PUT(request: NextRequest) {
 
   const admin = createSupabaseAdminClient()
 
-  let existing: any = null
+  let existing = null
   try {
     const { data } = await admin
       .from("notification_preferences")
@@ -163,8 +164,8 @@ export async function PUT(request: NextRequest) {
     await admin
       .from("notification_preferences")
       .upsert(nextRow, { onConflict: "user_id,category" })
-  } catch (err: any) {
-    console.warn("Could not update notification_preferences:", err?.message || err)
+  } catch (err: unknown) {
+    console.warn("Could not update notification_preferences:", readErrorMessage(err) || err)
   }
 
   return NextResponse.json({ success: true })

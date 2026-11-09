@@ -1,3 +1,4 @@
+import { relationOne } from "@/lib/academic-content-types"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { redirect } from "next/navigation"
@@ -93,7 +94,7 @@ export default async function DepartmentDetailPage({ params }: PageProps) {
     .order("name")
 
   // Load timetable builder permissions for faculty
-  let { data: perm } = await adminClient
+  const { data: perm } = await adminClient
     .from("permissions")
     .select("id")
     .eq("name", "timetable_builder")
@@ -155,7 +156,7 @@ export default async function DepartmentDetailPage({ params }: PageProps) {
       department_id: departmentId,
       phone: null,
       section: sec || null,
-    } as any
+    }
   })
 
   // 6. Fetch all faculty in the institution (for section advisor selection)
@@ -201,15 +202,15 @@ export default async function DepartmentDetailPage({ params }: PageProps) {
   return (
     <DepartmentDetailClient
       department={department}
-      initialPrograms={programs as any}
-      initialSections={sections as any}
-      initialFaculty={facultyWithStats as any}
-      initialStudents={students as any}
+      initialPrograms={(programs ?? []).map(row => ({ ...row, department: relationOne(row.department) }))}
+      initialSections={(sections ?? []).map(row => ({ ...row, faculty_advisor: relationOne(row.faculty_advisor), program: relationOne(row.program) }))}
+      initialFaculty={facultyWithStats}
+      initialStudents={students}
       initialTotalStudents={count ?? 0}
-      allFacultyAdvisors={(allInstitutionFaculty || []) as any}
-      initialSubjects={subjects as any}
-      initialAssignments={assignments as any}
-      departments={departments as any}
+      allFacultyAdvisors={(allInstitutionFaculty || [])}
+      initialSubjects={(subjects ?? []).map(row => { const program = relationOne(row.program); return { ...row, program: program ? { ...program, department: relationOne(program.department) } : null } })}
+      initialAssignments={(assignments ?? []).map(row => ({ ...row, users: [], subjects: [] }))}
+      departments={departments ?? []}
       institutionId={institutionId}
       organizationId={userProfile.organization_id || ""}
     />

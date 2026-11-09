@@ -1,6 +1,17 @@
+import type { TableRow } from "@/lib/database-row"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+type FacultyProfile = Pick<TableRow<"users">, "name" | "role" | "institution_id"> | null
+type FacultySubject = Pick<TableRow<"subjects">, "id" | "name" | "code">
+type FacultyTimetable = {
+  day: string
+  period: string
+  section_id: string | null
+  subjects: FacultySubject | undefined
+  sections: { name: string } | undefined
+}
+
 const CACHE_DEBUG = process.env.CACHE_DEBUG === "1"
-function debugLog(...args: any[]) {
+function debugLog(...args: unknown[]) {
   if (CACHE_DEBUG) console.debug("[faculty-cache]", ...args)
 }
 
@@ -26,15 +37,15 @@ function createTTLCache<T>(ttlMs: number) {
   }
 }
 
-const facultyProfileCache = createTTLCache<any>(300_000)
+const facultyProfileCache = createTTLCache<FacultyProfile>(300_000)
 const institutionNameCache = createTTLCache<string | null>(300_000)
-const facultySubjectsCache = createTTLCache<any[]>(60_000)
-const facultyTimetableCache = createTTLCache<any[]>(30_000)
+const facultySubjectsCache = createTTLCache<FacultySubject[]>(60_000)
+const facultyTimetableCache = createTTLCache<FacultyTimetable[]>(30_000)
 // In-flight request maps to dedupe concurrent fetches for the same key
-const facultyProfileInFlight = new Map<string, Promise<any>>()
+const facultyProfileInFlight = new Map<string, Promise<FacultyProfile>>()
 const institutionNameInFlight = new Map<string, Promise<string | null>>()
-const facultySubjectsInFlight = new Map<string, Promise<any[]>>()
-const facultyTimetableInFlight = new Map<string, Promise<any[]>>()
+const facultySubjectsInFlight = new Map<string, Promise<FacultySubject[]>>()
+const facultyTimetableInFlight = new Map<string, Promise<FacultyTimetable[]>>()
 
 export async function getFacultyProfile(userId: string) {
   const cached = facultyProfileCache.get(userId)
@@ -129,7 +140,7 @@ export async function getFacultySubjects(userId: string) {
         .eq("faculty_id", userId)
         .limit(10)
 
-      const subjectIds = (assignedSubjects ?? []).map((row: any) => row.subject_id)
+      const subjectIds = (assignedSubjects ?? []).map((row) => row.subject_id)
       if (subjectIds.length === 0) {
         facultySubjectsCache.set(userId, [])
         return []
@@ -189,7 +200,7 @@ export async function getFacultyTimetable(userId: string, institutionId: string 
     .order("day")
     .order("period")
     .limit(12)
-      const resolved = (timetableRows ?? []).map((slot: any) => ({
+      const resolved = (timetableRows ?? []).map((slot) => ({
         day: slot.day,
         period: slot.period,
         section_id: slot.section_id,

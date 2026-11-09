@@ -167,9 +167,9 @@ export const MOCK_STUDENTS: Student[] = NAMES.map((name, i) => {
     company,
     package: pkg,
     placed_date: placedDate,
-    sgpa: semRecord(sgpaVals) as any,
-    backlogs: semRecord([0, 0, seed % 2, 0, 0, 0, 0, 0]) as any,
-    attendance: semRecord([85, 88, 82, 90, 87, 91, 89, 92].map(v => Math.min(100, v + seed % 5))) as any,
+    sgpa: semRecord(sgpaVals),
+    backlogs: semRecord([0, 0, seed % 2, 0, 0, 0, 0, 0]),
+    attendance: semRecord([85, 88, 82, 90, 87, 91, 89, 92].map(v => Math.min(100, v + seed % 5))),
   };
 });
 
