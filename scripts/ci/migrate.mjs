@@ -26,17 +26,30 @@ function cli(step, args) {
   const result = spawnSync('supabase', args, { cwd: root, encoding: 'utf8', timeout: 15 * 60_000, maxBuffer: 10 * 1024 * 1024 });
   if (result.status !== 0) {
     // Report only fixed labels and structured codes. Raw CLI output can contain connection details or SQL.
-    const stderr = result.stderr || '';
-    const http = stderr.match(/\b(?:HTTP(?: status)?|status(?: code)?)[ :]+([45]\d{2})\b/i)?.[1];
-    const sqlstate = stderr.match(/\bSQLSTATE[ :]+([0-9A-Z]{5})\b/i)?.[1];
-    const system = result.error?.code || stderr.match(/\b(ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ENOTFOUND|EAI_AGAIN)\b/)?.[1];
+    let diagnostic = result.stderr || '';
+    let cliCode;
+    for (const line of (result.stdout || '').split('\n')) {
+      if (!line.startsWith('{')) continue;
+      try {
+        const record = JSON.parse(line);
+        if (record._tag !== 'Error') continue;
+        if (typeof record.error?.message === 'string') diagnostic += `\n${record.error.message}`;
+        if (/^(?:LegacyDbConfig(?:LoginRole(?:Status|Network)|ConnectTempRole|PoolerLogin|Ipv6|Load)|LegacyDbConnect|LegacyDbPush(?:TargetFlags|MigrationHistory))Error$/.test(record.error?.code || '')) cliCode = record.error.code;
+      } catch {
+        // Non-JSON output stays private.
+      }
+    }
+    const http = diagnostic.match(/\b(?:HTTP(?: status)?|status(?: code)?)[ :]+([45]\d{2})\b/i)?.[1];
+    const sqlstate = diagnostic.match(/\bSQLSTATE[ :]+([0-9A-Z]{5})\b/i)?.[1];
+    const system = result.error?.code || diagnostic.match(/\b(ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ENOTFOUND|EAI_AGAIN)\b/)?.[1];
     const details = [
       Number.isInteger(result.status) ? `exit ${result.status}` : 'process did not exit normally',
+      cliCode,
       http && `HTTP ${http}`,
       sqlstate && `SQLSTATE ${sqlstate}`,
       /^(?:ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ENOTFOUND|EAI_AGAIN|ENOENT|EACCES|ENOBUFS)$/.test(system || '') && system,
-      /login role/i.test(stderr) && 'CLI login role mentioned',
-      /(?:permission denied|unauthorized|forbidden|insufficient privileges)/i.test(stderr) && 'access error mentioned',
+      /login role/i.test(diagnostic) && 'CLI login role mentioned',
+      /(?:permission denied|unauthorized|forbidden|insufficient privileges)/i.test(diagnostic) && 'access error mentioned',
     ].filter(Boolean).join(', ');
     throw new Error(`Supabase ${step} failed (${details}); deployment stopped`);
   }
