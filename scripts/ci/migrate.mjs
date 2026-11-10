@@ -21,13 +21,28 @@ async function history() {
   if (!response.ok) throw new Error(`Cannot verify remote migration history (HTTP ${response.status})`);
   return response.json();
 }
-function cli(args) {
+function cli(step, args) {
   // No secret command-line arguments, raw output, seed/role/vault flags or repair.
   const result = spawnSync('supabase', args, { cwd: root, encoding: 'utf8', timeout: 15 * 60_000, maxBuffer: 10 * 1024 * 1024 });
-  if (result.status !== 0) throw new Error(`Supabase ${args.slice(0, 2).join(' ')} failed; deployment stopped (no application promotion)`);
+  if (result.status !== 0) {
+    // Report only fixed labels and structured codes. Raw CLI output can contain connection details or SQL.
+    const stderr = result.stderr || '';
+    const http = stderr.match(/\b(?:HTTP(?: status)?|status(?: code)?)[ :]+([45]\d{2})\b/i)?.[1];
+    const sqlstate = stderr.match(/\bSQLSTATE[ :]+([0-9A-Z]{5})\b/i)?.[1];
+    const system = result.error?.code || stderr.match(/\b(ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ENOTFOUND|EAI_AGAIN)\b/)?.[1];
+    const details = [
+      Number.isInteger(result.status) ? `exit ${result.status}` : 'process did not exit normally',
+      http && `HTTP ${http}`,
+      sqlstate && `SQLSTATE ${sqlstate}`,
+      /^(?:ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ENOTFOUND|EAI_AGAIN|ENOENT|EACCES|ENOBUFS)$/.test(system || '') && system,
+      /login role/i.test(stderr) && 'CLI login role mentioned',
+      /(?:permission denied|unauthorized|forbidden|insufficient privileges)/i.test(stderr) && 'access error mentioned',
+    ].filter(Boolean).join(', ');
+    throw new Error(`Supabase ${step} failed (${details}); deployment stopped`);
+  }
   return result.stdout.trim();
 }
-if (cli(['--version']) !== '2.117.0') throw new Error('Unexpected Supabase CLI version');
+if (cli('version check', ['--version']) !== '2.117.0') throw new Error('Unexpected Supabase CLI version');
 const inventoryResponse = await fetch(`https://api.supabase.com/v1/projects/${config.activeParentProjectRef}/branches`, {
   headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` }, redirect: 'error', signal: AbortSignal.timeout(30_000),
 });
@@ -37,8 +52,8 @@ const pending = validateLedger(versions, await history(), baseline, target.requi
 console.log(`${environment}: ${pending.length} reviewed migrations pending${pending.length ? ': ' + pending.join(', ') : ''}`);
 // CLI 2.117 supports an explicit project ref through the authenticated API.
 // No mutable linked-project state or database password is needed.
-cli(['db', 'push', '--project-ref', target.projectRef, '--skip-vault', '--dry-run', '--yes']);
-cli(['db', 'push', '--project-ref', target.projectRef, '--skip-vault', '--yes']);
+cli('migration dry run', ['db', 'push', '--project-ref', target.projectRef, '--skip-vault', '--dry-run', '--yes']);
+cli('migration apply', ['db', 'push', '--project-ref', target.projectRef, '--skip-vault', '--yes']);
 const remaining = validateLedger(versions, await history(), baseline, true);
 if (remaining.length) throw new Error('Migration ledger verification failed after push');
 console.log(`${environment}: migration ledger matches this reviewed revision`);
