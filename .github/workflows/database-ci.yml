@@ -38,6 +38,9 @@ jobs:
   server:
     name: Server tests
     runs-on: ubuntu-latest
+    env:
+      # Hosted runners use the bundled CPU runtime.
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -54,6 +57,8 @@ jobs:
 
   staging:
     name: Deploy and verify staging
+    env:
+      ONNXRUNTIME_NODE_INSTALL_CUDA: skip
     if: github.ref == 'refs/heads/staging' && github.event_name == 'push' && vars.STAGING_RELEASE_ENABLED == 'true'
     needs: [database, server]
     runs-on: ubuntu-latest
