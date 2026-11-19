@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { createClient } from "@supabase/supabase-js"
 import { authorizeMobileProfile, type MobilePrincipal } from "@/lib/mobile-auth"
+import { GET as getMe } from "@/app/api/mobile/v1/me/route"
 import { GET as getCourses } from "@/app/api/mobile/v1/student/courses/route"
 import { GET as getTasks } from "@/app/api/mobile/v1/student/tasks/route"
 import { GET as getTimetable } from "@/app/api/mobile/v1/student/timetable/route"
@@ -251,4 +252,26 @@ test("timetable validates static and multiweek selectors, closures and missing c
   assert.equal(selected.data.sessions[0].id, id(31))
   await body(await weekly(request(`timetable?week_id=${week}&date=2026-10-19`)), 400)
   await body(await weekly(request(`timetable?week_id=${id(25)}`)), 403)
+})
+
+test("Auth service failure is retryable on academic reads and preserves /me behavior", async t => {
+  const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const previousKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://auth.example.invalid"
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "synthetic-publishable"
+  t.after(() => {
+    if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl
+    if (previousKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = previousKey
+  })
+  let authStatus = 503
+  t.mock.method(globalThis, "fetch", async () => Response.json({ message: "Private Auth diagnostic" }, { status: authStatus }))
+  const bearer = new Request("https://skillarc.example.invalid", { headers: { Authorization: "Bearer synthetic.token.value" } })
+  const unavailable = await body(await getCourses(bearer), 503)
+  assert.equal(unavailable.error.code, "SERVICE_UNAVAILABLE")
+  assert.ok(!JSON.stringify(unavailable).includes("Private Auth diagnostic"))
+  assert.equal((await body(await getMe(bearer), 401)).error.code, "UNAUTHORIZED")
+  authStatus = 401
+  assert.equal((await body(await getCourses(bearer), 401)).error.code, "UNAUTHORIZED")
 })

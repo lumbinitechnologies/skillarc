@@ -11,7 +11,11 @@ export function academicHandler(
     authenticate: (request: Request) => Promise<MobilePrincipal>
     database: typeof createSupabaseAdminClient
     now: () => Date
-  } = { authenticate: requireMobilePrincipal, database: createSupabaseAdminClient, now: () => new Date() },
+  } = {
+    authenticate: request => requireMobilePrincipal(request, { distinguishAuthOutage: true }),
+    database: createSupabaseAdminClient,
+    now: () => new Date(),
+  },
 ) {
   return async function GET(request: Request) {
     const requestId = crypto.randomUUID()
