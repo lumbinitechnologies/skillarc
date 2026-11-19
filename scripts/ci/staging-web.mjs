@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+import { verifyAcademicSmoke } from './academic-smoke.mjs';
 import { readConfig, targetFor } from './deployment-policy.mjs';
 import { validateWebEnvironment } from './web-environment.mjs';
 import { validateStagingAlias } from './staging-verification.mjs';
@@ -14,7 +16,8 @@ function cli(args) {
 }
 cli(['pull','--yes','--environment=preview',`--git-branch=${target.gitBranch}`]);
 const project=JSON.parse(readFileSync('.vercel/project.json','utf8'));
-validateWebEnvironment(config,'staging',project,readFileSync('.vercel/.env.preview.local','utf8'));
+const dotenv = readFileSync('.vercel/.env.preview.local','utf8');
+validateWebEnvironment(config,'staging',project,dotenv);
 cli(['build']);
 const origin=cli(['deploy','--prebuilt','--yes','--meta',`githubCommitSha=${process.env.RELEASE_SHA}`,'--meta',`githubCommitRef=${target.gitBranch}`]);
 const url=new URL(origin);
@@ -33,8 +36,12 @@ async function verifyStableAlias() {
 }
 cli(['alias','set',origin,target.hostname,'--scope',config.vercelTeamId]);
 await verifyStableAlias();
-// No bypass token: the stable staging API must work for Android using app authentication.
-const smoke=await fetch(`https://${target.hostname}/api/mobile/v1/me`,{redirect:'error',signal:AbortSignal.timeout(30_000)});
-if(smoke.status!==401 || (await smoke.json()).error?.code!=='UNAUTHORIZED' || smoke.headers.get('cache-control')!=='private, no-store') throw new Error('Staging app-auth endpoint/protection smoke failed');
+// Verify the exact deployment through the stable origin used by the app.
+await verifyAcademicSmoke({
+  origin: `https://${target.hostname}`,
+  authOrigin: `https://${target.projectRef}.supabase.co`,
+  publicKey: parseEnv(dotenv).NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  password: process.env.FIXTURE_PASSWORD,
+});
 await verifyStableAlias();
-console.log('Staging deployment and public app-auth boundary verified. Authenticated browser and Android journey evidence is additionally required before activation.');
+console.log(`Staging Preview ${deployment.id} at ${process.env.RELEASE_SHA} passed the mobile HTTP smoke suite.`);

@@ -3,6 +3,7 @@ export const fixtureVersion = 'skillarc-synthetic-v1';
 export const fixtureId = n => `91000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 export const accountDefinitions = [
   ['student', 'STUDENT', 0], ['faculty', 'FACULTY', 0], ['admin', 'INSTITUTION_ADMIN', 0],
+  ['student-unconfigured', 'STUDENT', 2], ['faculty-unconfigured', 'FACULTY', 2],
   ['empty', 'STUDENT', 0], ['withdrawn', 'STUDENT', 0],
   ['student-au', 'STUDENT', 1], ['faculty-au', 'FACULTY', 1], ['admin-au', 'INSTITUTION_ADMIN', 1],
 ].map(([name, role, campus]) => ({ name, role, campus, email: `${name}@skillarc-fixtures.invalid` }));
@@ -22,16 +23,24 @@ export function fixtureSql(accounts, anchor = new Date()) {
   }
   rows.push('DO $fixture_v1$ BEGIN');
   // Refuse a collision with unrelated data; there is no delete/reset path.
-  rows.push(`IF EXISTS(SELECT 1 FROM public.organizations WHERE id IN (${literal(fixtureId(1))},${literal(fixtureId(2))}) AND name NOT LIKE '[Synthetic v1]%') THEN RAISE EXCEPTION 'Fixture ownership collision'; END IF;`);
-  for (let campus = 0; campus < 2; campus++) {
+  rows.push(`IF EXISTS(SELECT 1 FROM public.organizations WHERE id IN (${literal(fixtureId(1))},${literal(fixtureId(2))},${literal(fixtureId(3))}) AND name NOT LIKE '[Synthetic v1]%') THEN RAISE EXCEPTION 'Fixture ownership collision'; END IF;`);
+  const campuses = [
+    { label: 'India', domain: 'india', zone: 'Asia/Kolkata', student: 'student', faculty: 'faculty', features: [] },
+    { label: 'Sydney example', domain: 'australia', zone: 'Australia/Sydney', student: 'student-au', faculty: 'faculty-au', features: ['multi_week_timetable'] },
+    { label: 'Unconfigured', domain: 'unconfigured', zone: null, student: 'student-unconfigured', faculty: 'faculty-unconfigured', features: [] },
+  ];
+  for (const [campus, spec] of campuses.entries()) {
     const base = 100 + campus * 100;
     const id = n => fixtureId(base + n);
-    const student = accounts[campus ? 'student-au' : 'student'];
-    const faculty = accounts[campus ? 'faculty-au' : 'faculty'];
-    insert('organizations', { id: fixtureId(campus + 1), name: `[Synthetic v1] ${campus ? 'Australia' : 'India'} organization` });
-    insert('institutions', { id: id(0), organization_id: fixtureId(campus + 1), name: `[Synthetic v1] ${campus ? 'Sydney example campus' : 'India example campus'}`, domain: campus ? 'australia.fixture.invalid' : 'india.fixture.invalid' });
+    const student = accounts[spec.student];
+    const faculty = accounts[spec.faculty];
+    const organizationName = ['India', 'Australia', 'Unconfigured'][campus];
+    insert('organizations', { id: fixtureId(campus + 1), name: `[Synthetic v1] ${organizationName} organization`,
+      features: { sql: `ARRAY[${spec.features.map(literal).join(',')}]::text[]` } }, 'id', ['features']);
+    const campusName = campus === 0 ? 'India example' : spec.label;
+    insert('institutions', { id: id(0), organization_id: fixtureId(campus + 1), name: `[Synthetic v1] ${campusName} campus`, domain: `${spec.domain}.fixture.invalid` });
     // Timezone migration is a separate reviewed prerequisite, not an inferred real campus zone.
-    rows.push(`IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='institutions' AND table_schema='public' AND column_name='academic_time_zone') THEN UPDATE public.institutions SET academic_time_zone=${literal(campus ? 'Australia/Sydney' : 'Asia/Kolkata')} WHERE id=${literal(id(0))}; END IF;`);
+    rows.push(`IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='institutions' AND table_schema='public' AND column_name='academic_time_zone') THEN UPDATE public.institutions SET academic_time_zone=${literal(spec.zone)} WHERE id=${literal(id(0))}; END IF;`);
     insert('departments', { id: id(1), institution_id: id(0), name: '[Synthetic v1] Computing' });
     insert('programs', { id: id(2), department_id: id(1), institution_id: id(0), organization_id: fixtureId(campus + 1), name: '[Synthetic v1] Applied Computing' });
     for (const account of accountDefinitions.filter(a => a.campus === campus)) {
@@ -58,8 +67,19 @@ export function fixtureSql(accounts, anchor = new Date()) {
     }
     insert('academic_calendar_events', { id:id(30), institution_id:id(0), title:'[Synthetic v1] Campus closure', event_type:'PUBLIC_HOLIDAY', start_date:date(3), end_date:date(3), affects_classes:true }, 'id', ['start_date','end_date']);
     // Existing due_date is timestamp WITHOUT timezone: intentionally ambiguous.
-    // Known instants live in the fixture manifest until #55 defines their canonical representation.
-    for (let n=0;n<5;n++) insert('assignments', { id:id(40+n), subject_id:id(4), faculty_id:faculty, title:['[Synthetic v1] Regular practice','[Synthetic v1] Quiz summary','[Synthetic v1] Coding summary','[Synthetic v1] No deadline','[Synthetic v1] Ambiguous deadline'][n], type:['Assignment','Quiz','Coding','Assignment','Assignment'][n], description:'Synthetic test work; external execution is disabled.', due_date:n===3?null:`${date(n===0?-1:2)} 12:00:00`, section_ids:{sql:`ARRAY[${literal(id(3))}::uuid]`} }, 'id', ['due_date']);
+    for (const [n, title, type, dayOffset] of [
+      [40, 'Regular practice', 'Assignment', -1], [41, 'Quiz summary', 'Quiz', 2],
+      [42, 'Coding summary', 'Coding', 2], [43, 'No deadline', 'Assignment', null],
+      [44, 'Ambiguous deadline', 'Assignment', null], [49, 'Overdue practice', 'Assignment', -1],
+    ]) {
+      insert('assignments', {
+        id: id(n), subject_id: id(4), faculty_id: faculty, title: `[Synthetic v1] ${title}`, type,
+        description: 'Synthetic test work; external execution is disabled.',
+        due_date: n === 43 ? null : `${date(dayOffset ?? 2)} 12:00:00`,
+        due_at: dayOffset === null ? null : `${date(dayOffset)}T12:00:00Z`,
+        section_ids: { sql: `ARRAY[${literal(id(3))}::uuid]` },
+      }, 'id', ['due_date', 'due_at']);
+    }
     insert('submissions', { id:id(45), assignment_id:id(40), student_id:student, status:'graded', grade:85, feedback:'[Synthetic v1] Reviewed example' });
     insert('subject_announcements', { id:id(46), subject_id:id(4), faculty_id:faculty, title:'[Synthetic v1] Welcome', description:'Read the practice material before class.', section_ids:{sql:`ARRAY[${literal(id(3))}::uuid]`} });
     insert('resources', { id:id(47), subject_id:id(4), faculty_id:faculty, title:'[Synthetic v1] Resource availability example', file_url:'https://resources.fixture.invalid/example.pdf' });
