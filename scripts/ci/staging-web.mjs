@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { readConfig, targetFor } from './deployment-policy.mjs';
 import { validateWebEnvironment } from './web-environment.mjs';
-import { validateStagingAlias } from './staging-verification.mjs';
+import { ensureStagingAlias, validateStagingAlias } from './staging-verification.mjs';
 const config = readConfig(process.cwd());
 const target = targetFor(config,'staging',process.env.SUPABASE_PROJECT_ID);
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.GITHUB_REF !== 'refs/heads/staging' || !/^[a-f0-9]{40}$/.test(process.env.RELEASE_SHA || '')) throw new Error('Invalid staging context');
@@ -23,15 +23,20 @@ const response=await fetch(`https://api.vercel.com/v13/deployments/${encodeURICo
 if(!response.ok) throw new Error('Cannot verify staging deployment');
 const deployment=await response.json();
 if(deployment.projectId!==target.vercelProjectId || deployment.ownerId!==config.vercelTeamId || deployment.meta?.githubCommitSha!==process.env.RELEASE_SHA || deployment.meta?.githubCommitRef!==target.gitBranch || deployment.readyState!=='READY' || deployment.target==='production') throw new Error('Staging deployment mismatch');
-async function verifyStableAlias() {
+async function getStableAlias() {
   const response = await fetch(`https://api.vercel.com/v4/aliases/${encodeURIComponent(target.hostname)}?teamId=${config.vercelTeamId}`, {
     headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
     redirect: 'error', signal: AbortSignal.timeout(30_000),
   });
-  if (!response.ok) throw new Error('Cannot verify stable staging hostname');
-  validateStagingAlias(target, deployment, await response.json());
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Cannot read staging hostname binding (HTTP ${response.status})`);
+  return response.json();
 }
-cli(['alias','set',origin,target.hostname,'--scope',config.vercelTeamId]);
+async function verifyStableAlias() {
+  validateStagingAlias(target, deployment, await getStableAlias() ?? {});
+}
+await ensureStagingAlias(target, deployment, getStableAlias,
+  () => cli(['alias','set',origin,target.hostname,'--scope',config.vercelTeamId]));
 await verifyStableAlias();
 // No bypass token: the stable staging API must work for Android using app authentication.
 const smoke=await fetch(`https://${target.hostname}/api/mobile/v1/me`,{redirect:'error',signal:AbortSignal.timeout(30_000)});
