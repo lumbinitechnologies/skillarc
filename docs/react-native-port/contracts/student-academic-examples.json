@@ -1,5 +1,5 @@
 {
-  "status": "reviewed-proposal-examples-not-implemented",
+  "status": "synthetic-student-academic-read-examples",
   "time_policy": "Example institution explicitly uses Asia/Kolkata; example deadline instants are UTC. Institution-owned policy approved; the real Australian campus timezone remains unknown.",
   "courses": {
     "data": {
@@ -25,6 +25,18 @@
               "id": "50000000-0000-4000-8000-000000000001",
               "name": "Dr. Mira Sen"
             }
+          ],
+          "programs": [
+            {
+              "id": "20000000-0000-4000-8000-000000000001",
+              "name": "Computer Science"
+            }
+          ],
+          "sections": [
+            {
+              "id": "30000000-0000-4000-8000-000000000001",
+              "name": "Section A"
+            }
           ]
         },
         {
@@ -32,7 +44,19 @@
           "name": "Computer Networks Laboratory",
           "code": "CS204",
           "type": "LAB",
-          "faculty": []
+          "faculty": [],
+          "programs": [
+            {
+              "id": "20000000-0000-4000-8000-000000000001",
+              "name": "Computer Science"
+            }
+          ],
+          "sections": [
+            {
+              "id": "30000000-0000-4000-8000-000000000001",
+              "name": "Section A"
+            }
+          ]
         }
       ]
     },
@@ -84,7 +108,12 @@
         }
       ],
       "closures": [],
-      "empty_reason": null
+      "empty_reason": null,
+      "time_zone_status": "ready",
+      "next_class": {
+        "state": "timings_unavailable",
+        "session_id": null
+      }
     },
     "request_id": "90000000-0000-4000-8000-000000000002"
   },
@@ -113,7 +142,9 @@
           "due_at": "2026-10-15T18:00:00Z",
           "status": "overdue",
           "mobile_action": "unavailable",
-          "availability_message": "Assignment details and submission are not available in this version yet."
+          "availability_message": "Assignment details and submission are not available in this version yet.",
+          "deadline_state": "known",
+          "deadline_message": null
         },
         {
           "id": "70000000-0000-4000-8000-000000000002",
@@ -125,7 +156,9 @@
           "due_at": "2026-10-17T12:30:00Z",
           "status": "pending",
           "mobile_action": "unavailable",
-          "availability_message": "Available on the website; completing this task is not supported in mobile v1."
+          "availability_message": "Available on the website; completing this task is not supported in mobile v1.",
+          "deadline_state": "known",
+          "deadline_message": null
         },
         {
           "id": "70000000-0000-4000-8000-000000000003",
@@ -137,7 +170,9 @@
           "due_at": null,
           "status": "pending",
           "mobile_action": "unavailable",
-          "availability_message": "Available on the website; completing this task is not supported in mobile v1."
+          "availability_message": "Available on the website; completing this task is not supported in mobile v1.",
+          "deadline_state": "absent",
+          "deadline_message": null
         }
       ]
     },
@@ -153,11 +188,20 @@
       "courses": []
     },
     "no_section": {
-      "context": { "status": "no_section", "program": null, "section": null },
+      "context": {
+        "status": "no_section",
+        "program": null,
+        "section": null
+      },
       "sessions": [],
       "empty_reason": "no_section"
     },
-    "no_tasks": { "context": { "status": "ready" }, "tasks": [] },
+    "no_tasks": {
+      "context": {
+        "status": "ready"
+      },
+      "tasks": []
+    },
     "closure": {
       "date": "2026-10-19",
       "sessions": [],
@@ -178,6 +222,12 @@
         "message": "Academic information is temporarily unavailable"
       },
       "request_id": "90000000-0000-4000-8000-000000000004"
+    },
+    "ambiguous_deadline": {
+      "due_at": null,
+      "deadline_state": "ambiguous",
+      "deadline_message": "Deadline unavailable",
+      "status": "pending"
     }
   }
 }

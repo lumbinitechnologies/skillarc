@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient, isAuthRetryableFetchError } from "@supabase/supabase-js"
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { normalizeOrganizationFeatures } from "@/lib/organization-features"
 import { ROLES } from "@/constants/roles"
@@ -48,7 +48,10 @@ export function authorizeMobileProfile(profile: MobileProfile | null): MobilePro
   return profile
 }
 
-export async function requireMobilePrincipal(request: Request): Promise<MobilePrincipal> {
+export async function requireMobilePrincipal(
+  request: Request,
+  { distinguishAuthOutage = false } = {},
+): Promise<MobilePrincipal> {
   const token = parseBearerToken(request.headers.get("authorization"))
   if (!token) {
     throw new MobileAuthError(401, "UNAUTHORIZED", "Valid Bearer token required")
@@ -60,6 +63,10 @@ export async function requireMobilePrincipal(request: Request): Promise<MobilePr
     { auth: { persistSession: false, autoRefreshToken: false } },
   )
   const { data: { user }, error: authError } = await auth.auth.getUser(token)
+  if (distinguishAuthOutage && authError &&
+    (isAuthRetryableFetchError(authError) || authError.status === 429 || (authError.status ?? 0) >= 500)) {
+    throw new MobileAuthError(503, "SERVICE_UNAVAILABLE", "Service is temporarily unavailable")
+  }
   if (authError || !user?.id) {
     throw new MobileAuthError(401, "UNAUTHORIZED", "Valid Bearer token required")
   }

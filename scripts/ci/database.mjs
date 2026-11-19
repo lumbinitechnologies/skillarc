@@ -59,8 +59,8 @@ try {
     'DO $$ BEGIN ' + accountDefinitions.map(a => `INSERT INTO auth.users (id,email) VALUES ('${identities[a.name]}','${a.email}');`).join('\n') + ' END $$;',
     fixtureSql(identities), fixtureSql(identities),
     `DO $$ BEGIN
-      IF (SELECT count(*) FROM public.students WHERE id::text LIKE '92000000-%') <> 4 THEN RAISE EXCEPTION 'Fixture student graph mismatch'; END IF;
-      IF (SELECT count(*) FROM public.assignments WHERE id::text LIKE '91000000-%') <> 10 THEN RAISE EXCEPTION 'Fixture task graph mismatch'; END IF;
+      IF (SELECT count(*) FROM public.students WHERE id::text LIKE '92000000-%') <> 5 THEN RAISE EXCEPTION 'Fixture student graph mismatch'; END IF;
+      IF (SELECT count(*) FROM public.assignments WHERE id::text LIKE '91000000-%') <> 18 THEN RAISE EXCEPTION 'Fixture task graph mismatch'; END IF;
     END $$;`,
   ];
   for (const query of fixtureQueries) {
