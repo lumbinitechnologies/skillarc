@@ -1,10 +1,11 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import { readConfig, targetFor } from './deployment-policy.mjs';
 import { smokePrelaunch } from './prelaunch-smoke.mjs';
 import { validateWebEnvironment } from './web-environment.mjs';
+import { fixtureId } from '../fixtures/academic.mjs';
 
 const config = readConfig(process.cwd());
 const mode = process.argv[2];
@@ -134,6 +135,34 @@ async function verifyStableStaging() {
   if (smoke.status !== 401 || (await smoke.json()).error?.code !== 'UNAUTHORIZED') throw new Error('Stable staging mobile route is unavailable');
 }
 
+async function rehearseStaging(origin) {
+  const settings = parseEnv(readFileSync(stagingEnv, 'utf8'));
+  const stagingDatabase = `https://${config.staging.projectRef}.supabase.co`;
+  const key = settings.SUPABASE_SERVICE_ROLE_KEY;
+  if (settings.NEXT_PUBLIC_SUPABASE_URL !== stagingDatabase || !key) throw new Error('Staging database binding is missing');
+  const application = {
+    institution_id: fixtureId(100), program_id: fixtureId(102), first_name: 'Synthetic', last_name: 'Prelaunch',
+    email: `prelaunch-${randomUUID()}@skillarc-fixtures.invalid`,
+  };
+  const rows = new URL('/rest/v1/admissions_applications', stagingDatabase);
+  rows.searchParams.set('email', `eq.${application.email}`);
+  async function verifyNoApplication() {
+    const result = await fetch(rows, {
+      method: 'HEAD', headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: 'count=exact' },
+      redirect: 'error', signal: AbortSignal.timeout(30_000),
+    });
+    if (!result.ok || result.headers.get('content-range')?.split('/').at(-1) !== '0') {
+      throw new Error('Cannot verify absence of a staging application for the synthetic probe');
+    }
+  }
+  await verifyNoApplication();
+  try {
+    await smokePrelaunch(origin, protections, application);
+  } finally {
+    await verifyNoApplication();
+  }
+}
+
 async function verifyPublic(expectedId) {
   const alias = await getVercel('/v4/aliases/www.theskillarc.com');
   if (alias.deploymentId !== expectedId && alias.deployment?.id !== expectedId) throw new Error('Public domain points to a different deployment');
@@ -152,7 +181,7 @@ if (mode === 'stage') {
   const rehearsalBuild = build(false);
   const rehearsal = await deployment(rehearsalBuild.hostname, false, sha);
   if (rehearsal.configuration !== rehearsalBuild.configuration) throw new Error('Rehearsal config mismatch');
-  await smokePrelaunch(rehearsal.origin, protections, true);
+  await rehearseStaging(rehearsal.origin);
   cli(['pull', '--yes', '--environment=production']);
   const candidateBuild = build(true);
   const candidate = await deployment(candidateBuild.hostname, true, sha);

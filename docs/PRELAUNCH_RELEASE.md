@@ -8,7 +8,7 @@ This workflow keeps `www.theskillarc.com` informational while testing continues 
 - Confirm the Vercel team and plan are approved for public commercial hosting. Separately approve any account or spending change.
 - Configure production for the clean Supabase parent only. Disable self-signup, anonymous sign-in, custom email, payment integrations and background jobs. Keep the candidate Vercel environment limited to the clean database settings. Provide scoped credentials in the protected GitHub environments, including Auth Configuration Read for the production Supabase token. Do not set the prelaunch flag in shared Vercel project settings.
 - Preserve the exact existing bootstrap migration row in the private record. Obtain separate owner approval for the single history correction. After correction verify the schema and empty aggregate counts. The migration workflow must still verify the exact dry run and final ledger.
-- Complete the staging and archive recovery evidence in #66. Test that the current staging data is unchanged by the staging prelaunch probes and that blocked write requests have no outbound side effects.
+- Complete the staging and archive recovery evidence in #66. The rehearsal submits a unique fictional application to the actual write route and checks for absence of the associated database row both before and after the probe. Check worker, payment and delivery logs for outbound side effects separately.
 - Use a reviewed configuration change to set `activation.prelaunch` to `true`. Only after all prerequisites are met set the repository Actions variable `PRELAUNCH_RELEASE_ENABLED` to `true`. Dispatch runs on protected `main` with its exact independently reviewed merge SHA and hosted staging evidence.
 
 ## Prepare and verify the fallback

@@ -27,8 +27,13 @@ test('production uses read-only probes and checks mobile and worker closure', as
   assert.ok(requests.some(([, path]) => path === '/api/internal/knowledge/worker'));
 });
 
-test('staging submits explicit write requests and requires the prelaunch guard response', async t => {
-  const requests = stubFetch(t, url => url.pathname === '/api/admissions/public-submit' ? new Response('', { status: 400 }) : undefined);
-  await assert.rejects(smokePrelaunch(origin, {}, true), /public-submit expected HTTP 503/);
-  assert.ok(requests.some(([method, path]) => method === 'POST' && path === '/api/auth/signup'));
+test('staging submits a synthetic application to the real write route and requires the guard response', async t => {
+  const applicant = { email: 'sample@skillarc-fixtures.invalid' };
+  const requests = stubFetch(t, (url, options) => {
+    if (url.pathname !== '/api/admissions/public-apply' || options.method !== 'POST') return;
+    assert.deepEqual(JSON.parse(options.body), applicant);
+    return new Response('', { status: 400 });
+  });
+  await assert.rejects(smokePrelaunch(origin, {}, applicant), /POST .*public-apply expected HTTP 503/);
+  assert.ok(requests.some(([method, path]) => method === 'POST' && path === '/auth/signup'));
 });
