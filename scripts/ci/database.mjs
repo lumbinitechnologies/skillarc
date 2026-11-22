@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, cpSync, writeFileSync, readdirSync, rmSync } fr
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fixtureSql, accountDefinitions } from '../fixtures/academic.mjs';
+import { fixtureSql, accountDefinitions, androidSmokeAccount } from '../fixtures/academic.mjs';
 import { migrationVersions } from './deployment-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -63,6 +63,18 @@ try {
       IF (SELECT count(*) FROM public.assignments WHERE id::text LIKE '91000000-%') <> 18 THEN RAISE EXCEPTION 'Fixture task graph mismatch'; END IF;
     END $$;`,
   ];
+  const androidId = '92000000-0000-4000-8000-000000000099';
+  const androidFixture = fixtureSql({ ...identities, [androidSmokeAccount.name]: androidId });
+  fixtureQueries.push(
+    `INSERT INTO auth.users (id,email) VALUES ('${androidId}','${androidSmokeAccount.email}');`,
+    androidFixture, androidFixture,
+    `DO $$ BEGIN
+      IF (SELECT count(*) FROM public.enrolments e JOIN public.enrolment_units u ON u.enrolment_id = e.id
+          WHERE e.student_id = '${androidId}' AND e.status = 'ENROLLED' AND u.status = 'ACTIVE') <> 1 THEN
+        RAISE EXCEPTION 'Android fixture must have exactly one active enrolled unit after replay';
+      END IF;
+    END $$;`,
+  );
   for (const query of fixtureQueries) {
     writeFileSync(fixtureTest, query);
     run(['db', 'query', '--local', '--file', fixtureTest]);

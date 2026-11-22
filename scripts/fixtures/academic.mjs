@@ -7,10 +7,15 @@ export const accountDefinitions = [
   ['empty', 'STUDENT', 0], ['withdrawn', 'STUDENT', 0],
   ['student-au', 'STUDENT', 1], ['faculty-au', 'FACULTY', 1], ['admin-au', 'INSTITUTION_ADMIN', 1],
 ].map(([name, role, campus]) => ({ name, role, campus, email: `${name}@skillarc-fixtures.invalid` }));
+export const androidSmokeAccount = {
+  name: 'android-smoke', role: 'STUDENT', campus: 0, email: 'android-smoke@skillarc-fixtures.invalid',
+};
 const literal = value => value === null ? 'NULL' : typeof value === 'boolean' || typeof value === 'number' ? String(value) : `'${String(value).replaceAll("'", "''")}'`;
 const json = value => `${literal(JSON.stringify(value))}::jsonb`;
 export function fixtureSql(accounts, anchor = new Date()) {
-  for (const a of accountDefinitions) if (!/^[a-f0-9-]{36}$/.test(accounts[a.name] || '')) throw new Error('Missing fixture Auth identity');
+  const includeAndroidSmoke = Object.hasOwn(accounts, androidSmokeAccount.name);
+  const definitions = includeAndroidSmoke ? [...accountDefinitions, androidSmokeAccount] : accountDefinitions;
+  for (const a of definitions) if (!/^[a-f0-9-]{36}$/.test(accounts[a.name] || '')) throw new Error('Missing fixture Auth identity');
   const date = offset => new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate() + offset)).toISOString().slice(0, 10);
   const rows = [];
   function insert(table, record, conflict = 'id', refresh = []) {
@@ -43,14 +48,14 @@ export function fixtureSql(accounts, anchor = new Date()) {
     rows.push(`IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='institutions' AND table_schema='public' AND column_name='academic_time_zone') THEN UPDATE public.institutions SET academic_time_zone=${literal(spec.zone)} WHERE id=${literal(id(0))}; END IF;`);
     insert('departments', { id: id(1), institution_id: id(0), name: '[Synthetic v1] Computing' });
     insert('programs', { id: id(2), department_id: id(1), institution_id: id(0), organization_id: fixtureId(campus + 1), name: '[Synthetic v1] Applied Computing' });
-    for (const account of accountDefinitions.filter(a => a.campus === campus)) {
+    for (const account of definitions.filter(a => a.campus === campus)) {
       const uid = accounts[account.name];
       rows.push(`IF EXISTS(SELECT 1 FROM public.users WHERE id=${literal(uid)} AND (email IS DISTINCT FROM ${literal(account.email)} OR organization_id IS DISTINCT FROM ${literal(fixtureId(campus + 1))}::uuid)) THEN RAISE EXCEPTION 'Fixture user collision'; END IF;`);
       insert('users', { id: uid, institution_id: id(0), department_id: id(1), name: `[Synthetic v1] ${account.name}`, email: account.email, role: account.role, organization_id: fixtureId(campus + 1), is_active: true });
       if (account.role !== 'STUDENT') insert('staff', { id: uid, institution_id: id(0), employee_id: `SYN-${account.name}` });
     }
     insert('sections', { id: id(3), name: '[Synthetic v1] Section A', semester: 1, program_id: id(2), institution_id: id(0), faculty_advisor_id: faculty });
-    for (const a of accountDefinitions.filter(a => a.campus === campus && a.role === 'STUDENT')) {
+    for (const a of definitions.filter(a => a.campus === campus && a.role === 'STUDENT')) {
       insert('students', { id: accounts[a.name], institution_id: id(0), program_id: id(2), section_id: a.name === 'empty' ? null : id(3), semester: 1, registration_number: `SYN-${a.name}` });
     }
     insert('subjects', { id: id(4), institution_id: id(0), program_id: id(2), name: '[Synthetic v1] Data structures and practical problem solving', code: 'SYN101', semester: 1, credits: 4, subject_type: 'THEORY' });
@@ -59,6 +64,10 @@ export function fixtureSql(accounts, anchor = new Date()) {
     insert('enrolments', { id: id(6), student_id: student, institution_id: id(0), program_id: id(2), section_id: id(3), status: 'ENROLLED', started_at: date(-30), ended_at: date(180) }, 'id', ['started_at','ended_at']);
     insert('enrolment_units', { id: id(7), enrolment_id: id(6), subject_id: id(4), status: 'ACTIVE', trainer_id: faculty, planned_start: date(-30), planned_end: date(180) }, 'id', ['planned_start','planned_end']);
     if (!campus) insert('enrolments', { id: id(8), student_id: accounts.withdrawn, institution_id: id(0), program_id: id(2), section_id: id(3), status:'WITHDRAWN', started_at:date(-90), ended_at:date(-30) }, 'id', ['started_at','ended_at']);
+    if (campus === androidSmokeAccount.campus && includeAndroidSmoke) {
+      insert('enrolments', { id: id(55), student_id: accounts[androidSmokeAccount.name], institution_id: id(0), program_id: id(2), section_id: id(3), status: 'ENROLLED', started_at: date(-30), ended_at: date(180) }, 'id', ['started_at','ended_at']);
+      insert('enrolment_units', { id: id(56), enrolment_id: id(55), subject_id: id(4), status: 'ACTIVE', trainer_id: faculty, planned_start: date(-30), planned_end: date(180) }, 'id', ['planned_start','planned_end']);
+    }
     const mondayOffset = -((anchor.getUTCDay() + 6) % 7);
     for (let week=0; week<2; week++) insert('timetable_weeks', { id:id(10+week), institution_id:id(0), section_id:id(3), semester:1, week_number:week+1, title:`[Synthetic v1] Week ${week+1}`, start_date:date(mondayOffset+7*week), end_date:date(mondayOffset+7*week+6) }, 'id', ['start_date','end_date']);
     for (let day=0; day<5; day++) {
