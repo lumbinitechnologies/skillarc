@@ -30,6 +30,25 @@ if (mode === 'preview') {
 }
 if (!serviceKey || !publicKey) throw new Error('Branch-scoped Auth administration/public keys unavailable');
 const origin = `https://${ref}.supabase.co`;
+if (mode === 'staging') {
+  const bucketName = 'student-documents';
+  const bucketUrl = `${origin}/storage/v1/bucket`;
+  const headers = { apikey: serviceKey };
+  const getBucket = async () => {
+    const buckets = await request('staging Storage bucket inventory', bucketUrl, serviceKey, 'GET', undefined, headers);
+    if (!Array.isArray(buckets)) throw new Error('Malformed staging Storage bucket inventory');
+    return buckets.find(bucket => bucket.id === bucketName);
+  };
+  let bucket = await getBucket();
+  if (!bucket) {
+    await request('private student documents bucket creation', bucketUrl, serviceKey, 'POST', {
+      id: bucketName, name: bucketName, public: false,
+    }, headers);
+    bucket = await getBucket();
+  }
+  if (bucket?.public !== false) throw new Error('The student documents Storage bucket must be private');
+  console.log('Verified private student documents Storage bucket in staging.');
+}
 const users = [];
 for (let page=1;page<=100;page++) {
   const result = await request('Auth account inventory', `${origin}/auth/v1/admin/users?page=${page}&per_page=100`,serviceKey,'GET',undefined,{apikey:serviceKey});
