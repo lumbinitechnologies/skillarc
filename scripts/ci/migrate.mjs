@@ -6,11 +6,13 @@ import { migrationFailure, probePooler, verifyDryRun } from './migration-preflig
 import { migrationVersions, readConfig, targetFor, validateLedger, verifyDatabaseBranch } from './deployment-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const environment = process.argv[2];
+const mode = process.argv[2];
+const environment = mode === 'prelaunch' ? 'production' : mode;
 const config = readConfig(root);
 const target = targetFor(config, environment, process.env.SUPABASE_PROJECT_ID);
-if (config.activation?.[environment] !== true) throw new Error('Deployment target is not activated by reviewed configuration');
+if (config.activation?.[mode] !== true) throw new Error('Deployment target is not activated by reviewed configuration');
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.GITHUB_REF !== `refs/heads/${target.gitBranch}`) throw new Error('Hosted migration runner is restricted to reviewed environment branch workflows');
+if (mode === 'prelaunch' && (process.env.PRELAUNCH_RELEASE_ENABLED !== 'true' || process.env.GITHUB_WORKFLOW_REF !== 'lumbinitechnologies/skillarc/.github/workflows/prelaunch-release.yml@refs/heads/main')) throw new Error('Prelaunch migrations require the protected website workflow');
 if (!process.env.SUPABASE_ACCESS_TOKEN) throw new Error('Missing SUPABASE_ACCESS_TOKEN');
 const versions = migrationVersions(root);
 const baseline = JSON.parse(readFileSync(path.join(root, 'supabase/migration-baseline.json'), 'utf8')).version;
