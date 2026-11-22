@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import { verifyAcademicSmoke } from './academic-smoke.mjs';
+import { verifyPrivateFileSmoke } from './private-file-smoke.mjs';
 import { readConfig, targetFor } from './deployment-policy.mjs';
 import { validateWebEnvironment } from './web-environment.mjs';
 import { ensureStagingAlias, validateStagingAlias } from './staging-verification.mjs';
@@ -42,11 +43,13 @@ await ensureStagingAlias(target, deployment, getStableAlias,
   () => cli(['alias','set',origin,target.hostname,'--scope',config.vercelTeamId]));
 await verifyStableAlias();
 // Verify the exact deployment through the stable origin used by the app.
-await verifyAcademicSmoke({
+const smokeSettings = {
   origin: `https://${target.hostname}`,
   authOrigin: `https://${target.projectRef}.supabase.co`,
   publicKey: parseEnv(dotenv).NEXT_PUBLIC_SUPABASE_ANON_KEY,
   password: process.env.FIXTURE_PASSWORD,
-});
+};
+await verifyAcademicSmoke(smokeSettings);
+await verifyPrivateFileSmoke(smokeSettings);
 await verifyStableAlias();
 console.log(`Staging Preview ${deployment.id} at ${process.env.RELEASE_SHA} passed the mobile HTTP smoke suite.`);

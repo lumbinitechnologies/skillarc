@@ -12,6 +12,7 @@ Owner: Keane; #66. This matrix separates implemented fixture data from verified 
 | Released results | grade column and entry only | verify actual release/publication semantics; no invented published flag |
 | Faculty rosters/timetable | faculty-course/section relationships and schedules | roster/scoped timetable and attendance UI journeys |
 | Profile/recovery | linked identities and active profiles | environment/session boundary checks; do not repeat unchanged waived auth suite |
+| Private student document | CI uploads a generated one-pixel PNG through the staging API and verifies its checksum on later runs | India campus administrator uploads; the synthetic student downloads; the Australia campus administrator receives 403. The scenario retains one synthetic file and revokes each smoke session. |
 | Admissions, placements, payments, meetings, events, assistant, documents, parent and broader admin | not covered by this fixture generator | inventory supported website operations; add synthetic/sandbox fixtures and readiness tests before claiming full website coverage |
 
 Known deadline instants must be recorded by explicit timezone/instant fixtures once #55 settles canonical representation. The existing due_date column is timezone-less; do not label it known UTC or calculate overdue based on it. Australia/Sydney is synthetic only.
