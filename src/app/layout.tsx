@@ -1,5 +1,6 @@
 import "./globals.css"
 import ChatbotWidget from "@/components/chatbot/ChatbotWidget"
+import { isPrelaunchEnabled } from "@/lib/prelaunch"
 
 export const metadata = {
   title: "SkillArc | Connected university operations",
@@ -18,7 +19,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <ChatbotWidget />
+        {!isPrelaunchEnabled() && <ChatbotWidget />}
       </body>
     </html>
   )
