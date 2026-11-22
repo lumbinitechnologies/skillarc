@@ -78,3 +78,82 @@ test('staging with a missing Auth key stops without using another credential', (
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Branch-scoped Auth administration\/public keys unavailable/);
 });
+
+test('an optional staging Android credential creates and verifies only its dedicated fixture', () => {
+  const transport = `
+    import assert from 'node:assert/strict';
+    import { accountDefinitions, androidSmokeAccount, fixtureVersion } from ${JSON.stringify(new URL('../fixtures/academic.mjs', import.meta.url).href)};
+    const branch = ${JSON.stringify(branch)};
+    const accountId = i => '92000000-0000-4000-8000-' + String(i + 1).padStart(12, '0');
+    const existing = accountDefinitions.map((account, index) => ({
+      email: account.email, id: accountId(index), app_metadata: { fixture_version: fixtureVersion },
+    }));
+    const androidId = accountId(existing.length);
+    const android = { id: androidId, email: androidSmokeAccount.email, app_metadata: { fixture_version: fixtureVersion } };
+    if (process.env.REPLAY_FIXTURE === 'true') existing.push(android);
+    const accounts = [...accountDefinitions, androidSmokeAccount];
+    const verified = new Set();
+    globalThis.fetch = async (target, options) => {
+      const url = new URL(target);
+      if (url.pathname.endsWith('/branches')) return Response.json([branch]);
+      if (url.pathname === '/storage/v1/bucket') return Response.json([{id: 'student-documents', public: false}]);
+      if (url.pathname.endsWith('/database/query')) {
+        const {query} = JSON.parse(options.body);
+        assert.ok(query.includes(androidId));
+        assert.ok(query.includes(androidSmokeAccount.email));
+        return Response.json([]);
+      }
+      if (url.pathname === '/auth/v1/admin/users' && options.method === 'GET') {
+        return Response.json({users: existing});
+      }
+      if (url.pathname === '/auth/v1/admin/users' && options.method === 'POST') {
+        assert.notEqual(process.env.REPLAY_FIXTURE, 'true');
+        const body = JSON.parse(options.body);
+        assert.equal(body.email, androidSmokeAccount.email);
+        assert.equal(body.password, 'private-android-test-password');
+        assert.equal(body.email_confirm, true);
+        return Response.json(android);
+      }
+      if (url.pathname === '/auth/v1/token') {
+        const { email, password } = JSON.parse(options.body);
+        const index = accounts.findIndex(account => account.email === email);
+        assert.notEqual(index, -1);
+        const id = accountId(index);
+        assert.equal(password, email === androidSmokeAccount.email ? 'private-android-test-password' : 'synthetic-test-password');
+        verified.add(email);
+        return Response.json({user: {id}, access_token: 'session-' + index});
+      }
+      if (url.pathname === '/rest/v1/users') {
+        const index = Number(options.headers.Authorization.replace('Bearer session-', ''));
+        assert.equal(url.searchParams.get('id'), 'eq.' + accountId(index));
+        return Response.json([{id: accountId(index), role: accounts[index].role}]);
+      }
+      assert.equal(url.pathname, '/auth/v1/logout');
+      return new Response(null, {status: 204});
+    };
+    process.on('exit', code => {
+      if (code === 0) assert.equal(verified.size, accounts.length);
+    });
+  `;
+
+  for (const replay of ['false', 'true']) {
+    const result = spawnSync(process.execPath, [
+      '--import', 'data:text/javascript,' + encodeURIComponent(transport), 'scripts/ci/fixtures.mjs', 'staging',
+    ], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SUPABASE_PROJECT_ID: ref,
+        SUPABASE_ACCESS_TOKEN: 'synthetic-management-key',
+        SUPABASE_SERVICE_ROLE_KEY: 'synthetic-service-key',
+        SUPABASE_PUBLISHABLE_KEY: 'synthetic-publishable-key',
+        FIXTURE_PASSWORD: 'synthetic-test-password',
+        ANDROID_SMOKE_FIXTURE_PASSWORD: 'private-android-test-password',
+        REPLAY_FIXTURE: replay,
+      },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /linked accounts and password login verified/);
+    assert.doesNotMatch(result.stdout + result.stderr, /private-android-test-password/);
+  }
+});

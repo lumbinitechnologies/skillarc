@@ -12,3 +12,20 @@ test('synthetic fixture graph is deterministic, scoped and repeatable without de
   assert.equal(fixtureId(100),'91000000-0000-4000-8000-000000000100');
   assert.throws(()=>fixtureSql({...users,student:"'); DELETE FROM users; --"}));
 });
+
+test('Android fixture adds a student and enrolled unit only when supplied', () => {
+  const androidId = '92000000-0000-4000-8000-000000000099';
+  const date = new Date('2026-10-17T00:00:00Z');
+  assert.doesNotMatch(fixtureSql(users, date), /android-smoke/);
+  const sql = fixtureSql({ ...users, 'android-smoke': androidId }, date);
+  assert.match(sql, /INSERT INTO public\.users .*android-smoke@skillarc-fixtures\.invalid/);
+  assert.match(sql, /INSERT INTO public\.students .*SYN-android-smoke/);
+  assert.ok(sql.split('\n').some(line =>
+    line.startsWith('INSERT INTO public.enrolments ') &&
+    line.includes(fixtureId(155)) && line.includes(androidId)
+  ));
+  assert.ok(sql.split('\n').some(line =>
+    line.startsWith('INSERT INTO public.enrolment_units ') &&
+    line.includes(fixtureId(156)) && line.includes(fixtureId(155))
+  ));
+});
