@@ -34,6 +34,7 @@
   "activation": {
     "staging": true,
     "previews": false,
-    "production": false
+    "production": false,
+    "prelaunch": false
   }
 }
