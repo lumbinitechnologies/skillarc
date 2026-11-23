@@ -10,7 +10,7 @@ const informationalPages = new Set([
 export const prelaunchMessage = "SkillArc is preparing for launch. Sign-in and onboarding are currently closed."
 
 export function isPrelaunchEnabled() {
-  return process.env.SKILLARC_PRELAUNCH === "true"
+  return process.env.SKILLARC_BUILD_PRELAUNCH === "true" || process.env.SKILLARC_PRELAUNCH === "true"
 }
 
 function isPublicImage(pathname: string) {
