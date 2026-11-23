@@ -9,6 +9,10 @@ const siteName = 'skillarc-prelaunch-review-8f9e793';
 const cliVersion = '27.20.1';
 const workflow = 'lumbinitechnologies/skillarc/.github/workflows/netlify-prelaunch.yml@refs/heads/main';
 const isRehearsal = process.argv[2] === '--rehearsal';
+const isMigrationCheck = ['--before-migrations', '--after-migrations'].includes(process.argv[2]);
+const { FALLBACK_DEPLOY_ID: fallbackId, NETLIFY_CANDIDATE_ID: candidateId,
+  NETLIFY_APPROVAL_DIGEST: expectedDigest } = process.env;
+const deployIdPattern = /^[a-f0-9]{24}$/;
 const { RELEASE_SHA: revision, STAGING_SHA: stagingSha, STAGING_EVIDENCE: stagingEvidence,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: publicKey, NETLIFY_AUTH_TOKEN: token } = process.env;
 const config = readConfig(process.cwd());
@@ -24,14 +28,19 @@ if (!fullSha.test(revision ?? '') || !fullSha.test(stagingSha ?? '') || !staging
   throw new Error('Expected a full revision, staging evidence and a publishable Supabase key');
 }
 if (isRehearsal ? process.env.GITHUB_ACTIONS === 'true' :
-    process.argv.length !== 2 || process.env.GITHUB_ACTIONS !== 'true' || process.env.GITHUB_WORKFLOW_REF !== workflow ||
+    (!isMigrationCheck && process.argv.length !== 2) || process.env.GITHUB_ACTIONS !== 'true' || process.env.GITHUB_WORKFLOW_REF !== workflow ||
     process.env.GITHUB_REF !== 'refs/heads/main' || process.env.NETLIFY_PRELAUNCH_PREPARE_ENABLED !== 'true' || !token) {
   throw new Error('Netlify candidate preparation requires the protected main workflow or an explicit local rehearsal');
 }
 
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const tree = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
-if (head !== revision || tree) throw new Error('Build requires a clean checkout of the named revision');
+if (head !== revision || tree) throw new Error('Netlify release requires a clean checkout of the named revision');
+if ((fallbackId && !deployIdPattern.test(fallbackId)) || (isMigrationCheck && (!fallbackId ||
+    !deployIdPattern.test(candidateId ?? '') || !/^[a-f0-9]{64}$/.test(expectedDigest ?? '') ||
+    process.env.NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED !== 'true'))) {
+  throw new Error('Expected enabled migrations with exact candidate, fallback and approval digest');
+}
 const allowedEnvironment = ['PATH', 'HOME', 'TMPDIR', 'CI', 'NETLIFY_AUTH_TOKEN', 'NETLIFY_TELEMETRY_DISABLED', 'NO_COLOR'];
 const env = Object.fromEntries(allowedEnvironment.filter(name => process.env[name]).map(name => [name, process.env[name]]));
 Object.assign(env, { SKILLARC_PRELAUNCH: 'true', NEXT_PUBLIC_SUPABASE_URL: database, NEXT_PUBLIC_SUPABASE_ANON_KEY: publicKey });
@@ -68,24 +77,79 @@ const migrations = digest(migrationFiles.map(name => ({ name, sha256: hash(readF
 const configuration = digest({ prelaunch: true, database, keyDigest: hash(publicKey), serviceRole: false,
   schedules: [], cliVersion, netlifyConfig: hash(readFileSync('netlify.toml')) });
 const title = `SkillArc ${isRehearsal ? 'rehearsal' : 'candidate'} ${revision} ${configuration}`;
-const result = JSON.parse(cli(['deploy', '--site', siteId, '--context', 'deploy-preview', '--json', '--message', title], true));
-if (!/^[a-f0-9]{24}$/.test(result.deploy_id ?? '') || result.site_id !== siteId) throw new Error('Unexpected deploy response');
-const deployment = JSON.parse(cli(['api', 'getSiteDeploy', '--data', JSON.stringify({ site_id: siteId, deploy_id: result.deploy_id })]));
-const origin = `https://${result.deploy_id}--${siteName}.netlify.app`;
-if (deployment.id !== result.deploy_id || deployment.site_id !== siteId || deployment.state !== 'ready' ||
-    deployment.title !== title || deployment.context !== 'deploy-preview' || deployment.published_at ||
-    deployment.deploy_ssl_url !== origin || !Array.isArray(deployment.function_schedules) ||
-    deployment.function_schedules.length || deployment.edge_functions_present !== true) {
-  throw new Error('Draft identity, readiness, privacy context or schedule verification failed');
-}
-verifyPrivateSite(getSite());
-const visitor = await fetch(new URL('/', origin), { redirect: 'manual', signal: AbortSignal.timeout(30_000) });
-if (visitor.status !== 401) throw new Error('Draft did not require Netlify visitor authentication');
 
-const record = { kind: isRehearsal ? 'rehearsal' : 'candidate', revision, stagingSha, stagingEvidence,
-  database: target.projectRef, siteId, deployId: deployment.id, origin, migrations, configuration };
-writeFileSync('netlify-prelaunch-record.json', `${JSON.stringify({ ...record, approvalDigest: digest(record) }, null, 2)}\n`);
-if (process.env.GITHUB_STEP_SUMMARY) {
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Private Netlify draft: ${deployment.id}\n\nApproval record digest: ${digest(record)}\n`);
+async function verifyDraft(id, fallback = false) {
+  if (!deployIdPattern.test(id ?? '')) throw new Error('Invalid Netlify draft identifier');
+  const draft = JSON.parse(cli(['api', 'getSiteDeploy', '--data', JSON.stringify({ site_id: siteId, deploy_id: id })]));
+  const origin = `https://${id}--${siteName}.netlify.app`;
+  if (draft.id !== id || draft.site_id !== siteId || draft.state !== 'ready' ||
+      (fallback ? !draft.title?.startsWith('SkillArc private database-independent fallback ') : draft.title !== title) ||
+      !(fallback ? ['deploy-preview', 'branch-deploy'] : ['deploy-preview']).includes(draft.context) ||
+      draft.published_at || (fallback ? draft.links?.permalink : draft.deploy_ssl_url) !== origin ||
+      !Array.isArray(draft.function_schedules) ||
+      draft.function_schedules.length || draft.edge_functions_present !== true) {
+    throw new Error('Draft identity, readiness, privacy context or schedule verification failed');
+  }
+  const visitor = await fetch(new URL('/', origin), { redirect: 'manual', signal: AbortSignal.timeout(30_000) });
+  if (visitor.status !== 401) throw new Error('Draft did not require Netlify visitor authentication');
+  return { id, origin };
 }
-console.log(`Verified private Netlify draft ${deployment.id}; authenticated application checks are recorded separately.`);
+
+async function checkDatabase(before) {
+  const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
+  if (!accessToken) throw new Error('Missing scoped production Supabase access');
+  const management = `https://api.supabase.com/v1/projects/${target.projectRef}`;
+  const headers = { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' };
+  const options = { headers, redirect: 'error', signal: AbortSignal.timeout(30_000) };
+  const authResponse = await fetch(`${management}/config/auth`, options);
+  if (!authResponse.ok) throw new Error('Cannot verify production Auth settings');
+  const auth = await authResponse.json();
+  if (auth.disable_signup !== true || auth.external_anonymous_users_enabled !== false || auth.smtp_host) {
+    throw new Error('Production Auth signup, anonymous sign-in or custom SMTP is active');
+  }
+  const query = `SELECT
+    (SELECT count(*) FROM auth.users)::int AS accounts,
+    (SELECT count(*) FROM storage.objects)::int AS files,
+    (SELECT count(*) FROM pg_tables WHERE schemaname='public')::int AS tables,
+    (SELECT count(*) FROM storage.buckets WHERE id IN ('assignments','resumes') AND public=false)::int AS private_buckets`;
+  const result = await fetch(`${management}/database/query`, {
+    ...options, method: 'POST', body: JSON.stringify({ query, read_only: true }),
+  });
+  if (!result.ok) throw new Error('Cannot verify clean production data counts');
+  const [counts] = await result.json();
+  if (!counts || counts.accounts !== 0 || counts.files !== 0 ||
+      (before ? counts.tables !== 0 : counts.tables < 1 || counts.private_buckets !== 2)) {
+    throw new Error('Production database counts or required private buckets are unexpected');
+  }
+}
+
+if (isMigrationCheck && candidateId === fallbackId) throw new Error('Fallback must be a separate draft');
+const fallback = fallbackId ? await verifyDraft(fallbackId, true) : undefined;
+let selectedId = candidateId;
+if (!isMigrationCheck) {
+  const result = JSON.parse(cli(['deploy', '--site', siteId, '--context', 'deploy-preview', '--json', '--message', title], true));
+  if (result.site_id !== siteId) throw new Error('Unexpected deploy response');
+  selectedId = result.deploy_id;
+}
+if (selectedId === fallbackId) throw new Error('Fallback must be a separate draft');
+const deployment = await verifyDraft(selectedId);
+verifyPrivateSite(getSite());
+const record = { kind: isRehearsal ? 'rehearsal' : 'candidate', revision, stagingSha, stagingEvidence,
+  database: target.projectRef, siteId, deployId: deployment.id, origin: deployment.origin, migrations, configuration,
+  ...(fallback && { fallback }) };
+const approvalDigest = digest(record);
+if (isMigrationCheck) {
+  if (approvalDigest !== expectedDigest) throw new Error('Netlify approval binding changed');
+  await checkDatabase(process.argv[2] === '--before-migrations');
+  console.log(`Verified Netlify approval and clean production: ${process.argv[2]}`);
+} else {
+  writeFileSync('netlify-prelaunch-record.json', `${JSON.stringify({ ...record, approvalDigest }, null, 2)}\n`);
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, `candidate_id=${deployment.id}\napproval_digest=${approvalDigest}\n`);
+  }
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+      `Private Netlify draft: ${deployment.id}\n\nPrivate fallback: ${fallback?.id ?? 'not selected'}\n\nApproval record digest: ${approvalDigest}\n`);
+  }
+  console.log(`Verified private Netlify draft ${deployment.id}; authenticated application checks are recorded separately.`);
+}
