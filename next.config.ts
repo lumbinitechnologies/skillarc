@@ -1,6 +1,9 @@
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  env: {
+    SKILLARC_BUILD_PRELAUNCH: process.env.SKILLARC_PRELAUNCH === "true" ? "true" : "false",
+  },
   experimental: {
     // Optimise imports — ensures only the icons/exports actually used get bundled
     // instead of entire barrel files (lucide-react has 700+ icons).

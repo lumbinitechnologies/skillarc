@@ -1,0 +1,83 @@
+name: Prepare private Netlify prelaunch candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact reviewed main merge SHA matching tested staging
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skillarc-production-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify exact reviewed website revision
+    if: github.ref == 'refs/heads/main' && vars.NETLIFY_PRELAUNCH_PREPARE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: skillarc-policy
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      staging_sha: ${{ steps.verify.outputs.staging_sha }}
+      staging_evidence: ${{ steps.verify.outputs.staging_evidence }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify independent review, branch protection and hosted staging
+        id: verify
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_POLICY_READ_TOKEN: ${{ secrets.GH_POLICY_READ_TOKEN }}
+        run: |
+          git fetch origin main staging
+          node scripts/ci/verify-release.mjs
+
+  draft:
+    name: Build and stage a private Netlify draft
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: skillarc-netlify-candidates
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: |
+          npm ci
+          npm install --global netlify-cli@27.20.1
+      - name: Create private candidate and bind its identity
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          STAGING_SHA: ${{ needs.verify.outputs.staging_sha }}
+          STAGING_EVIDENCE: ${{ needs.verify.outputs.staging_evidence }}
+          NETLIFY_PRELAUNCH_PREPARE_ENABLED: ${{ vars.NETLIFY_PRELAUNCH_PREPARE_ENABLED }}
+          SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: node scripts/ci/netlify-prelaunch.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: netlify-prelaunch-approval-record
+          path: netlify-prelaunch-record.json
+          if-no-files-found: error
