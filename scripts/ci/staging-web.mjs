@@ -54,12 +54,22 @@ cli(['pull', '--yes', '--environment=preview', `--git-branch=${target.gitBranch}
 const project = JSON.parse(readFileSync('.vercel/project.json', 'utf8'));
 const dotenv = readFileSync('.vercel/.env.preview.local', 'utf8');
 validateWebEnvironment(config, 'staging', project, dotenv);
+const settings = parseEnv(dotenv);
+const oidcToken = settings.VERCEL_OIDC_TOKEN;
+const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!oidcToken || !serviceRole || serviceRole === '[SENSITIVE]') {
+  throw new Error('Protected staging OIDC token or scoped service role is unavailable');
+}
 cli(['build']);
 
 // A Git-associated Preview can receive the stable branch domain during upload.
 // Suppress Git auto-detection and supply the already-reviewed staging settings
 // explicitly so the branchless deployment uses the same runtime environment.
-const runtime = Object.fromEntries(Object.entries(parseEnv(dotenv)).filter(([name]) => !name.startsWith('VERCEL_')));
+const runtime = Object.fromEntries(Object.entries(settings).filter(([name]) => !name.startsWith('VERCEL_')));
+runtime.SUPABASE_SERVICE_ROLE_KEY = serviceRole;
+if (Object.values(runtime).includes('[SENSITIVE]')) {
+  throw new Error('A staging runtime setting was unavailable to the deployment');
+}
 const origin = cli(['deploy', '--prebuilt', '--yes', '--force', ...Object.keys(runtime).flatMap(name => ['--env', name]),
   '--meta', `githubCommitSha=${sha}`, '--meta', `skillarcStagingBranch=${target.gitBranch}`],
 { ...process.env, ...runtime, GIT_DIR: resolve('.vercel/no-git-metadata') });
@@ -78,7 +88,6 @@ async function smoke(origin, headers, previewOrigin) {
   await verifyAcademicSmoke(settings);
   await verifyPrivateFileSmoke(settings);
 }
-const bypass = process.env.VERCEL_PREVIEW_BYPASS_SECRET;
 await publishStagingCandidate(target, candidate, previous, {
   getAlias,
   setAlias: deployment => vercel(`/v2/deployments/${deployment.id}/aliases`, {
@@ -89,7 +98,7 @@ await publishStagingCandidate(target, candidate, previous, {
   verifyCandidate: async () => {
     if (candidate.meta?.githubCommitSha !== sha || candidate.meta?.skillarcStagingBranch !== target.gitBranch ||
         candidate.meta?.githubCommitRef === target.gitBranch) throw new Error('Staging candidate revision or branch mismatch');
-    await smoke(origin, bypass ? { 'x-vercel-protection-bypass': bypass } : {}, origin);
+    await smoke(origin, { 'x-vercel-trusted-oidc-idp-token': oidcToken }, origin);
   },
   verifyStable: () => smoke(stableOrigin, {}),
 });

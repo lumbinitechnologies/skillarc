@@ -114,7 +114,7 @@ jobs:
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PREVIEW_BYPASS_SECRET: ${{ secrets.VERCEL_PREVIEW_BYPASS_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           FIXTURE_PASSWORD: ${{ secrets.FIXTURE_PASSWORD }}
         run: |
           npm install --global vercel@63.1.2
