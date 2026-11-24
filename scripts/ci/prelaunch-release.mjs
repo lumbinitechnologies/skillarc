@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
-import { readConfig, targetFor } from './deployment-policy.mjs';
+import { migrationVersions, readConfig, readMigrationHistory, targetFor, validatePrelaunchDatabase } from './deployment-policy.mjs';
 import { smokePrelaunch } from './prelaunch-smoke.mjs';
 import { validateWebEnvironment } from './web-environment.mjs';
 import { fixtureId } from '../fixtures/academic.mjs';
@@ -95,7 +95,7 @@ function build(production) {
   return { hostname: url.hostname, configuration };
 }
 
-async function checkAuth(requireEmpty) {
+async function checkAuth(before) {
   const supabaseToken = process.env.SUPABASE_ACCESS_TOKEN;
   if (!supabaseToken) throw new Error('Missing scoped production Supabase credential');
   const url = `https://api.supabase.com/v1/projects/${target.projectRef}`;
@@ -104,13 +104,19 @@ async function checkAuth(requireEmpty) {
   if (!response.ok) throw new Error('Cannot verify production Auth configuration');
   const auth = await response.json();
   if (auth.disable_signup !== true || auth.external_anonymous_users_enabled !== false || auth.smtp_host) throw new Error('Production Auth signup, anonymous sign-in or custom SMTP is still active');
-  const query = `SELECT (SELECT count(*) FROM auth.users)::int AS accounts, (SELECT count(*) FROM storage.objects)::int AS objects${requireEmpty ? ", (SELECT count(*) FROM pg_tables WHERE schemaname = 'public')::int AS tables" : ''}`;
+  const query = `SELECT
+    (SELECT count(*) FROM auth.users)::int AS accounts,
+    (SELECT count(*) FROM storage.objects)::int AS files,
+    (SELECT count(*) FROM pg_tables WHERE schemaname='public')::int AS tables,
+    (SELECT count(*) FROM storage.buckets WHERE id IN ('assignments','resumes') AND public=false)::int AS private_buckets`;
   const check = await fetch(`${url}/database/query`, {
     headers, method: 'POST', body: JSON.stringify({ query, read_only: true }), redirect: 'error', signal: AbortSignal.timeout(30_000),
   });
   if (!check.ok) throw new Error('Cannot verify clean production aggregate counts');
   const [counts] = await check.json();
-  if (counts?.accounts !== 0 || counts.objects !== 0 || (requireEmpty && counts.tables !== 0)) throw new Error('Production is not empty as required for this prelaunch release');
+  const history = await readMigrationHistory(target.projectRef, supabaseToken);
+  const baseline = JSON.parse(readFileSync('supabase/migration-baseline.json', 'utf8')).version;
+  validatePrelaunchDatabase(migrationVersions(process.cwd()), history, counts, baseline, before);
 }
 
 function record(candidate, rehearsal, fallback) {

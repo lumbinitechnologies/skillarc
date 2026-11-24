@@ -46,16 +46,22 @@ async function expectJson(origin, path, options, status) {
   return response.json();
 }
 
-export async function verifyPrivateFileSmoke({ origin, authOrigin, publicKey, password }) {
-  assert.equal(origin, 'https://staging.theskillarc.com', 'Private file smoke requires the staging website');
+export async function verifyPrivateFileSmoke({ origin, authOrigin, publicKey, password, headers: previewHeaders, previewOrigin }) {
+  const url = new URL(origin);
+  assert.ok(origin === 'https://staging.theskillarc.com' ||
+    (origin === previewOrigin && origin === url.origin && url.protocol === 'https:' &&
+      /^[a-z0-9-]+\.vercel\.app$/.test(url.hostname)), 'Private file smoke requires verified staging');
   assert.equal(authOrigin, 'https://kzbplqwcammuytqjwdge.supabase.co', 'Private file smoke requires staging Auth');
   assert.ok(publicKey && password, 'Private file fixture credentials unavailable');
 
+  const appJson = (path, options, status) => expectJson(origin, path, {
+    ...options, headers: { ...previewHeaders, ...options.headers },
+  }, status);
   await withAccount(authOrigin, publicKey, password, 'student', async (studentId, studentHeaders) => {
     const path = `/api/students/${encodeURIComponent(studentId)}/documents`;
     let document;
     await withAccount(authOrigin, publicKey, password, 'admin', async (adminId, headers) => {
-      const { documents } = await expectJson(origin, path, { headers }, 200);
+      const { documents } = await appJson(path, { headers }, 200);
       const matches = documents.filter(row => row.title === title && row.category === category);
       assert.ok(matches.length <= 1, 'Private file fixture already has multiple versions');
       document = matches[0];
@@ -64,7 +70,7 @@ export async function verifyPrivateFileSmoke({ origin, authOrigin, publicKey, pa
         body.set('title', title);
         body.set('category', category);
         body.set('file', new Blob([sample], { type: 'image/png' }), 'synthetic-smoke.png');
-        ({ document } = await expectJson(origin, path, { method: 'POST', headers, body }, 201));
+        ({ document } = await appJson(path, { method: 'POST', headers, body }, 201));
       }
       assert.ok(document.id && document.student_id === studentId && document.institution_id === fixtureId(100) &&
         document.uploaded_by === adminId && document.storage_bucket === bucket &&
@@ -72,7 +78,7 @@ export async function verifyPrivateFileSmoke({ origin, authOrigin, publicKey, pa
     });
 
     const downloadPath = `${path}/${encodeURIComponent(document.id)}`;
-    const { url } = await expectJson(origin, downloadPath, { headers: studentHeaders }, 200);
+    const { url } = await appJson(downloadPath, { headers: studentHeaders }, 200);
     const downloadUrl = new URL(url);
     assert.ok(downloadUrl.origin === authOrigin && downloadUrl.pathname.startsWith(`/storage/v1/object/sign/${bucket}/`),
       'Private file signed URL points outside staging storage');
@@ -81,7 +87,7 @@ export async function verifyPrivateFileSmoke({ origin, authOrigin, publicKey, pa
     assert.ok(digest(new Uint8Array(await download.arrayBuffer())) === checksum, 'Downloaded fixture checksum mismatch');
 
     await withAccount(authOrigin, publicKey, password, 'admin-au', async (_, headers) => {
-      const denied = await expectJson(origin, downloadPath, { headers }, 403);
+      const denied = await appJson(downloadPath, { headers }, 403);
       assert.ok(!denied.url, 'Cross-tenant response exposed a signed URL');
     });
   });

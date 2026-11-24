@@ -11,12 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 import { syncAssignmentKnowledge, archiveAssignmentKnowledge } from "@/lib/knowledge/assignment"
 import { canManageAcademicSubject, getActiveActorProfile, getManagedAssignment } from "@/lib/assignment-authorization"
 import { parsePrivateStoragePath } from "@/lib/private-storage"
-
-function parseExplicitInstant(value: string | null | undefined): Date | null {
-  if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
+import { assignmentDeadline, parseExplicitInstant } from "@/lib/assignment-deadline"
 
 function parseCorrectAnswers(value: unknown): Array<{ answer: number }> | null {
   if (!Array.isArray(value)) return null
@@ -96,16 +91,8 @@ export async function createAssignmentAction(data: {
     }
   }
 
-  // Prevent past due dates (ASG-005)
-  if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
-    const dueDate = parseExplicitInstant(data.due_date)
-    if (!dueDate) {
-      return { success: false, error: "Enter a deadline with an explicit timezone." }
-    }
-    if (dueDate.getTime() < Date.now() - 60000) {
-      return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
-    }
-  }
+  const deadline = assignmentDeadline(data.due_date, data.type)
+  if (deadline.error) return { success: false, error: deadline.error }
 
   const uniqueFiles = data.files && Array.isArray(data.files) ? Array.from(new Set(data.files)) : data.files
 
@@ -114,7 +101,8 @@ export async function createAssignmentAction(data: {
     faculty_id: data.faculty_id,
     title: data.title.trim(),
     description: data.description?.trim() || "",
-    due_date: (data.type === "Material" || data.type === "Syllabus" || !data.due_date) ? null : new Date(data.due_date).toISOString(),
+    due_date: deadline.value,
+    due_at: deadline.value,
     type: data.type,
     max_score: data.type === "Material" || data.type === "Syllabus" ? 0 : data.max_score,
     questions: data.questions,
@@ -224,25 +212,13 @@ export async function updateAssignmentAction(
     return { success: false, error: "Assignment requires either instructions/description or at least one attached guideline file." }
   }
 
-  if (data.due_date && data.type !== "Material" && data.type !== "Syllabus") {
-    const dueDate = parseExplicitInstant(data.due_date)
-    if (!dueDate) {
-      return { success: false, error: "Enter a deadline with an explicit timezone." }
-    }
-    if (dueDate.getTime() < Date.now() - 60000) {
-      return { success: false, error: "Due date cannot be in the past. Please select a future date and time." }
-    }
-  }
+  const deadline = assignmentDeadline(data.due_date, data.type ?? currentAss.type)
+  if (deadline.error) return { success: false, error: deadline.error }
 
-  // Format update payload
-  const updateData = { ...data }
+  // Omitted deadlines preserve both columns. An explicit clear updates both.
+  const updateData = { ...data, due_date: deadline.value, due_at: deadline.value }
   if (data.title) updateData.title = data.title.trim()
   if (data.description !== undefined) updateData.description = data.description.trim()
-  if (data.due_date) {
-    updateData.due_date = parseExplicitInstant(data.due_date)?.toISOString() ?? null
-  } else if (data.due_date === null) {
-    updateData.due_date = null
-  }
 
   // Deduplicate files if provided
   if (data.files && Array.isArray(data.files)) {
@@ -487,13 +463,13 @@ export async function submitAssignmentAction(data: {
   // through an eligible enrollment or their validated current section.
   const { data: assignment } = await supabase
     .from("assignments")
-    .select("id, title, faculty_id, due_date, subject_id, type, max_score")
+    .select("id, title, faculty_id, due_at, due_date, subject_id, type, max_score")
     .eq("id", data.assignment_id)
     .maybeSingle()
   if (!assignment || assignment.subject_id !== data.subject_id) {
     return { success: false, error: "This assignment is unavailable for your account." }
   }
-  const dueInstant = parseExplicitInstant(assignment.due_date)
+  const dueInstant = parseExplicitInstant(assignment.due_at ?? assignment.due_date)
   if (dueInstant && Date.now() - dueInstant.getTime() > 60_000) {
     return { success: false, error: "Submissions are closed for this assignment." }
   }

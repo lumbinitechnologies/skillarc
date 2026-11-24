@@ -24,6 +24,7 @@ try {
   writeFileSync(join(cwd, '.gitignore'), 'netlify-prelaunch-record.json\n');
   const name = '20260101000000_sample.sql';
   const sql = 'SELECT 1;';
+  writeFileSync(join(cwd, 'supabase/migration-baseline.json'), JSON.stringify({ version: name.slice(0, 14) }));
   writeFileSync(join(cwd, 'supabase/migrations', name), sql);
   const git = (...args) => {
     const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -76,6 +77,9 @@ else process.exit(37);`,{mode:0o700});
   writeFileSync(preload,`globalThis.fetch=async (url, options={})=>{
     if(String(url).includes('.netlify.app/')) return new Response(null,{status:401});
     if(String(url).endsWith('/config/auth')) return Response.json({ disable_signup:process.env.ALLOW_SIGNUP!=='yes', external_anonymous_users_enabled:false, smtp_host:null });
+    if(String(url).endsWith('/database/migrations')) return Response.json(process.env.AFTER==='yes'
+      ? [{ version: '${name.slice(0, 14)}' }]
+      : process.env.UNRELATED_HISTORY==='yes' ? [{ version: '20261109093320' }] : []);
     if(String(url).endsWith('/database/query') && JSON.parse(options.body).read_only===true) return Response.json([{accounts:0,files:0,tables:process.env.AFTER==='yes'?20:0,private_buckets:process.env.AFTER==='yes'?2:0}]);
     throw Error('Unexpected network request');
   };`);
@@ -96,13 +100,14 @@ else process.exit(37);`,{mode:0o700});
   const candidate = run();
   assert.equal(candidate.status, 0, candidate.stderr);
   assert.deepEqual(JSON.parse(readFileSync(join(cwd, 'netlify-prelaunch-record.json'))), { ...record, approvalDigest: approve });
-  for (const [mode, options] of [['--before-migrations', {}], ['--after-migrations', { AFTER: 'yes' }]]) {
+  for (const [mode, options] of [['--before-migrations', {}], ['--before-migrations', { AFTER: 'yes' }], ['--after-migrations', { AFTER: 'yes' }]]) {
     const result = run(mode, options);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Verified Netlify approval/);
   }
   for (const [options, error] of [
     [{ NETLIFY_APPROVAL_DIGEST: 'c'.repeat(64) }, /approval binding changed/],
+    [{ UNRELATED_HISTORY: 'yes' }, /not a prefix/],
     [{ ALLOW_SIGNUP: 'yes' }, /Auth signup/],
     [{ FALLBACK_DEPLOY_ID: id }, /separate draft/],
     [{ NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED: 'false' }, /Expected enabled migrations/],

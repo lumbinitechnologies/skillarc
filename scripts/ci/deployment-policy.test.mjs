@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validateLedger, targetFor, approvedMerge, productionEnvironmentReady, previewExpired } from './deployment-policy.mjs';
+import { validateLedger, validatePrelaunchDatabase, targetFor, approvedMerge, productionEnvironmentReady, previewExpired } from './deployment-policy.mjs';
 
 const versions = ['20261010094633', '20261016153434'];
 test('existing staging must contain the reconciled baseline; clean production may bootstrap', () => {
@@ -60,4 +60,21 @@ test('persistent staging must be a direct isolated child of the clean parent', a
   const preview={project_ref:'preview',name:'skillarc-ci-pr-66-abcdef012345',persistent:false,is_default:false,parent_project_ref:'parent'};
   assert.equal(ownedPreview(preview,config),true);
   for(const patch of [{project_ref:'legacy'},{parent_project_ref:'stage'},{project_ref:'parent'},{project_ref:'stage'},{persistent:true},{name:'skillarc-ci-pr-66-invalid'}]) assert.equal(ownedPreview({...preview,...patch},config),false);
+});
+
+test('prelaunch can retry a reviewed prefix without weakening initial or final checks', () => {
+  const versions = ['20260101000000', '20260102000000', '20260103000000'];
+  const baseline = versions[1];
+  const empty = { accounts: 0, files: 0, tables: 0, private_buckets: 0 };
+  const schema = { ...empty, tables: 20, private_buckets: 2 };
+  const rows = versions.map(version => ({ version }));
+  validatePrelaunchDatabase(versions, [], empty, baseline, true);
+  validatePrelaunchDatabase(versions, rows.slice(0, 1), empty, baseline, true);
+  validatePrelaunchDatabase(versions, rows.slice(0, 2), schema, baseline, true);
+  validatePrelaunchDatabase(versions, rows, schema, baseline, true);
+  validatePrelaunchDatabase(versions, rows, schema, baseline, false);
+  assert.throws(() => validatePrelaunchDatabase(versions, rows.slice(0, 1), schema, baseline, true));
+  assert.throws(() => validatePrelaunchDatabase(versions, rows.slice(0, 2), schema, baseline, false));
+  assert.throws(() => validatePrelaunchDatabase(versions, rows, { ...schema, files: 1 }, baseline, true));
+  assert.throws(() => validatePrelaunchDatabase(versions, [{ version: '20261109093320' }], empty, baseline, true));
 });

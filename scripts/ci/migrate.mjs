@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { migrationFailure, probePooler, verifyDryRun } from './migration-preflight.mjs';
-import { migrationVersions, readConfig, targetFor, validateLedger, verifyDatabaseBranch } from './deployment-policy.mjs';
+import { migrationVersions, readConfig, readMigrationHistory, targetFor, validateLedger, verifyDatabaseBranch } from './deployment-policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const mode = process.argv[2];
@@ -23,13 +23,7 @@ if (!process.env.SUPABASE_ACCESS_TOKEN) throw new Error('Missing SUPABASE_ACCESS
 const versions = migrationVersions(root);
 const baseline = JSON.parse(readFileSync(path.join(root, 'supabase/migration-baseline.json'), 'utf8')).version;
 
-async function history() {
-  const response = await fetch(`https://api.supabase.com/v1/projects/${target.projectRef}/database/migrations`, {
-    headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` }, redirect: 'error', signal: AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) throw new Error(`Cannot verify remote migration history (HTTP ${response.status})`);
-  return response.json();
-}
+const history = () => readMigrationHistory(target.projectRef, process.env.SUPABASE_ACCESS_TOKEN);
 function cli(args) {
   // Keep all CLI output private, including on failure.
   return spawnSync('supabase', args, { cwd: root, encoding: 'utf8', timeout: 15 * 60_000, maxBuffer: 10 * 1024 * 1024 });
@@ -59,7 +53,7 @@ const expectedFiles = readdirSync(path.join(root, 'supabase/migrations'))
   .filter(filename => filename.endsWith('.sql') && pending.includes(filename.slice(0, 14)))
   .sort();
 verifyDryRun(dryRun, expectedFiles);
-await requireSuccess('migration apply', cli(pushArgs));
+if (pending.length) await requireSuccess('migration apply', cli(pushArgs));
 const remaining = validateLedger(versions, await history(), baseline, true);
 if (remaining.length) throw new Error('Migration ledger verification failed after push');
 console.log(`${environment}: migration ledger matches this reviewed revision`);

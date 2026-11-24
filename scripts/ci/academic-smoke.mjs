@@ -17,10 +17,10 @@ async function safeJson(response, label) {
   }
 }
 
-async function api(origin, path, expectedStatus, token) {
+async function api(origin, path, expectedStatus, token, headers) {
   const response = await fetch(new URL(path, origin), {
     ...jsonOptions(),
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { ...headers, ...(token && { Authorization: `Bearer ${token}` }) },
   });
   if (response.status !== expectedStatus) {
     throw new Error(`${path.split('?')[0]} smoke expected ${expectedStatus}, received ${response.status}`);
@@ -32,7 +32,8 @@ async function api(origin, path, expectedStatus, token) {
   return body;
 }
 
-export async function verifyAcademicSmoke({ origin, authOrigin, publicKey, password }) {
+export async function verifyAcademicSmoke({ origin, authOrigin, publicKey, password, headers }) {
+  const read = (path, status, token) => api(origin, path, status, token, headers);
   if (!publicKey || !password) throw new Error('Synthetic academic smoke credentials unavailable');
   const withAccount = async (name, operation) => {
     const email = `${name}@skillarc-fixtures.invalid`;
@@ -57,20 +58,20 @@ export async function verifyAcademicSmoke({ origin, authOrigin, publicKey, passw
   };
 
   for (const path of ['/api/mobile/v1/me', ...Object.values(routes)]) {
-    const body = await api(origin, path, 401);
+    const body = await read(path, 401);
     assert.ok(body.error?.code === 'UNAUTHORIZED', 'Unauthenticated request error mismatch');
   }
   await withAccount('student', async (token, studentId) => {
-    const me = (await api(origin, '/api/mobile/v1/me', 200, token)).data;
+    const me = (await read('/api/mobile/v1/me', 200, token)).data;
     assert.ok(me.id === studentId && me.role === 'STUDENT', 'Synthetic student profile mismatch');
-    const courses = (await api(origin, routes.courses, 200, token)).data;
+    const courses = (await read(routes.courses, 200, token)).data;
     assert.ok(courses.courses.length === 1 && courses.courses[0].id === fixtureId(104) &&
       courses.courses[0].faculty.length === 1, 'India student course scope mismatch');
-    const timetable = (await api(origin, routes.timetable, 200, token)).data;
+    const timetable = (await read(routes.timetable, 200, token)).data;
     assert.ok(timetable.time_zone === 'Asia/Kolkata' && timetable.today && timetable.date === timetable.today &&
       !timetable.multiweek_enabled && timetable.weeks.length === 0, 'India timetable clock or static scope mismatch');
-    await api(origin, `${routes.timetable}?date=2026-02-30`, 400, token);
-    const { tasks } = (await api(origin, routes.tasks, 200, token)).data;
+    await read(`${routes.timetable}?date=2026-02-30`, 400, token);
+    const { tasks } = (await read(routes.tasks, 200, token)).data;
     const rows = new Map(tasks.map(task => [task.id, task]));
     assert.ok(rows.size === 5 && !rows.has(fixtureId(140)), 'Submitted or unrelated tasks leaked');
     assert.ok(rows.get(fixtureId(141))?.type === 'quiz' && rows.get(fixtureId(142))?.type === 'coding', 'Summary types missing');
@@ -82,25 +83,25 @@ export async function verifyAcademicSmoke({ origin, authOrigin, publicKey, passw
       !['questions', 'test_cases', 'files', 'answer', 'submission', 'language'].some(key => key in task)), 'Unexpected task data');
   });
   await withAccount('student-au', async token => {
-    const day = (await api(origin, routes.timetable, 200, token)).data;
+    const day = (await read(routes.timetable, 200, token)).data;
     assert.ok(day.time_zone === 'Australia/Sydney' && day.multiweek_enabled && day.weeks.length === 2 &&
       day.weeks.every(week => week.section_id === fixtureId(203)), 'Sydney timetable weeks mismatch');
-    await api(origin, `${routes.timetable}?week_id=${fixtureId(110)}`, 403, token);
+    await read(`${routes.timetable}?week_id=${fixtureId(110)}`, 403, token);
     const week = day.weeks.find(week => week.id === fixtureId(211));
     assert.ok(week, 'Synthetic second week missing');
-    const selected = (await api(origin, `${routes.timetable}?week_id=${week.id}`, 200, token)).data;
+    const selected = (await read(`${routes.timetable}?week_id=${week.id}`, 200, token)).data;
     assert.ok(selected.selected_week_id === week.id, 'Second week selection mismatch');
   });
   await withAccount('student-unconfigured', async token => {
-    const { data } = await api(origin, routes.timetable, 200, token);
+    const { data } = await read(routes.timetable, 200, token);
     assert.ok(data.time_zone === null && data.today === null && data.empty_reason === 'time_zone_unavailable',
       'Unconfigured timetable produced a date or timezone');
   });
   await withAccount('faculty', async token => {
-    for (const path of Object.values(routes)) await api(origin, path, 403, token);
+    for (const path of Object.values(routes)) await read(path, 403, token);
   });
   await withAccount('withdrawn', async token => {
-    const { data } = await api(origin, routes.courses, 200, token);
+    const { data } = await read(routes.courses, 200, token);
     assert.ok(data.context.status === 'no_enrollment' && data.courses.length === 0, 'Revoked enrollment gained section fallback');
   });
   console.log('Synthetic profile and academic HTTP checks passed for India, Sydney and unconfigured campus accounts.');

@@ -3669,6 +3669,7 @@ function CreateWorksheetModal({
   const [description, setDescription] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [dueTime, setDueTime] = useState("23:59")
+  const [deadlineEdited, setDeadlineEdited] = useState(false)
   const [maxScore, setMaxScore] = useState(100)
   const [targetSectionIds, setTargetSectionIds] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -3871,6 +3872,7 @@ function CreateWorksheetModal({
     setPreviousSource1(nextSource1)
     ;(() => {
     setFormError(null)
+    setDeadlineEdited(false)
     if (editingAssignment) {
       setType(normalizeWorksheetType(editingAssignment.type))
       setTitle(editingAssignment.title)
@@ -3935,7 +3937,7 @@ function CreateWorksheetModal({
     }
 
     let fullDueDateStr: string | null = null
-    if (type !== "Material" && type !== "Syllabus") {
+    if ((!editingAssignment || deadlineEdited) && type !== "Material" && type !== "Syllabus") {
       if (dueDate) {
         const fullDueDate = new Date(`${dueDate}T${dueTime || "23:59"}:00`)
         if (isNaN(fullDueDate.getTime())) {
@@ -4015,7 +4017,9 @@ function CreateWorksheetModal({
 
     let res
     if (editingAssignment) {
-      res = await updateAssignmentAction(editingAssignment.id, subjectId, data)
+      res = await updateAssignmentAction(editingAssignment.id, subjectId, {
+        ...data, due_date: deadlineEdited ? fullDueDateStr : undefined,
+      })
     } else {
       res = await createAssignmentAction(data)
     }
@@ -4097,6 +4101,7 @@ function CreateWorksheetModal({
                     value={dueDate}
                     onChange={e => {
                       setDueDate(e.target.value)
+                      setDeadlineEdited(true)
                       setFormError(null)
                     }}
                     className={`w-full bg-white border ${isPastDueDateSelected ? 'border-rose-400 focus:ring-rose-400' : 'border-slate-200 focus:ring-indigo-500'} focus:ring-2 rounded-xl px-4 py-2.5 text-sm text-slate-800`}
@@ -4109,6 +4114,7 @@ function CreateWorksheetModal({
                     value={dueTime}
                     onChange={e => {
                       setDueTime(e.target.value)
+                      setDeadlineEdited(true)
                       setFormError(null)
                     }}
                     className={`w-full bg-white border ${isPastDueDateSelected ? 'border-rose-400 focus:ring-rose-400' : 'border-slate-200 focus:ring-indigo-500'} focus:ring-2 rounded-xl px-4 py-2.5 text-sm text-slate-800`}
