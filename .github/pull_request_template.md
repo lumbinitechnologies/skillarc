@@ -1,16 +1,17 @@
 GitHub issue: #___
 
-## Outcome
+## Outcome and scope
 
-What the user can do after this change, dependencies and scope boundaries:
+- User-visible result:
+- Companion issue/PR, API revision and fixture if applicable:
+- Decision and rationale, or link to the issue discussion:
 
-## Verification
+## Verification and handoff
 
-- [ ] Root lint, typecheck and relevant tests pass
-- [ ] Full migration replay/tests/security checks where applicable
-- [ ] Authorization and denied-path evidence where data changes
-- [ ] No production data or credentials in source/artifacts
-- AI assistance and checks personally verified:
-- Known baseline failures / risks:
+- Commit checked, commands/results, and relevant behavior/access cases:
+- Migration replay and checks if applicable:
+- CI or hosted staging evidence if available:
+- AI assistance and what I verified myself:
+- Current state, remaining evidence or blocker, next owner and action:
 
-Feature PRs target staging and squash. Promotion PRs merge staging into main with a merge commit and one release issue containing included work/evidence. Independent reviewer: @lumbinitechnologies. No self-approval.
+Feature PRs target `staging` and squash after current-head independent approval and required checks. Release PRs promote `staging` to `main` with a merge commit.

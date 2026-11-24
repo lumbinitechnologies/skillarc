@@ -1,6 +1,6 @@
 # Mobile release-one scope
 
-The [SkillArc Mobile v1 specification](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/mobile-v1.md) is the authoritative product scope. It replaces the earlier three-role workflow matrix. The [backlog reconciliation](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/backlog-reconciliation.md) maps scope to GitHub issues. Keane owns the current work in both repositories; independent review remains required.
+The [SkillArc Mobile v1 specification](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/mobile-v1.md) is the authoritative product scope. It replaces the earlier three-role workflow matrix. The [backlog reconciliation](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/backlog-reconciliation.md) maps scope to GitHub issues. Use the [repository workflow](repository-workflow.md) for task ownership and independent review.
 
 ## Audience and capability boundary
 
