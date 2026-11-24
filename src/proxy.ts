@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { measureServer } from "@/lib/perf"
+import { isPrelaunchEnabled, isPrelaunchPublicRequest, prelaunchMessage } from "@/lib/prelaunch"
 
 function cleanIdentityHeaders(request: NextRequest) {
   const forwardedHeaders = new Headers(request.headers)
@@ -11,8 +12,31 @@ function cleanIdentityHeaders(request: NextRequest) {
 }
 
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: cleanIdentityHeaders(request) } })
   const { pathname } = request.nextUrl
+  if (isPrelaunchEnabled()) {
+    if (isPrelaunchPublicRequest(request.method, pathname, request.nextUrl.searchParams.getAll("url"))) {
+      return NextResponse.next({ request: { headers: cleanIdentityHeaders(request) } })
+    }
+
+    const headers = { "Cache-Control": "no-store" }
+    if (pathname === "/api" || pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: { code: "PRELAUNCH_CLOSED", message: prelaunchMessage } },
+        { status: 503, headers },
+      )
+    }
+
+    return new NextResponse(
+      request.method === "HEAD" ? null : `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SkillArc prelaunch</title><main><h1>SkillArc prelaunch</h1><p>${prelaunchMessage}</p><a href="/">Visit the SkillArc homepage</a></main></html>`,
+      { status: 503, headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } },
+    )
+  }
+
+  if (/^\/(?:_next\/static|_next\/image|favicon\.ico)|\.(?:svg|png|jpg|jpeg|gif|webp)$/.test(pathname)) {
+    return NextResponse.next()
+  }
+
+  let response = NextResponse.next({ request: { headers: cleanIdentityHeaders(request) } })
 
   const isPublicApiRoute =
     pathname === "/api/assistant/public" ||
@@ -103,10 +127,4 @@ export async function proxy(request: NextRequest) {
   }
 
   return response
-}
-
-export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
 }
