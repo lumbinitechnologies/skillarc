@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { readConfig, targetFor } from './deployment-policy.mjs';
+import { readConfig, readMigrationHistory, targetFor, validatePrelaunchDatabase } from './deployment-policy.mjs';
 
 const siteId = '9de55e27-a988-42fc-83f4-15a69e210ce9';
 const teamId = '6b03112dbb187de31292dc84';
@@ -117,10 +117,9 @@ async function checkDatabase(before) {
   });
   if (!result.ok) throw new Error('Cannot verify clean production data counts');
   const [counts] = await result.json();
-  if (!counts || counts.accounts !== 0 || counts.files !== 0 ||
-      (before ? counts.tables !== 0 : counts.tables < 1 || counts.private_buckets !== 2)) {
-    throw new Error('Production database counts or required private buckets are unexpected');
-  }
+  const history = await readMigrationHistory(target.projectRef, accessToken);
+  const baseline = JSON.parse(readFileSync('supabase/migration-baseline.json', 'utf8')).version;
+  validatePrelaunchDatabase(migrationFiles.map(name => name.slice(0, 14)), history, counts, baseline, before);
 }
 
 if (isMigrationCheck && candidateId === fallbackId) throw new Error('Fallback must be a separate draft');

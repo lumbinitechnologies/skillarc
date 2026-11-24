@@ -16,6 +16,25 @@ export function validateLedger(local, rows, baseline, requireBaseline) {
   return local.slice(remote.length);
 }
 
+export function validatePrelaunchDatabase(local, rows, counts, baseline, before) {
+  const pending = validateLedger(local, rows, undefined, false);
+  const hasSchema = rows.some(row => row.version === baseline);
+  if (counts?.accounts !== 0 || counts.files !== 0 ||
+      !Number.isInteger(counts.tables) ||
+      (hasSchema ? counts.tables < 1 : counts.tables !== 0) ||
+      (!before && (!hasSchema || pending.length !== 0 || counts.private_buckets !== 2))) {
+    throw new Error('Production database counts or required private buckets are unexpected');
+  }
+}
+
+export async function readMigrationHistory(projectRef, accessToken, request = fetch) {
+  const response = await request(`https://api.supabase.com/v1/projects/${projectRef}/database/migrations`, {
+    headers: { Authorization: `Bearer ${accessToken}` }, redirect: 'error', signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) throw new Error(`Cannot verify remote migration history (HTTP ${response.status})`);
+  return response.json();
+}
+
 export function targetFor(config, environment, suppliedRef) {
   if (!['staging', 'production'].includes(environment)) throw new Error('Unknown deployment environment');
   const target = config[environment];

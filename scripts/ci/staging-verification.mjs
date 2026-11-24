@@ -27,3 +27,29 @@ export async function ensureStagingAlias(target, deployment, getAlias, setAlias)
   }
   validateStagingAlias(target, deployment, await getAlias() ?? {});
 }
+
+export async function publishStagingCandidate(target, candidate, previous, {
+  getAlias, setAlias, verifyCandidate, verifyStable,
+}) {
+  const verifyAlias = async deployment => validateStagingAlias(target, deployment, await getAlias() ?? {});
+  try {
+    // An unexpected automatic assignment must be rolled back before any smoke test.
+    await verifyAlias(previous);
+    await verifyCandidate();
+    await verifyAlias(previous);
+    await ensureStagingAlias(target, candidate, getAlias, () => setAlias(candidate));
+    await verifyStable();
+    await verifyAlias(candidate);
+  } catch (error) {
+    const current = await getAlias();
+    if (current?.deploymentId === candidate.id) {
+      validateStagingAlias(target, candidate, current);
+      try {
+        await ensureStagingAlias(target, previous, getAlias, () => setAlias(previous));
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], 'Staging verification failed and the prior binding could not be restored');
+      }
+    }
+    throw error;
+  }
+}
