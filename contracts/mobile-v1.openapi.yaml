@@ -1,0 +1,805 @@
+openapi: 3.0.3
+info:
+  title: SkillArc Mobile API
+  version: 1.0.0
+  description: |
+    Contract for implemented release-one mobile endpoints. Add operations here only
+    when the matching SkillArc handler and authorization tests are ready.
+servers:
+  - url: /
+    description: Resolve against the deployment-specific HTTPS origin.
+paths:
+  /api/mobile/v1/me:
+    get:
+      operationId: getMobilePrincipal
+      summary: Get the verified mobile user's profile and enabled organization features
+      security:
+        - SupabaseAccessToken: []
+      responses:
+        '200':
+          description: Active student, parent, or faculty profile
+          headers:
+            X-Request-Id:
+              schema:
+                type: string
+                format: uuid
+            Cache-Control:
+              schema:
+                type: string
+                example: private, no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/mobile/v1/student/courses:
+    get:
+      operationId: getStudentCourses
+      summary: Get student courses
+      description: Current formal enrolment units, or explicit current-section courses when formal records do not exist.
+      security:
+        - SupabaseAccessToken: []
+      responses:
+        '200':
+          description: Academic data visible to the verified active student
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentCoursesResponse'
+              example:
+                data:
+                  context:
+                    status: ready
+                    program:
+                      id: 20000000-0000-4000-8000-000000000001
+                      name: Computer Science
+                    section:
+                      id: 30000000-0000-4000-8000-000000000001
+                      name: Section A
+                  courses:
+                    - id: 40000000-0000-4000-8000-000000000001
+                      name: Data Structures
+                      code: CS201
+                      type: THEORY
+                      faculty:
+                        - id: 50000000-0000-4000-8000-000000000001
+                          name: Dr. Mira Sen
+                      programs:
+                        - id: 20000000-0000-4000-8000-000000000001
+                          name: Computer Science
+                      sections:
+                        - id: 30000000-0000-4000-8000-000000000001
+                          name: Section A
+                    - id: 40000000-0000-4000-8000-000000000002
+                      name: Computer Networks Laboratory
+                      code: CS204
+                      type: LAB
+                      faculty: []
+                      programs:
+                        - id: 20000000-0000-4000-8000-000000000001
+                          name: Computer Science
+                      sections:
+                        - id: 30000000-0000-4000-8000-000000000001
+                          name: Section A
+                request_id: 90000000-0000-4000-8000-000000000001
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api/mobile/v1/student/timetable:
+    get:
+      operationId: getStudentTimetable
+      summary: Get student timetable
+      description: Institutional Today by default. Returns sessions for the selected day and a reference to the next reliably timed session on that day. Multiweek selection is limited to authorized sections; the list covers four weeks before and twelve weeks after the selected date.
+      security:
+        - SupabaseAccessToken: []
+      responses:
+        '200':
+          description: Academic data visible to the verified active student
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTimetableResponse'
+              example:
+                data:
+                  context:
+                    status: ready
+                    program:
+                      id: 20000000-0000-4000-8000-000000000001
+                      name: Computer Science
+                    section:
+                      id: 30000000-0000-4000-8000-000000000001
+                      name: Section A
+                  date: '2026-10-16'
+                  today: '2026-10-16'
+                  time_zone: Asia/Kolkata
+                  multiweek_enabled: false
+                  weeks: []
+                  selected_week_id: null
+                  sessions:
+                    - id: 60000000-0000-4000-8000-000000000001
+                      period: 2
+                      course_id: 40000000-0000-4000-8000-000000000001
+                      course_name: Data Structures
+                      course_code: CS201
+                      faculty_name: Dr. Mira Sen
+                      time_label: 10:00–11:00
+                      room: Room 204
+                      delivery_mode: ON_CAMPUS
+                      state: scheduled
+                    - id: 60000000-0000-4000-8000-000000000002
+                      period: 3
+                      course_id: 40000000-0000-4000-8000-000000000002
+                      course_name: Computer Networks Laboratory
+                      course_code: CS204
+                      faculty_name: null
+                      time_label: null
+                      room: Lab 3
+                      delivery_mode: ON_CAMPUS
+                      state: timings_unavailable
+                  closures: []
+                  empty_reason: null
+                  time_zone_status: ready
+                  next_class:
+                    state: timings_unavailable
+                    session_id: null
+                request_id: 90000000-0000-4000-8000-000000000002
+        '400':
+          $ref: '#/components/responses/InvalidSelector'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+      parameters:
+        - in: query
+          name: date
+          description: Institutional calendar date in YYYY-MM-DD format.
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: week_id
+          description: Week in an authorized section when multiweek is enabled.
+          schema:
+            type: string
+            format: uuid
+  /api/mobile/v1/student/tasks:
+    get:
+      operationId: getStudentTasks
+      summary: Get student tasks
+      description: Authorized pending summaries. Only a verified absolute deadline can be overdue. Submitted tasks are excluded.
+      security:
+        - SupabaseAccessToken: []
+      responses:
+        '200':
+          description: Academic data visible to the verified active student
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/PrivateCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentTasksResponse'
+              example:
+                data:
+                  context:
+                    status: ready
+                    program:
+                      id: 20000000-0000-4000-8000-000000000001
+                      name: Computer Science
+                    section:
+                      id: 30000000-0000-4000-8000-000000000001
+                      name: Section A
+                  as_of: '2026-10-16T03:30:00Z'
+                  tasks:
+                    - id: 70000000-0000-4000-8000-000000000001
+                      title: Trees and traversal
+                      type: assignment
+                      course_id: 40000000-0000-4000-8000-000000000001
+                      course_name: Data Structures
+                      course_code: CS201
+                      due_at: '2026-10-15T18:00:00Z'
+                      status: overdue
+                      mobile_action: unavailable
+                      availability_message: Assignment details and submission are not available in this version yet.
+                      deadline_state: known
+                      deadline_message: null
+                    - id: 70000000-0000-4000-8000-000000000002
+                      title: Graph fundamentals
+                      type: quiz
+                      course_id: 40000000-0000-4000-8000-000000000001
+                      course_name: Data Structures
+                      course_code: CS201
+                      due_at: '2026-10-17T12:30:00Z'
+                      status: pending
+                      mobile_action: unavailable
+                      availability_message: Available on the website; completing this task is not supported in mobile v1.
+                      deadline_state: known
+                      deadline_message: null
+                    - id: 70000000-0000-4000-8000-000000000003
+                      title: Packet routing exercise
+                      type: coding
+                      course_id: 40000000-0000-4000-8000-000000000002
+                      course_name: Computer Networks Laboratory
+                      course_code: CS204
+                      due_at: null
+                      status: pending
+                      mobile_action: unavailable
+                      availability_message: Available on the website; completing this task is not supported in mobile v1.
+                      deadline_state: absent
+                      deadline_message: null
+                request_id: 90000000-0000-4000-8000-000000000003
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+components:
+  securitySchemes:
+    SupabaseAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth access token, verified by the SkillArc server.
+  responses:
+    Unauthorized:
+      description: Missing or invalid access token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateCache'
+    Forbidden:
+      description: Inactive account, unsupported role, missing tenant scope, or denied academic relationship
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateCache'
+    Unavailable:
+      description: Temporary upstream data lookup failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateCache'
+    InvalidSelector:
+      description: Malformed or repeated date/week selector, or date outside an authorized selected week
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/PrivateCache'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ProfileResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - request_id
+      properties:
+        data:
+          $ref: '#/components/schemas/MobilePrincipal'
+        request_id:
+          type: string
+          format: uuid
+    MobilePrincipal:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - role
+        - organization_id
+        - institution_id
+        - department_id
+        - name
+        - email
+        - profile_image_url
+        - features
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+            - STUDENT
+            - PARENT
+            - FACULTY
+        organization_id:
+          type: string
+          format: uuid
+        institution_id:
+          type: string
+          format: uuid
+        department_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        profile_image_url:
+          type: string
+          nullable: true
+        features:
+          type: array
+          items:
+            type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+        - request_id
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        request_id:
+          type: string
+          format: uuid
+    AcademicNamedSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+    AcademicContext:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - program
+        - section
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+            - no_enrollment
+            - no_section
+        program:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - name
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              nullable: true
+          nullable: true
+        section:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - name
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+              nullable: true
+          nullable: true
+    AcademicCourse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - code
+        - type
+        - faculty
+        - programs
+        - sections
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          nullable: true
+        code:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum:
+            - THEORY
+            - LAB
+            - ELECTIVE
+            - null
+          nullable: true
+        faculty:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcademicNamedSummary'
+        programs:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcademicNamedSummary'
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/AcademicNamedSummary'
+    AcademicWeek:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - section_id
+        - week_number
+        - title
+        - start_date
+        - end_date
+      properties:
+        id:
+          type: string
+          format: uuid
+        section_id:
+          type: string
+          format: uuid
+        week_number:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+    AcademicSession:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - period
+        - course_id
+        - course_name
+        - course_code
+        - faculty_name
+        - time_label
+        - room
+        - delivery_mode
+        - state
+      properties:
+        id:
+          type: string
+          format: uuid
+        period:
+          type: integer
+        course_id:
+          type: string
+          format: uuid
+        course_name:
+          type: string
+          nullable: true
+        course_code:
+          type: string
+          nullable: true
+        faculty_name:
+          type: string
+          nullable: true
+        time_label:
+          type: string
+          nullable: true
+        room:
+          type: string
+          nullable: true
+        delivery_mode:
+          type: string
+          enum:
+            - ON_CAMPUS
+            - ONLINE
+            - HYBRID
+            - null
+          nullable: true
+        state:
+          type: string
+          enum:
+            - scheduled
+            - timings_unavailable
+    AcademicClosure:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - start_date
+        - end_date
+        - affects_classes
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        affects_classes:
+          type: boolean
+    AcademicNextClass:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+        - session_id
+      properties:
+        state:
+          type: string
+          enum:
+            - scheduled
+            - none
+            - timings_unavailable
+            - time_zone_unavailable
+        session_id:
+          type: string
+          format: uuid
+          nullable: true
+    AcademicTask:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - type
+        - course_id
+        - course_name
+        - course_code
+        - due_at
+        - deadline_state
+        - deadline_message
+        - status
+        - mobile_action
+        - availability_message
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        type:
+          type: string
+          enum:
+            - assignment
+            - quiz
+            - coding
+        course_id:
+          type: string
+          format: uuid
+        course_name:
+          type: string
+          nullable: true
+        course_code:
+          type: string
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        deadline_state:
+          type: string
+          enum:
+            - known
+            - absent
+            - ambiguous
+        deadline_message:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - pending
+            - overdue
+        mobile_action:
+          type: string
+          enum:
+            - unavailable
+        availability_message:
+          type: string
+    StudentCoursesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - request_id
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - context
+            - courses
+          properties:
+            context:
+              $ref: '#/components/schemas/AcademicContext'
+            courses:
+              type: array
+              items:
+                $ref: '#/components/schemas/AcademicCourse'
+        request_id:
+          type: string
+          format: uuid
+    StudentTimetableResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - request_id
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - context
+            - date
+            - today
+            - time_zone
+            - time_zone_status
+            - multiweek_enabled
+            - weeks
+            - selected_week_id
+            - sessions
+            - closures
+            - next_class
+            - empty_reason
+          properties:
+            context:
+              $ref: '#/components/schemas/AcademicContext'
+            date:
+              type: string
+              format: date
+              nullable: true
+            today:
+              type: string
+              format: date
+              nullable: true
+            time_zone:
+              type: string
+              nullable: true
+            time_zone_status:
+              type: string
+              enum:
+                - ready
+                - invalid
+                - unconfigured
+            multiweek_enabled:
+              type: boolean
+            weeks:
+              type: array
+              items:
+                $ref: '#/components/schemas/AcademicWeek'
+            selected_week_id:
+              type: string
+              format: uuid
+              nullable: true
+            sessions:
+              type: array
+              items:
+                $ref: '#/components/schemas/AcademicSession'
+            closures:
+              type: array
+              items:
+                $ref: '#/components/schemas/AcademicClosure'
+            next_class:
+              $ref: '#/components/schemas/AcademicNextClass'
+            empty_reason:
+              type: string
+              enum:
+                - no_enrollment
+                - no_section
+                - time_zone_unavailable
+                - academic_closure
+                - no_week
+                - no_classes
+                - null
+              nullable: true
+        request_id:
+          type: string
+          format: uuid
+    StudentTasksResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - data
+        - request_id
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required:
+            - context
+            - as_of
+            - tasks
+          properties:
+            context:
+              $ref: '#/components/schemas/AcademicContext'
+            as_of:
+              type: string
+              format: date-time
+            tasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/AcademicTask'
+        request_id:
+          type: string
+          format: uuid
+  headers:
+    RequestId:
+      description: Same value as request_id in the response body.
+      schema:
+        type: string
+        format: uuid
+    PrivateCache:
+      description: Academic data and errors are never cacheable.
+      schema:
+        type: string
+        enum:
+          - private, no-store

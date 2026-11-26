@@ -1,0 +1,1657 @@
+"use client"
+
+import { errorMessage as readErrorMessage } from "@/lib/error-message"
+
+import React, { useState, useEffect, useRef } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import {
+  ArrowLeft,
+  Play,
+  Terminal,
+  Clock,
+  FileCode2,
+  CheckCircle2,
+  FileText,
+  X,
+  BookOpen,
+  Brain,
+  Download,
+  Loader2,
+  Send,
+  AlertTriangle,
+  Award,
+  Book,
+  FileCheck,
+  Paperclip,
+  CheckCircle,
+  Shield,
+  ShieldAlert,
+  Maximize,
+  Lock,
+  AlertOctagon,
+  Sparkles,
+  Check,
+  ChevronRight,
+  Eye,
+  RotateCcw
+} from "lucide-react"
+
+import { submitAssignmentAction } from "@/app/actions/assignments"
+import { supabase } from "@/lib/supabase"
+import { getPrivateStorageHref, makePrivateStorageReference, parsePrivateStoragePath } from "@/lib/private-storage"
+import type { TableRow } from "@/lib/database-row"
+
+type StudentQuizQuestion = { q: string; options: string[] }
+type AssignmentForClient = Omit<TableRow<"assignments">, "questions" | "test_cases"> & {
+  questions: StudentQuizQuestion[] | null
+  test_cases: null
+}
+type SubmissionForClient = Omit<TableRow<"submissions">, "quiz_answers"> & {
+  quiz_answers: number[] | null
+}
+type AssignmentKind = "Assignment" | "Quiz" | "Coding Assignment" | "Material" | "Syllabus"
+type FullscreenElement = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void
+  msRequestFullscreen?: () => Promise<void> | void
+}
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null
+  mozFullScreenElement?: Element | null
+  msFullscreenElement?: Element | null
+}
+
+function isAssignmentKind(value: string | null): value is AssignmentKind {
+  return value === "Assignment" || value === "Quiz" || value === "Coding Assignment" || value === "Material" || value === "Syllabus"
+}
+
+interface StudentAssignmentSolveClientProps {
+  studentId: string
+  studentName: string
+  subjectId: string
+  assignment: AssignmentForClient
+  initialSubmission: SubmissionForClient | null
+}
+
+const LANGUAGES = [
+  { id: "python", label: "Python", ext: ".py", color: "#3572A5" },
+  { id: "javascript", label: "JavaScript", ext: ".js", color: "#f1e05a" },
+  { id: "java", label: "Java", ext: ".java", color: "#b07219" },
+  { id: "cpp", label: "C++", ext: ".cpp", color: "#f34b7d" },
+]
+
+const LANG_TEMPLATES: Record<string, string> = {
+  python: `def solve():\n    # Write your solution here\n    print("Hello, World!")\n\nsolve()`,
+  javascript: `function solve() {\n    // Write your solution here\n    console.log("Hello, World!");\n}\n\nsolve();`,
+  java: `public class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n        System.out.println("Hello, World!");\n    }\n}`,
+  cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    cout << "Hello, World!" << endl;\n    return 0;\n}`,
+}
+
+function parseExplicitInstant(value: string | null | undefined): Date | null {
+  if (!value || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+interface ToastState {
+  message: string
+  type: "success" | "error" | "warning" | "info"
+  id: number
+}
+
+interface ConfirmModalState {
+  isOpen: boolean
+  title: string
+  message: string
+  confirmLabel?: string
+  onConfirm: () => void
+}
+
+export function StudentAssignmentSolveClient({
+  studentId,
+  studentName,
+  subjectId,
+  assignment,
+  initialSubmission,
+}: StudentAssignmentSolveClientProps) {
+  const router = useRouter()
+  const [submission, setSubmission] = useState<SubmissionForClient | null>(initialSubmission)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [currentTimeMs, setCurrentTimeMs] = useState<number | null>(null)
+
+  useEffect(() => {
+    const initialTimer = window.setTimeout(() => setCurrentTimeMs(Date.now()), 0)
+    const clockTimer = window.setInterval(() => setCurrentTimeMs(Date.now()), 30_000)
+    return () => {
+      window.clearTimeout(initialTimer)
+      window.clearInterval(clockTimer)
+    }
+  }, [])
+
+  // A deadline is actionable only when it carries an explicit UTC offset.
+  // Timezone-less legacy values are shown as unavailable and never treated as overdue.
+  const deadlineInstant = parseExplicitInstant(assignment.due_date)
+  const isPastDueDate = Boolean(
+    deadlineInstant && currentTimeMs !== null && currentTimeMs - deadlineInstant.getTime() > 60000
+  )
+
+  // In-app UI Toast and Confirm States
+  const [toast, setToast] = useState<ToastState | null>(null)
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState | null>(null)
+
+  const showToast = (message: string, type: "success" | "error" | "warning" | "info" = "success") => {
+    setToast({ message, type, id: Date.now() })
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  // Standard assignment state
+  const [textAnswer, setTextAnswer] = useState("")
+  const [fileUrl, setFileUrl] = useState("")
+  const [dragOver, setDragOver] = useState(false)
+  const [isUploadingFile, setIsUploadingFile] = useState(false)
+  const [fileName, setFileName] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const MAX_FILE_SIZE_MB = 50
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+  const uploadFileToSupabase = async (file: File) => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this assignment has passed.", "error")
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      showToast(`File "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds maximum limit of ${MAX_FILE_SIZE_MB}MB.`, "error")
+      return
+    }
+
+    if (typeof window !== "undefined" && !window.navigator.onLine) {
+      showToast("Network offline. Please check your internet connection and try again.", "error")
+      return
+    }
+
+    setIsUploadingFile(true)
+    setFileName(file.name)
+    try {
+      const bucketName = "assignments"
+      const filePath = `${studentId}/${Date.now()}_${file.name}`
+      
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file)
+
+      if (error) {
+        throw error
+      }
+
+      setFileUrl(makePrivateStorageReference("assignments", filePath))
+      showToast("File uploaded successfully!", "success")
+    } catch (err: unknown) {
+      if (typeof window !== "undefined" && !window.navigator.onLine) {
+        showToast("Network disconnected during file upload. Please check your connection.", "error")
+      } else {
+        console.warn("Storage upload failed:", readErrorMessage(err))
+        setFileUrl("")
+        showToast("File upload failed. Please try again.", "error")
+      }
+    } finally {
+      setIsUploadingFile(false)
+    }
+  }
+
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline has passed.", "error")
+      return
+    }
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      uploadFileToSupabase(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline has passed.", "error")
+      return
+    }
+    if (e.target.files && e.target.files[0]) {
+      uploadFileToSupabase(e.target.files[0])
+    }
+  }
+
+  // Coding states
+  const [lang, setLang] = useState(assignment.language || "python")
+  const [code, setCode] = useState(() => {
+    return initialSubmission?.code_content || LANG_TEMPLATES[assignment.language || "python"] || LANG_TEMPLATES.python
+  })
+  const [consoleLogs, setConsoleLogs] = useState<string[]>([
+    "Code execution is unavailable in this app.",
+    "You can submit your solution for instructor review."
+  ])
+  const [isResubmitting, setIsResubmitting] = useState(false)
+
+  // Quiz states & Anti-Cheat Proctoring States
+  const [quizAnswers, setQuizAnswers] = useState<number[]>(() => {
+    if (initialSubmission?.quiz_answers) return initialSubmission.quiz_answers
+    return Array(assignment.questions?.length || 0).fill(-1)
+  })
+  const quizAnswersRef = useRef<number[]>(quizAnswers)
+  useEffect(() => {
+    quizAnswersRef.current = quizAnswers
+  }, [quizAnswers])
+
+  const [isQuizStarted, setIsQuizStarted] = useState(() => Boolean(initialSubmission))
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [violationCount, setViolationCount] = useState(0)
+  const [isViolationModalOpen, setIsViolationModalOpen] = useState(false)
+  const [violationReason, setViolationReason] = useState("")
+  const [isExitedFullscreenModalOpen, setIsExitedFullscreenModalOpen] = useState(false)
+  const lastViolationTimeRef = useRef<number>(0)
+  const MAX_VIOLATIONS = 3
+
+  const [quizTimeLeft, setQuizTimeLeft] = useState<number | null>(() => {
+    if (initialSubmission) return null
+    if (assignment.type === "Quiz" && assignment.questions?.length) {
+      // 10 minutes default if not specified
+      return 10 * 60
+    }
+    return null
+  })
+
+  const violationCountRef = useRef(0)
+
+  // Timer loop for quiz
+  useEffect(() => {
+    if (!isQuizStarted || quizTimeLeft === null || quizTimeLeft <= 0 || submission) return
+    const timer = setInterval(() => {
+      setQuizTimeLeft(prev => {
+        if (prev === null) return null
+        if (prev <= 1) {
+          clearInterval(timer)
+          setTimeout(() => {
+            handleAutoSubmitQuiz()
+          }, 0)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [isQuizStarted, quizTimeLeft, submission])
+
+  // Fullscreen Request Helper
+  const requestExamFullscreen = async () => {
+    try {
+      const elem = document.documentElement as FullscreenElement
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen()
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen()
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen()
+      }
+      setIsFullscreen(true)
+      setIsExitedFullscreenModalOpen(false)
+    } catch (err) {
+      console.warn("Fullscreen request error:", err)
+      showToast("Please allow fullscreen mode to take this secure exam.", "warning")
+    }
+  }
+
+  // Record Violation Function (Tab switch / App blur / Fullscreen exit)
+  const recordViolation = (reason: string) => {
+    if (!isQuizStarted || submission || isSubmitting) return
+
+    const now = Date.now()
+    if (now - lastViolationTimeRef.current < 1500) return
+    lastViolationTimeRef.current = now
+
+    const nextCount = violationCountRef.current + 1
+    violationCountRef.current = nextCount
+    setViolationCount(nextCount)
+
+    if (nextCount >= MAX_VIOLATIONS) {
+      setIsViolationModalOpen(false)
+      setIsExitedFullscreenModalOpen(false)
+      showToast("⚠️ Security Breach: 3 violations recorded. Your exam is being automatically submitted.", "error")
+      setTimeout(() => {
+        performQuizSubmit(quizAnswersRef.current, true)
+      }, 0)
+    } else {
+      setViolationReason(reason)
+      setIsViolationModalOpen(true)
+    }
+  }
+
+  // 1. Fullscreen Change Listener
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const onFullscreenChange = () => {
+      const inFull = Boolean(
+        document.fullscreenElement ||
+        (document as FullscreenDocument).webkitFullscreenElement ||
+        (document as FullscreenDocument).mozFullScreenElement ||
+        (document as FullscreenDocument).msFullscreenElement
+      )
+      setIsFullscreen(inFull)
+      if (!inFull && !submission) {
+        setIsExitedFullscreenModalOpen(true)
+        recordViolation("Exited Fullscreen mode during an active exam.")
+      }
+    }
+
+    document.addEventListener("fullscreenchange", onFullscreenChange)
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange)
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange)
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 2. Tab Visibility & Window Focus (Blur) Monitor
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordViolation("Switched to another tab or minimized browser window.")
+      }
+    }
+
+    const handleWindowBlur = () => {
+      // Focus left the browser window (user opened another app or clicked outside)
+      recordViolation("Focus lost from exam window (switched to another desktop application).")
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("blur", handleWindowBlur)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("blur", handleWindowBlur)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 3. Prevent Keyboard Shortcuts & DevTools
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey
+
+      // Block F12, DevTools (Ctrl/Cmd+Shift+I, J, C), View Source (Ctrl/Cmd+U)
+      if (
+        e.key === "F12" ||
+        (isCtrlOrCmd && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key)) ||
+        (isCtrlOrCmd && ["u", "U"].includes(e.key))
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Developer tools and inspect shortcuts are disabled during exams.", "warning")
+        return
+      }
+
+      // Block New Tab (Ctrl/Cmd+T), New Window (Ctrl/Cmd+N), Close Tab (Ctrl/Cmd+W)
+      if (isCtrlOrCmd && ["t", "T", "n", "N", "w", "W"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Opening new tabs or windows is blocked during exams.", "warning")
+        return
+      }
+
+      // Block Print (Ctrl/Cmd+P), Save (Ctrl/Cmd+S)
+      if (isCtrlOrCmd && ["p", "P", "s", "S"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Printing and saving are disabled during exams.", "warning")
+        return
+      }
+
+      // Block Copy / Paste / Cut (Ctrl/Cmd + C, V, X)
+      if (isCtrlOrCmd && ["c", "C", "v", "V", "x", "X"].includes(e.key)) {
+        e.preventDefault()
+        e.stopPropagation()
+        showToast("Copying and pasting are disabled during exams.", "warning")
+        return
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, true)
+    }
+  }, [assignment.type, isQuizStarted, submission])
+
+  // 4. BeforeUnload Listener
+  useEffect(() => {
+    if (assignment.type !== "Quiz" || !isQuizStarted || submission) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = "Are you sure you want to leave? Your exam progress will be lost or submitted."
+      return e.returnValue
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [assignment.type, isQuizStarted, submission])
+
+  // Start Quiz Handler
+  const handleStartQuiz = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions are closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+    await requestExamFullscreen()
+    setIsQuizStarted(true)
+    showToast("🛡️ Secure Lockdown Mode activated. All tabs and external apps must remain closed.", "info")
+  }
+
+  async function performQuizSubmit(answersToSubmit: number[], isAuto = false) {
+    if (isPastDueDate && !submission) {
+      showToast("Submissions closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+
+    setIsSubmitting(true)
+    const res = await submitAssignmentAction({
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: null,
+      quiz_answers: answersToSubmit,
+      code_content: null,
+      language: null,
+      subject_id: subjectId,
+    })
+    setIsSubmitting(false)
+    if (res.success) {
+      const newSub = {
+        id: res.submissionId || Date.now().toString(),
+        assignment_id: assignment.id,
+        student_id: studentId,
+        file_url: null,
+        quiz_answers: answersToSubmit,
+        code_content: null,
+        language: null,
+        grade: res.grade ?? null,
+        feedback: null,
+        status: res.status ?? "submitted",
+        submitted_at: new Date().toISOString(),
+      }
+      setSubmission(newSub)
+      setQuizTimeLeft(null)
+      setIsQuizStarted(false)
+
+      // Exit fullscreen if active
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try {
+          document.exitFullscreen()
+        } catch {
+          // ignore
+        }
+      }
+
+      if (isAuto) {
+        showToast("Time is up! Your quiz has been submitted and graded.", "info")
+      } else {
+        showToast(`Quiz submitted successfully. Score: ${res.grade ?? "Pending"}/${assignment.max_score || "—"}.`, "success")
+      }
+      router.refresh()
+    } else {
+      showToast("Error submitting quiz: " + res.error, "error")
+    }
+  }
+
+  async function handleAutoSubmitQuiz() {
+    performQuizSubmit(quizAnswersRef.current, true)
+  }
+
+  const handleManualSubmitQuiz = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this quiz has passed.", "error")
+      return
+    }
+
+    if (quizAnswers.includes(-1)) {
+      setConfirmModal({
+        isOpen: true,
+        title: "Unanswered Questions",
+        message: "You have unanswered questions in this quiz. Are you sure you want to submit your answers now?",
+        confirmLabel: "Submit Anyway",
+        onConfirm: () => performQuizSubmit(quizAnswers, false),
+      })
+    } else {
+      setConfirmModal({
+        isOpen: true,
+        title: "Submit Quiz",
+        message: "Are you ready to submit your quiz? Answers will be evaluated immediately.",
+        confirmLabel: "Submit Quiz",
+        onConfirm: () => performQuizSubmit(quizAnswers, false),
+      })
+    }
+  }
+
+  // Standard Upload submission handler
+  const handleUploadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this assignment has passed.", "error")
+      return
+    }
+
+    if (!fileUrl.trim() && !textAnswer.trim()) {
+      showToast("Please provide a text response or attach a file URL.", "warning")
+      return
+    }
+
+    setIsSubmitting(true)
+    const res = await submitAssignmentAction({
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: fileUrl.trim() || null,
+      quiz_answers: null,
+      code_content: textAnswer.trim() || null,
+      language: "text",
+      subject_id: subjectId,
+    })
+    setIsSubmitting(false)
+    if (res.success) {
+      const newSub = {
+        id: (res).submissionId || Date.now().toString(),
+        assignment_id: assignment.id,
+        student_id: studentId,
+        file_url: fileUrl.trim() || null,
+        quiz_answers: null,
+        code_content: textAnswer.trim() || null,
+        language: "text",
+        grade: null,
+        feedback: null,
+        status: "pending",
+        submitted_at: new Date().toISOString(),
+      }
+      setSubmission(newSub)
+      setIsResubmitting(false)
+      showToast("✨ Assignment submitted successfully!", "success")
+      router.refresh()
+    } else {
+      showToast("Error submitting: " + res.error, "error")
+    }
+  }
+
+  // Code execution is intentionally unavailable until an isolated execution service exists.
+  const handleRunCode = () => {
+    showToast("Code execution is unavailable. You can still submit your work for instructor review.", "info")
+  }
+
+  const performCodeSubmit = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this coding assignment has passed.", "error")
+      return
+    }
+
+    if (!code || !code.trim()) {
+      showToast("Cannot submit empty code. Please write your solution before submitting.", "error")
+      return
+    }
+
+    setIsSubmitting(true)
+    const res = await submitAssignmentAction({
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: null,
+      quiz_answers: null,
+      code_content: code,
+      language: lang,
+      subject_id: subjectId,
+    })
+    setIsSubmitting(false)
+
+    if (!res.success) {
+      showToast("Error submitting: " + res.error, "error")
+      return
+    }
+
+    setSubmission({
+      id: res.submissionId || Date.now().toString(),
+      assignment_id: assignment.id,
+      student_id: studentId,
+      file_url: null,
+      quiz_answers: null,
+      code_content: code,
+      language: lang,
+      grade: null,
+      feedback: null,
+      status: "pending",
+      submitted_at: new Date().toISOString(),
+    })
+    setIsResubmitting(false)
+    showToast("Code submitted for instructor review. Automated execution is unavailable.", "success")
+    router.refresh()
+  }
+
+  const handleSubmitCode = async () => {
+    if (isPastDueDate) {
+      showToast("Submissions closed: The deadline for this coding assignment has passed.", "error")
+      return
+    }
+
+    // Validate empty code upfront (CODE-020)
+    if (!code || !code.trim()) {
+      showToast("Cannot submit empty code. Please write your solution before submitting.", "error")
+      return
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Submit Code Solution?",
+      message: "Your code will be sent to your instructor for review. Automated code execution is unavailable.",
+      confirmLabel: "Submit for Review",
+      onConfirm: performCodeSubmit,
+    })
+  }
+
+  // Quiz UI elements
+  const formatTimer = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`
+  }
+
+  const formatDueDate = (dueDate: string | null) => {
+    if (!dueDate) return "No due date"
+    const d = parseExplicitInstant(dueDate)
+    if (!d) return "Deadline unavailable"
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+  }
+
+  const activeType = typeConfig[isAssignmentKind(assignment.type) ? assignment.type : "Assignment"]
+  const TypeIcon = activeType.icon
+
+  return (
+    <div className={`min-h-screen bg-slate-50 flex flex-col font-sans relative ${assignment.type === "Quiz" && isQuizStarted && !submission ? "select-none" : ""}`}>
+      {/* In-App Floating Toast Notification */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${
+            toast.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-900"
+              : toast.type === "error"
+              ? "bg-rose-50/95 border-rose-200 text-rose-900"
+              : toast.type === "warning"
+              ? "bg-amber-50/95 border-amber-200 text-amber-900"
+              : "bg-indigo-50/95 border-indigo-200 text-indigo-900"
+          }`}>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              toast.type === "success"
+                ? "bg-emerald-100 text-emerald-700"
+                : toast.type === "error"
+                ? "bg-rose-100 text-rose-700"
+                : toast.type === "warning"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {toast.type === "success" ? (
+                <CheckCircle2 size={18} />
+              ) : toast.type === "error" ? (
+                <AlertTriangle size={18} />
+              ) : toast.type === "warning" ? (
+                <AlertTriangle size={18} />
+              ) : (
+                <Brain size={18} />
+              )}
+            </div>
+            <div className="text-xs font-bold leading-snug max-w-sm">
+              {toast.message}
+            </div>
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-lg hover:bg-black/5 text-slate-400 hover:text-slate-700 transition-colors ml-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Confirmation Modal Dialog */}
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-base">{confirmModal.title}</h3>
+                <p className="text-xs text-slate-400 font-medium">Confirmation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-normal">
+              {confirmModal.message}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const onConfirm = confirmModal.onConfirm
+                  setConfirmModal(null)
+                  onConfirm()
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+              >
+                {confirmModal.confirmLabel || "Confirm & Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Security Violation Modal (Anti-Cheat Strike) */}
+      {isViolationModalOpen && !submission && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-rose-950/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-rose-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200 text-left">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 border border-rose-200 shadow-sm">
+                <ShieldAlert size={28} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-800 bg-rose-100 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                    Security Violation Detected
+                  </span>
+                  <span className="text-xs font-extrabold text-rose-600 font-mono">
+                    Strike {violationCount} / {MAX_VIOLATIONS}
+                  </span>
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-lg mt-1 font-['Plus_Jakarta_Sans']">
+                  Exam Proctoring Warning
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Focus was lost from the active exam window.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 text-xs text-rose-950 space-y-2">
+              <div className="font-bold flex items-center gap-1.5">
+                <AlertOctagon size={14} className="text-rose-600 shrink-0" />
+                <span>Violation Triggered:</span>
+              </div>
+              <p className="text-rose-800 italic">&quot;{violationReason}&quot;</p>
+              <p className="font-semibold text-rose-900 pt-1 border-t border-rose-200/60">
+                All external browser tabs, background applications, Discord, ChatGPT, IDEs, and notes must remain closed.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900 flex items-center gap-2">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              <span>
+                {MAX_VIOLATIONS - violationCount > 0
+                  ? `Warning: Reaching ${MAX_VIOLATIONS} strikes will immediately auto-submit and lock your exam.`
+                  : "Maximum strikes reached. Auto-submitting quiz..."}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsViolationModalOpen(false)
+                  requestExamFullscreen()
+                }}
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-extrabold rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <Check size={14} /> I Understand & Return to Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Required Modal */}
+      {isExitedFullscreenModalOpen && !submission && !isViolationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-amber-200 shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-14 h-14 rounded-3xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto shadow-sm">
+              <Maximize size={28} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-lg font-['Plus_Jakarta_Sans']">
+                Fullscreen Mode Required
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                You have exited fullscreen. To preserve academic integrity, this exam must be taken in active full-screen mode.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={requestExamFullscreen}
+              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 text-white font-extrabold rounded-2xl text-xs shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Maximize size={15} /> Return to Fullscreen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Header Bar */}
+      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-3">
+          {(!isQuizStarted || Boolean(submission)) && (
+            <Link href={`/dashboard/student/subjects/${subjectId}`} className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-xl transition-all mr-1">
+              <ArrowLeft size={18} />
+            </Link>
+          )}
+          <div className={`w-8 h-8 rounded-lg ${activeType.bg} ${activeType.color} flex items-center justify-center flex-shrink-0`}>
+            <TypeIcon size={16} />
+          </div>
+          <div>
+            <h1 className="font-extrabold text-slate-800 text-sm leading-none">{assignment.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span className="text-[10px] text-slate-400 font-bold uppercase font-['Space_Grotesk']">
+                Coursework • Due {formatDueDate(assignment.due_date)}
+              </span>
+              {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-[10px] font-extrabold text-[#E57D37] bg-orange-50 border border-orange-200/60 px-2 py-0.5 rounded-md font-['Space_Grotesk'] flex items-center gap-1">
+                    <Award size={11} className="text-[#E57D37]" /> Max Marks: {assignment.max_score || 100}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Timer / Proctoring Status / Submission Pill */}
+        <div className="flex items-center gap-3">
+          {/* Active Quiz Proctoring HUD */}
+          {assignment.type === "Quiz" && isQuizStarted && !submission && (
+            <>
+              {/* Lockdown Pill */}
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>Lockdown Active</span>
+              </div>
+
+              {/* Strikes Counter */}
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono border ${
+                violationCount === 0
+                  ? "bg-slate-50 border-slate-200 text-slate-700"
+                  : violationCount === 1
+                  ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-rose-50 border-rose-200 text-rose-700 animate-pulse"
+              }`}>
+                <ShieldAlert size={14} />
+                <span>Strikes: {violationCount}/{MAX_VIOLATIONS}</span>
+              </div>
+
+              {/* Timer */}
+              {quizTimeLeft !== null && (
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-mono ${
+                  quizTimeLeft < 60 ? "bg-red-50 text-red-600 animate-pulse border border-red-200" : "bg-slate-100 text-slate-700"
+                }`}>
+                  <Clock size={14} />
+                  {formatTimer(quizTimeLeft)}
+                </div>
+              )}
+            </>
+          )}
+
+          {submission ? (
+            <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
+              <CheckCircle2 size={14} /> Submitted
+            </span>
+          ) : isPastDueDate ? (
+            <span className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-extrabold px-3 py-1.5 rounded-xl flex items-center gap-1">
+              <AlertOctagon size={13} /> Submissions Closed
+            </span>
+          ) : (
+            assignment.type !== "Material" && !isQuizStarted && (
+              <span className="bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold px-3 py-1.5 rounded-xl">
+                Status: Pending
+              </span>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Main Body */}
+      {assignment.type === "Material" ? (
+        // Material View
+        <div className="flex-1 max-w-3xl w-full mx-auto p-8 space-y-6">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div className="flex items-center gap-3 border-b pb-4">
+              <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
+                <BookOpen size={24} />
+              </div>
+              <div>
+                <h2 className="font-extrabold text-slate-800 text-lg">{assignment.title}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Reference Material posted by your teacher</p>
+              </div>
+            </div>
+            <div className="text-slate-600 text-sm font-normal leading-relaxed whitespace-pre-wrap">
+              {assignment.description || "No material descriptions available."}
+            </div>
+
+            {assignment.files && assignment.files.length > 0 && (
+              <div className="pt-4 border-t border-slate-100 space-y-2 text-left">
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Coursework Attachments</h4>
+                <div className="space-y-1.5">
+                  {assignment.files.map((file: string, idx: number) => {
+                    const name = file.substring(file.lastIndexOf("/") + 1)
+                    return (
+                      <a
+                        key={idx}
+                        href={getPrivateStorageHref(file, "assignments") ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-700 transition-all"
+                      >
+                        <FileText size={14} className="text-indigo-500" />
+                        <span className="truncate flex-1">{name}</span>
+                        <Download size={12} className="text-slate-400" />
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : assignment.type === "Quiz" && !submission && !isQuizStarted ? (
+        // Pre-Quiz Proctoring & Security Briefing Screen
+        <div className="flex-1 max-w-4xl w-full mx-auto p-6 sm:p-10 space-y-6">
+          {/* Past Due Banner if expired */}
+          {isPastDueDate && (
+            <div className="rounded-3xl border border-rose-300 bg-rose-50 p-5 text-rose-950 flex items-start gap-4 shadow-sm">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                <AlertOctagon size={22} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-sm">Quiz Deadline Passed</h3>
+                <p className="text-xs text-rose-800 leading-relaxed">
+                  The deadline for this quiz was <strong>{formatDueDate(assignment.due_date)}</strong>. Submissions are permanently closed and new attempts cannot be started.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Proctoring Card */}
+          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 text-[#6C63FF] flex items-center justify-center shrink-0 shadow-sm">
+                  <Brain size={28} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
+                      Proctored Exam
+                    </span>
+                    <span className="text-xs font-bold text-slate-400 font-mono">
+                      {assignment.questions?.length || 0} Questions • 10 Minutes
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 mt-1 font-['Plus_Jakarta_Sans']">
+                    {assignment.title}
+                  </h2>
+                </div>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Max Score</span>
+                <span className="text-2xl font-black text-slate-900 font-['Space_Grotesk']">{assignment.max_score || assignment.questions?.length || 100}</span>
+              </div>
+            </div>
+
+            {/* Exam Description */}
+            <div className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              {assignment.description || "Answer all questions below. Your answers will be automatically evaluated upon submission."}
+            </div>
+
+            {/* 4 Proctoring Rules Grid */}
+            <div className="space-y-3 pt-2">
+              <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Shield size={15} className="text-[#6C63FF]" /> Strict Exam Proctoring Guidelines
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Maximize size={15} className="text-indigo-600" />
+                    <span>1. Forced Fullscreen Mode</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    The quiz must be completed in full-screen mode. Exiting fullscreen triggers a security strike.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <ShieldAlert size={15} className="text-amber-600" />
+                    <span>2. Zero Tab & App Switching</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Switching browser tabs or opening external applications (Discord, ChatGPT, IDE, Notes) is strictly monitored.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <AlertOctagon size={15} className="text-rose-600" />
+                    <span>3. 3-Strike Auto-Submission</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Reaching 3 security strikes will terminate the exam immediately and submit your current answers.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Lock size={15} className="text-teal-600" />
+                    <span>4. Keys & Clipboard Locked</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Copying questions, pasting text, right-click inspect, and browser shortcuts are disabled during the session.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Launch Quiz Action */}
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <p className="text-xs text-slate-500">
+                Ensure you have a stable connection and all background apps are closed before starting.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleStartQuiz}
+                disabled={isPastDueDate}
+                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-[#6C63FF] via-indigo-600 to-[#8B5CF6] hover:opacity-95 text-white font-extrabold rounded-2xl text-xs shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+              >
+                {isPastDueDate ? (
+                  <>
+                    <AlertOctagon size={15} /> Submissions Closed
+                  </>
+                ) : (
+                  <>
+                    <Maximize size={15} /> Enter Fullscreen & Start Quiz
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Interactive Solve Layout (Standard, Coding, or Active Quiz)
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+          {/* Left panel: Worksheet description */}
+          <div className="w-full md:w-1/2 p-6 sm:p-8 border-r border-slate-200 overflow-y-auto bg-slate-50 space-y-6 text-left">
+            {/* Past Due Warning Banner */}
+            {isPastDueDate && !submission && (
+              <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-xs font-bold text-rose-900 flex items-start gap-3">
+                <AlertOctagon size={18} className="text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="block font-black">Submission Deadline Passed</span>
+                  <p className="font-normal text-rose-700 mt-0.5">
+                    The due date for this assignment was {formatDueDate(assignment.due_date)}. Submissions are closed.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="font-extrabold text-slate-800 text-base">Coursework Instructions</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Carefully review the guidelines before submitting your work.</p>
+                </div>
+                {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                  <div className="px-3.5 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl text-amber-900 font-extrabold text-xs flex items-center gap-2 font-['Space_Grotesk'] shadow-sm shrink-0">
+                    <Award size={16} className="text-[#E57D37]" />
+                    <span>Max Marks: <strong className="text-sm font-black text-slate-900">{assignment.max_score || 100}</strong></span>
+                  </div>
+                )}
+              </div>
+
+              {/* Assignment Overview Metadata Card */}
+              {assignment.type !== "Material" && assignment.type !== "Syllabus" && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Marks</span>
+                    <span className="text-sm font-extrabold text-slate-900 font-['Space_Grotesk'] flex items-center gap-1">
+                      <Award size={14} className="text-[#E57D37]" /> {assignment.max_score || 100} Marks
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Deadline</span>
+                    <span className="text-xs font-bold text-slate-700 font-['Space_Grotesk'] truncate block">
+                      {formatDueDate(assignment.due_date)}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status</span>
+                    <span className={`text-xs font-bold font-['Space_Grotesk'] ${submission ? (submission.status === 'graded' ? 'text-indigo-700' : 'text-emerald-700') : isPastDueDate ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {submission ? (submission.status === 'graded' ? `Graded (${submission.grade}/${assignment.max_score || 100})` : 'Submitted') : isPastDueDate ? 'Closed (Overdue)' : 'Pending Submission'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-slate-600 text-xs font-normal leading-relaxed whitespace-pre-wrap">
+                {assignment.description || "Solve the questions below and upload your implementation."}
+              </div>
+
+              {assignment.files && assignment.files.length > 0 && (
+                <div className="pt-4 border-t border-slate-100 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Coursework Attachments</h4>
+                  <div className="space-y-1.5">
+                    {assignment.files.map((file: string, idx: number) => {
+                      const name = file.substring(file.lastIndexOf("/") + 1)
+                      return (
+                        <a
+                          key={idx}
+                          href={getPrivateStorageHref(file, "assignments") ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-700 transition-all text-left"
+                        >
+                          <FileText size={14} className="text-indigo-500" />
+                          <span className="truncate flex-1 text-xs">{name}</span>
+                          <Download size={12} className="text-slate-400" />
+                        </a>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Grading feedback if graded */}
+            {submission?.status === "graded" && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-6 shadow-sm space-y-3">
+                <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
+                  <Award size={18} />
+                  <span>Evaluation Grade</span>
+                </div>
+                <div className="text-3xl font-extrabold text-emerald-950 font-mono">
+                  {submission.grade} <span className="text-sm font-normal text-emerald-600">/ {assignment.max_score}</span>
+                </div>
+                {submission.feedback && (
+                  <div className="pt-2 border-t border-emerald-200/50">
+                    <span className="text-[10px] uppercase font-bold text-emerald-600">Faculty Feedback</span>
+                    <p className="text-xs text-emerald-800 mt-1 font-medium italic">&quot;{submission.feedback}&quot;</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Right panel: Solve Input */}
+          <div className="w-full md:w-1/2 p-6 sm:p-8 overflow-y-auto bg-white text-left">
+            {submission && !isResubmitting && assignment.type !== "Quiz" ? (
+              // Already submitted standard or coding
+              <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-3xl border border-slate-200 min-h-[320px] space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <FileCheck className="w-8 h-8 text-emerald-500" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-800 text-base">Submission Recorded Successfully!</h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                    Your solution was submitted on {submission.submitted_at ? new Date(submission.submitted_at).toLocaleString("en-IN") : "the recorded date is unavailable"}.
+                  </p>
+                </div>
+                {submission.file_url && (
+                  <a
+                    href={getPrivateStorageHref(submission.file_url, "assignments") ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 bg-white border border-slate-200 shadow-sm rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <FileText size={14} className="text-indigo-600" />
+                    <span>View Attached File</span>
+                  </a>
+                )}
+                {submission.code_content && assignment.type === "Coding Assignment" && (
+                  <div className="w-full text-left mt-2 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                    <div className="bg-slate-800 text-[10px] text-slate-400 font-mono px-3 py-1.5 uppercase">Submitted Code</div>
+                    <pre className="bg-slate-900 text-green-400 p-4 font-mono text-xs overflow-auto max-h-40">{submission.code_content}</pre>
+                  </div>
+                )}
+                {submission.code_content && assignment.type === "Assignment" && (
+                  <div className="w-full text-left mt-2 border border-slate-200 rounded-2xl overflow-hidden bg-white p-4">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Submitted Text Solution / Remarks</div>
+                    <p className="text-xs text-slate-800 font-sans leading-relaxed whitespace-pre-wrap">{submission.code_content}</p>
+                  </div>
+                )}
+
+                {/* Resubmission Action (CODE-021) */}
+                {!isPastDueDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsResubmitting(true)
+                      if (submission.code_content) {
+                        setCode(submission.code_content)
+                      }
+                      if (submission.language) {
+                        setLang(submission.language)
+                      }
+                      if (submission.file_url) {
+                        const existingPath = parsePrivateStoragePath(submission.file_url, "assignments")
+                        setFileUrl(existingPath ? makePrivateStorageReference("assignments", existingPath) : "")
+                      }
+                    }}
+                    className="mt-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <RotateCcw size={13} /> Edit & Resubmit Solution
+                  </button>
+                )}
+              </div>
+            ) : assignment.type === "Quiz" ? (
+              // Quiz Solving & Results
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="font-extrabold text-slate-800 text-base font-['Plus_Jakarta_Sans']">
+                    {submission ? "Quiz Evaluation Results" : "Live Quiz Assessment"}
+                  </h2>
+                  {!submission && (
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-xl">
+                      {quizAnswers.filter(a => a !== -1).length} of {assignment.questions?.length || 0} Answered
+                    </span>
+                  )}
+                </div>
+
+                {submission ? (
+                  // Quiz Graded / Completed Key View
+                  <div className="space-y-4">
+                    <div className="bg-emerald-50 border border-emerald-200 p-6 rounded-3xl text-center space-y-1.5">
+                      <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-1" />
+                      <h4 className="font-bold text-emerald-900 text-sm">Quiz Evaluation Completed</h4>
+                      <div className="text-2xl font-black text-emerald-950 font-['Space_Grotesk']">
+                        {submission.grade} <span className="text-sm font-semibold text-emerald-600">/ {assignment.max_score || 100} Marks</span>
+                      </div>
+                      <p className="text-xs text-emerald-700 font-medium font-['Space_Grotesk']">
+                        {assignment.questions?.length || 0} questions submitted
+                      </p>
+                    </div>
+                    {/* Key List */}
+                    <div className="space-y-3">
+                      {assignment.questions?.map((q, qi) => {
+                        const selected = submission.quiz_answers?.[qi];
+                        return (
+                          <div key={qi} className="p-4 rounded-xl border bg-slate-50 border-slate-200">
+                            <p className="font-semibold text-xs text-slate-800 mb-2">Q{qi + 1}. {q.q}</p>
+                            <div className="space-y-1">
+                              {q.options.map((opt: string, oi: number) => (
+                                <div
+                                  key={oi}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border ${oi === selected ? "bg-indigo-100 border-indigo-300 text-indigo-900" : "bg-white border-slate-100 text-slate-500"}`}
+                                >
+                                  <span>{opt}</span>
+                                  {oi === selected && <span className="text-[9px] uppercase font-bold text-indigo-700 bg-white px-1.5 py-0.5 rounded">Your answer</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  // Active Proctored Quiz Solver
+                  <div className="space-y-6">
+                    {assignment.questions?.map((q, qi) => (
+                      <div key={qi} className="border border-slate-200 rounded-2xl p-5 bg-white shadow-sm space-y-3">
+                        <p className="font-extrabold text-slate-800 text-sm">
+                          <span className="text-indigo-600 mr-1.5 font-mono">Q{qi + 1}.</span> {q.q}
+                        </p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {q.options.map((opt: string, oi: number) => {
+                            const isSelected = quizAnswers[qi] === oi
+                            return (
+                              <button
+                                key={oi}
+                                type="button"
+                                onClick={() => {
+                                  if (isPastDueDate) return
+                                  const updated = [...quizAnswers]
+                                  updated[qi] = oi
+                                  setQuizAnswers(updated)
+                                }}
+                                disabled={isPastDueDate}
+                                className={`w-full text-left px-4 py-3 text-xs font-bold rounded-xl border flex items-center justify-between transition-all disabled:opacity-50 ${
+                                  isSelected
+                                    ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm"
+                                    : "bg-slate-50 border-slate-100 text-slate-500 hover:bg-slate-100/80"
+                                }`}
+                              >
+                                <span>{opt}</span>
+                                <span className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${isSelected ? "border-indigo-600 bg-indigo-600" : "border-slate-300"}`}>
+                                  {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      onClick={handleManualSubmitQuiz}
+                      disabled={isSubmitting || isPastDueDate}
+                      className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" /> Submitting Quiz...
+                        </>
+                      ) : isPastDueDate ? (
+                        <>
+                          <AlertOctagon size={14} /> Submissions Closed (Past Due)
+                        </>
+                      ) : (
+                        <>
+                          <Send size={14} /> Submit Exam Answers
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : assignment.type === "Coding Assignment" ? (
+              // Coding Playground
+              <div className="space-y-4 flex flex-col h-[580px]">
+                {/* Resubmission Banner */}
+                {isResubmitting && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between text-xs text-amber-900 font-medium">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
+                      <span>Editing mode: Make modifications and re-verify your code to update your submission.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsResubmitting(false)}
+                      className="text-[11px] font-bold text-amber-700 hover:text-amber-900 px-2.5 py-1 bg-white border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors ml-2 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center bg-slate-50 border rounded-2xl p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-700">Coding Workspace</span>
+                    <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                      Execution unavailable
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {LANGUAGES.map(l => (
+                      <button
+                        key={l.id}
+                        onClick={() => {
+                          setLang(l.id)
+                          setCode(LANG_TEMPLATES[l.id] || "")
+                        }}
+                        disabled={isPastDueDate}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all disabled:opacity-50 cursor-pointer ${
+                          lang === l.id
+                            ? "bg-slate-800 border-slate-800 text-white shadow-sm"
+                            : "bg-white border-slate-200 text-slate-500 hover:bg-slate-100"
+                        }`}
+                      >
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Editor textarea */}
+                <div className="flex-1 flex flex-col border border-slate-200 rounded-2xl overflow-hidden min-h-[220px]">
+                  <textarea
+                    value={code}
+                    onChange={e => setCode(e.target.value)}
+                    disabled={isPastDueDate}
+                    placeholder="Write your code solution here..."
+                    spellCheck={false}
+                    className="flex-1 bg-slate-900 text-green-400 p-4 font-mono text-xs leading-relaxed resize-none focus:outline-none disabled:opacity-75"
+                    style={{ tabSize: 4 }}
+                  />
+                  <div className="bg-slate-900 border-t border-slate-800 px-4 py-3 flex items-center justify-between gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setCode(LANG_TEMPLATES[lang] || "")}
+                      disabled={isPastDueDate}
+                      className="text-[10px] font-bold text-slate-400 hover:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Reset code template"
+                    >
+                      <RotateCcw size={11} /> Reset Template
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRunCode}
+                        disabled
+                        className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border border-slate-700"
+                      >
+                        <Lock size={12} />
+                        Execution Unavailable
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmitCode}
+                        disabled={isSubmitting || isPastDueDate}
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-all shadow-sm"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" /> Submitting...
+                          </>
+                        ) : isPastDueDate ? (
+                          <>
+                            <AlertOctagon size={12} /> Submissions Closed
+                          </>
+                        ) : (
+                          <>
+                            <Send size={12} /> {isResubmitting ? "Resubmit Solution" : "Submit Code"}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Console output */}
+                <div className="h-32 bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden flex flex-col flex-shrink-0">
+                  <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Terminal size={10} /> Code execution status
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConsoleLogs(["Automated code execution is unavailable."])}
+                      className="text-[9px] text-slate-400 hover:text-slate-200 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="flex-grow p-3 overflow-y-auto font-mono text-[10px] leading-normal space-y-1 bg-slate-950 text-left">
+                    {consoleLogs.map((l, i) => {
+                      const isSuccess = l.includes("[SUCCESS]") || l.includes("✓")
+                      const isFailed = l.includes("[FAILED]") || l.includes("✗") || l.includes("ERROR]") || l.includes("REJECTED]")
+                      const isTimeout = l.includes("[TIMEOUT]")
+                      return (
+                        <div
+                          key={i}
+                          className={
+                            isSuccess
+                              ? "text-emerald-400"
+                              : isFailed
+                              ? "text-rose-400 font-semibold"
+                              : isTimeout
+                              ? "text-amber-400"
+                              : "text-slate-300"
+                          }
+                        >
+                          {l}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Standard Upload Assignment Form
+              <form onSubmit={handleUploadSubmit} className="space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="font-extrabold text-slate-800 text-base">Submit Solution</h2>
+                  <span className="text-xs font-extrabold text-slate-600 font-['Space_Grotesk'] bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                    <Award size={13} className="text-[#E57D37]" /> Max Score: {assignment.max_score || 100} Pts
+                  </span>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Text Response / Remarks</label>
+                  <textarea
+                    rows={4}
+                    value={textAnswer}
+                    onChange={e => setTextAnswer(e.target.value)}
+                    disabled={isPastDueDate}
+                    placeholder={isPastDueDate ? "Submissions closed: Deadline passed." : "Type your answer here..."}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl p-4 text-xs text-slate-800 disabled:opacity-50 disabled:bg-slate-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Upload Attachment</label>
+                  <div
+                    onDragOver={e => { e.preventDefault(); if (!isPastDueDate) setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleFileDrop}
+                    onClick={() => { if (!isPastDueDate) fileInputRef.current?.click(); }}
+                    className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                      isPastDueDate
+                        ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
+                        : dragOver
+                        ? "border-indigo-500 bg-indigo-50 scale-[1.01] cursor-pointer"
+                        : "border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer"
+                    }`}
+                  >
+                    <Paperclip className={`w-6 h-6 mx-auto mb-2 transition-colors ${dragOver ? "text-indigo-500" : "text-slate-300"}`} />
+                    <p className="text-xs text-slate-500 font-bold">
+                      {isPastDueDate ? "Uploads disabled (Deadline passed)" : dragOver ? "Drop file to attach" : "Drag & drop files here"}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      {isPastDueDate ? "Submission closed" : "or click to browse from files"}
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      disabled={isPastDueDate}
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </div>
+
+                  {isUploadingFile && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-indigo-600 font-semibold">
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Uploading {fileName}...</span>
+                    </div>
+                  )}
+
+                  {fileUrl && !isUploadingFile && (
+                    <div className="mt-3 flex items-center gap-3 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
+                      <FileText className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                      <span className="text-xs text-indigo-800 font-semibold flex-1 truncate">
+                        {fileUrl.startsWith("https://mock-lms-storage.local/") 
+                          ? fileUrl.substring(fileUrl.lastIndexOf("/") + 1)
+                          : fileUrl}
+                      </span>
+                      {!isPastDueDate && (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setFileUrl(""); setFileName(""); }}
+                          className="text-indigo-300 hover:text-red-500 transition-colors p-0.5 rounded"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Or Paste Attachment URL (e.g. Google Drive, GitHub)</label>
+                  <input
+                    type="url"
+                    value={fileUrl}
+                    onChange={e => setFileUrl(e.target.value)}
+                    disabled={isPastDueDate}
+                    placeholder={isPastDueDate ? "Submissions closed" : "https://docs.google.com/document/d/... or github.com/..."}
+                    className="w-full bg-white border border-slate-200 focus:ring-2 focus:ring-indigo-500 rounded-xl px-4 py-2.5 text-xs text-slate-800 disabled:opacity-50 disabled:bg-slate-50"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploadingFile || isPastDueDate}
+                  className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Submitting Solution...
+                    </>
+                  ) : isPastDueDate ? (
+                    <>
+                      <AlertOctagon size={14} /> Submissions Closed (Past Due)
+                    </>
+                  ) : (
+                    <>
+                      <Send size={14} /> Submit Solution
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const typeConfig: Record<AssignmentKind, {
+  icon: typeof FileText
+  color: string
+  bg: string
+  border: string
+  activeBg: string
+  label: string
+}> = {
+  'Assignment': { icon: FileText, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', activeBg: 'bg-emerald-600', label: 'Assignment' },
+  'Quiz': { icon: Brain, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', activeBg: 'bg-purple-600', label: 'Quiz' },
+  'Coding Assignment': { icon: FileCode2, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', activeBg: 'bg-blue-600', label: 'Coding' },
+  'Material': { icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', activeBg: 'bg-amber-600', label: 'Material' },
+  'Syllabus': { icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', activeBg: 'bg-amber-600', label: 'Syllabus' },
+}

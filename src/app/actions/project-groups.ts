@@ -1,0 +1,414 @@
+"use server"
+
+import { relationOne } from "@/lib/academic-content-types"
+import type { RosterStudent } from "@/lib/academic-content-types"
+
+
+import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { revalidatePath } from "next/cache"
+import { getCurrentUserContext } from "@/lib/user-context"
+import { runAssistantTask, type TeamSuggestion } from "@/lib/assistant/tasks"
+
+const PROJECT_PUBLISHER_ROLES = ["FACULTY", "HOD", "PROGRAM_HEAD"] as const
+
+export async function createProjectWithGroupsAction(data: {
+  title: string
+  description: string
+  subject_id: string
+  faculty_id: string
+  groups: Array<{
+    name: string
+    description?: string
+    motto?: string
+    memberIds: string[]
+  }>
+}) {
+  const supabase = await createSupabaseServerClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: "You must be signed in to publish project teams." }
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile || !PROJECT_PUBLISHER_ROLES.includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
+    return { success: false, error: "You are not allowed to publish project teams." }
+  }
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("faculty_subjects")
+    .select("id")
+    .eq("faculty_id", user.id)
+    .eq("subject_id", data.subject_id)
+    .limit(1)
+    .maybeSingle()
+
+  if (assignmentError || !assignment) {
+    return { success: false, error: "You are not assigned to this subject." }
+  }
+
+  // Never trust a caller-supplied faculty_id from the client.
+  const facultyId = user.id
+
+  // 1. Insert Project. Older deployments do not have subject_id on projects.
+  let projectRes = await supabase
+    .from("projects")
+    .insert({
+      title: data.title,
+      description: data.description,
+      faculty_id: facultyId,
+      subject_id: data.subject_id,
+    })
+    .select("id")
+    .single()
+
+  if (projectRes.error && ["42703", "PGRST204"].includes(projectRes.error.code || "")) {
+    // Retry without subject_id column
+    projectRes = await supabase
+      .from("projects")
+      .insert({
+        title: data.title,
+        description: data.description,
+        faculty_id: facultyId,
+      })
+      .select("id")
+      .single()
+  }
+
+  const project = projectRes.data
+  const projectError = projectRes.error
+
+  if (projectError || !project) {
+    console.error("Error creating project:", projectError)
+    return { success: false, error: projectError?.message || "Failed to create project" }
+  }
+
+  // 2. Insert Groups & Members
+  for (const group of data.groups) {
+    const { data: pgGroup, error: groupError } = await supabase
+      .from("project_groups")
+      .insert({
+        project_id: project.id,
+        group_name: group.name,
+      })
+      .select("id")
+      .single()
+
+    if (groupError || !pgGroup) {
+      console.error("Error creating project group:", groupError)
+      continue
+    }
+
+    // Insert group members
+    const membersData = group.memberIds.map(studentId => ({
+      group_id: pgGroup.id,
+      student_id: studentId,
+    }))
+
+    const { error: membersError } = await supabase
+      .from("group_members")
+      .insert(membersData)
+
+    if (membersError) {
+      console.error("Error inserting group members:", membersError)
+    }
+  }
+
+  revalidatePath("/dashboard/project-groups")
+  return { success: true, projectId: project.id }
+}
+
+export async function updateProjectGroupAction(data: {
+  groupId: string
+  groupName: string
+  memberIds: string[]
+  subjectId: string
+}) {
+  const supabase = await createSupabaseServerClient()
+
+  const { error: groupError } = await supabase
+    .from("project_groups")
+    .update({ group_name: data.groupName.trim() })
+    .eq("id", data.groupId)
+
+  if (groupError) {
+    return { success: false, error: groupError.message }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("group_members")
+    .delete()
+    .eq("group_id", data.groupId)
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message }
+  }
+
+  if (data.memberIds.length > 0) {
+    const { error: memberError } = await supabase
+      .from("group_members")
+      .insert(data.memberIds.map((studentId) => ({
+        group_id: data.groupId,
+        student_id: studentId,
+      })))
+
+    if (memberError) {
+      return { success: false, error: memberError.message }
+    }
+  }
+
+  revalidatePath(`/dashboard/faculty/subjects/${data.subjectId}`)
+  return { success: true }
+}
+
+export async function sendProjectGroupUpdateAction(data: {
+  groupId: string
+  title: string
+  message: string
+  subjectId: string
+}) {
+  const supabase = await createSupabaseServerClient()
+
+  const { data: members, error: membersError } = await supabase
+    .from("group_members")
+    .select("student_id")
+    .eq("group_id", data.groupId)
+
+  if (membersError) {
+    return { success: false, error: membersError.message }
+  }
+
+  if (!members?.length) {
+    return { success: false, error: "This team has no members." }
+  }
+
+  const { error: notificationError } = await supabase
+    .from("notifications")
+    .insert(members.map((member) => ({
+      user_id: member.student_id,
+      title: data.title.trim(),
+      message: data.message.trim(),
+      is_read: false,
+    })))
+
+  if (notificationError) {
+    return { success: false, error: notificationError.message }
+  }
+
+  revalidatePath(`/dashboard/faculty/subjects/${data.subjectId}`)
+  return { success: true }
+}
+
+export async function getProjectsByFacultyAction(facultyId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select(`
+      id,
+      title,
+      description,
+      created_at,
+      project_groups (
+        id,
+        group_name,
+        group_members (
+          student_id,
+          users:student_id (name, email)
+        )
+      )
+    `)
+    .eq("faculty_id", facultyId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Failed to load projects:", error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function getStudentProjectGroupsAction(studentId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // Find all groups the student belongs to
+  const { data: memberships, error } = await supabase
+    .from("group_members")
+    .select(`
+      group_id,
+      project_groups (
+        id,
+        group_name,
+        project_id,
+        projects (id, title, description, created_at, faculty_id, subject_id)
+      )
+    `)
+    .eq("student_id", studentId)
+
+  if (error || !memberships) {
+    console.error("Failed to load student groups:", error)
+    return []
+  }
+
+  const results = []
+  for (const m of memberships) {
+    const group = relationOne(m.project_groups)
+    if (!group) continue
+
+    // Load other members in this group
+    const { data: members } = await supabase
+      .from("group_members")
+      .select("student_id, users:student_id(name, email)")
+      .eq("group_id", group.id)
+
+    results.push({
+      project: relationOne(group.projects),
+      group: {
+        id: group.id,
+        group_name: group.group_name,
+      },
+      members: members || []
+    })
+  }
+
+  return results
+}
+
+export async function getSubjectStudentsAction(sectionId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  if (!sectionId) return []
+
+  const { data, error } = await supabase
+    .from("students")
+    .select(`
+      id,
+      users:id (name, email),
+      section_id
+    `)
+    .eq("section_id", sectionId)
+
+  if (error) {
+    console.error("Failed to load subject students:", error)
+    return []
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: relationOne(row.users)?.name || "Student",
+    email: relationOne(row.users)?.email || "",
+    section_id: row.section_id || null,
+  }))
+}
+
+export async function suggestTeamsAIAction(members: RosterStudent[], settings: { teamCount: number; theme: string; focus: string }) {
+  const profile = await getCurrentUserContext()
+  if (!profile || ![...PROJECT_PUBLISHER_ROLES].includes(profile.role as typeof PROJECT_PUBLISHER_ROLES[number])) {
+    return { success: false, error: "You are not allowed to request project team suggestions." }
+  }
+
+  const prompt = `
+    Divide these students into ${settings.teamCount} project teams:
+    Students: ${JSON.stringify(members)}
+    Theme: ${settings.theme}
+    Optimization: ${settings.focus}
+    Return suggestions only. Do not publish or persist anything.
+  `;
+
+  try {
+    const result = await runAssistantTask("team_suggestion", prompt)
+    return { success: true, data: result.data as TeamSuggestion }
+  } catch (error) {
+    console.error("Team suggestion task failed", error instanceof Error ? error.message : "unknown")
+    return { success: false, error: "The team suggestion service is unavailable." }
+  }
+}
+
+export async function getProjectsBySubjectAction(subjectId: string) {
+  const supabase = await createSupabaseServerClient()
+
+  // 1. Try querying with subject_id column first
+  const { data, error } = await supabase
+    .from("projects")
+    .select(`
+      id,
+      title,
+      description,
+      created_at,
+      subject_id,
+      project_groups (
+        id,
+        group_name,
+        group_members (
+          student_id,
+          users:student_id (name, email)
+        )
+      )
+    `)
+    .eq("subject_id", subjectId)
+    .order("created_at", { ascending: false })
+
+  if (!error) {
+    return data || []
+  }
+
+  // 2. Fallback: Query all projects and filter by student section matching the subject's section
+  console.log("subject_id query failed (e.g. column missing), falling back to student correlation filtering...")
+  
+  const { data: allProjects, error: fallbackError } = await supabase
+    .from("projects")
+    .select(`
+      id,
+      title,
+      description,
+      created_at,
+      project_groups (
+        id,
+        group_name,
+        group_members (
+          student_id,
+          users:student_id (name, email)
+        )
+      )
+    `)
+    .order("created_at", { ascending: false })
+
+  if (fallbackError) {
+    console.error("Fallback projects query failed:", fallbackError)
+    return []
+  }
+
+  // Get active sections assigned to this subject
+  const { data: slots } = await supabase
+    .from("timetable_slots")
+    .select("section_id")
+    .eq("subject_id", subjectId)
+
+  const sectionIds = Array.from(new Set((slots ?? []).map((s) => s.section_id).filter(Boolean)))
+  if (sectionIds.length === 0) {
+    return []
+  }
+
+  // Load students belonging to these sections
+  const { data: studentRecords } = await supabase
+    .from("students")
+    .select("id")
+    .in("section_id", sectionIds)
+
+  const studentIdsSet = new Set((studentRecords ?? []).map((s) => s.id))
+
+  // Filter projects in memory where at least one member is enrolled in the subject's sections
+  const filtered = (allProjects || []).filter((proj) => {
+    return proj.project_groups?.some((group) =>
+      group.group_members?.some((member) => studentIdsSet.has(member.student_id))
+    )
+  })
+
+  return filtered
+}

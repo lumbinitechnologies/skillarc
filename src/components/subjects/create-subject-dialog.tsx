@@ -1,0 +1,337 @@
+"use client"
+
+import type { CatalogSubject, SubjectFormValues } from "@/lib/catalog-types"
+
+
+import { useState, useMemo, useEffect } from "react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { X, BookMarked } from "lucide-react"
+import { useTerms, useIsSchool } from "@/lib/org-type-context"
+
+const subjectTypes = [
+  { value: "THEORY",   label: "Theory",   icon: "📖", textClass: "text-[#6C63FF]", bgClass: "bg-[#6C63FF]/5", borderClass: "border-[#6C63FF]/20" },
+  { value: "LAB",      label: "Lab",      icon: "🧪", textClass: "text-[#00C2A8]", bgClass: "bg-[#00C2A8]/5", borderClass: "border-[#00C2A8]/20" },
+  { value: "ELECTIVE", label: "Elective", icon: "🎯", textClass: "text-[#FFB020]", bgClass: "bg-[#FFB020]/5", borderClass: "border-[#FFB020]/20" },
+]
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">
+      {children}
+    </label>
+  )
+}
+
+function StyledSelect({ value, onChange, children, disabled }: {
+  value: string
+  onChange: (v: string) => void
+  children: React.ReactNode
+  disabled?: boolean
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        disabled={disabled}
+        className={`w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl outline-none appearance-none cursor-pointer transition-all duration-200 ${
+          disabled 
+            ? "bg-slate-100 text-slate-400 cursor-not-allowed" 
+            : "bg-slate-50/50 text-slate-800 hover:border-slate-200 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-100"
+        }`}
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "right 16px center",
+          paddingRight: "40px",
+        }}
+      >
+        {children}
+      </select>
+    </div>
+  )
+}
+
+function StyledInput({ value, onChange, placeholder }: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <input
+      type="text"
+      value={value}
+      placeholder={placeholder}
+      onChange={e => onChange(e.target.value)}
+      className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-200/80 rounded-2xl bg-white/50 text-slate-800 placeholder-slate-400 outline-none hover:border-slate-300 focus:border-slate-900 focus:bg-white focus:ring-2 focus:ring-slate-100 transition-all duration-200"
+    />
+  )
+}
+
+interface Department { id: string; name: string }
+interface Program    { id: string; name: string; department_id: string }
+
+export function CreateSubjectDialog({ open, onOpenChange, onSubmit, departments, programs, subject }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (data: SubjectFormValues) => Promise<void>
+  departments: Department[]
+  programs: Program[]
+  subject?: CatalogSubject | null
+}) {
+  const defaultForm = {
+    department_id: "",
+    program_id: "",
+    program_ids: [] as string[],
+    semester: 1,
+    name: "",
+    code: "",
+    credits: 4,
+    subject_type: "THEORY",
+  }
+  const [formData, setFormData] = useState(defaultForm)
+  const [loading, setLoading] = useState(false)
+  const t = useTerms()
+  const isSchool = useIsSchool()
+
+  const isEdit = !!subject
+
+  const [resetInputs0, setResetInputs0] = useState<readonly unknown[] | null>(null)
+  const nextResetInputs0 = [open, subject]
+  if (resetInputs0 === null || nextResetInputs0.some((value, index) => !Object.is(value, resetInputs0[index]))) {
+    setResetInputs0(nextResetInputs0)
+
+    if (open) {
+      if (subject) {
+        setFormData({
+          department_id: subject.program?.department_id || subject.program?.department?.id || "",
+          program_id: subject.program_id || "",
+          program_ids: subject.program_id ? [subject.program_id] : [],
+          semester: subject.semester || 1,
+          name: subject.name || "",
+          code: subject.code || "",
+          credits: subject.credits || 4,
+          subject_type: subject.subject_type || "THEORY",
+        })
+      } else {
+        setFormData(defaultForm)
+      }
+    }
+
+  }
+
+  function set<K extends keyof typeof formData>(key: K, value: (typeof formData)[K]) {
+    setFormData(prev => ({ ...prev, [key]: value }))
+  }
+
+  // Filter programs by selected department
+  const filteredPrograms = useMemo(() =>
+    programs.filter(p => p.department_id === formData.department_id),
+    [programs, formData.department_id]
+  )
+
+  function handleDepartmentChange(department_id: string) {
+    setFormData(prev => ({ ...prev, department_id, program_id: "", program_ids: [] }))
+  }
+
+  const canSubmit = isEdit 
+    ? formData.program_id && formData.name.trim() && formData.code.trim()
+    : (formData.program_id || formData.program_ids.length > 0) && formData.name.trim() && formData.code.trim()
+
+  async function handleSubmit() {
+    if (!canSubmit) return
+    setLoading(true)
+    const { department_id, program_id, program_ids, ...payload } = formData
+    
+    if (isEdit) {
+      await onSubmit({
+        ...payload,
+        program_id: program_id || null,
+      })
+    } else {
+      const idsToSend = program_ids.length > 0 
+        ? program_ids 
+        : (program_id ? [program_id] : [])
+      
+      await onSubmit({
+        ...payload,
+        program_ids: idsToSend,
+      })
+      setFormData(defaultForm)
+    }
+    setLoading(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="p-0 overflow-hidden max-w-lg rounded-3xl border border-slate-100 bg-white/95 backdrop-blur-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] flex items-center justify-center shadow-md shadow-indigo-100/50">
+              <BookMarked className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 tracking-tight font-['Plus_Jakarta_Sans']">
+                {isEdit ? "Edit Subject" : "Create Subject"}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {isEdit ? "Modify subject catalog parameters" : "Fill in the subject details below"}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="w-8 h-8 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-center hover:bg-slate-100 transition-colors duration-200"
+          >
+            <X className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-5 max-h-[65vh] overflow-y-auto">
+          {/* Department / Stream */}
+          <div>
+            <FieldLabel>{t.department}</FieldLabel>
+            <StyledSelect value={formData.department_id} onChange={handleDepartmentChange}>
+              <option value="">Select {t.department}</option>
+              {departments.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </StyledSelect>
+          </div>
+
+          {/* Programs */}
+          <div>
+            <FieldLabel>{isEdit ? "Program *" : "Programs *"}</FieldLabel>
+            {!formData.department_id ? (
+              <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
+                Select a {t.department.toLowerCase()} first
+              </div>
+            ) : filteredPrograms.length === 0 ? (
+              <div className="w-full px-4 py-2.5 text-sm font-semibold border border-slate-100 rounded-2xl bg-slate-100 text-slate-400">
+                No programs for this {t.department.toLowerCase()}
+              </div>
+            ) : isEdit ? (
+              <StyledSelect value={formData.program_id} onChange={v => set("program_id", v)}>
+                <option value="">Select Program</option>
+                {filteredPrograms.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </StyledSelect>
+            ) : (
+              <div className="space-y-2.5 max-h-40 overflow-y-auto border border-slate-100 rounded-2xl p-4 bg-slate-50/50">
+                {filteredPrograms.map(p => {
+                  const isChecked = formData.program_ids.includes(p.id)
+                  return (
+                    <label key={p.id} className="flex items-center gap-3 cursor-pointer text-sm font-semibold text-slate-700 hover:text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          const newIds = isChecked
+                            ? formData.program_ids.filter(id => id !== p.id)
+                            : [...formData.program_ids, p.id]
+                          set("program_ids", newIds)
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                      />
+                      <span>{p.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Semester — hidden for schools */}
+          {!isSchool && (
+          <div>
+            <FieldLabel>Semester</FieldLabel>
+            <StyledSelect
+              value={String(formData.semester)}
+              onChange={v => set("semester", Number(v))}
+              disabled={!formData.department_id}
+            >
+              {!formData.department_id
+                ? <option value="">Select a {t.department.toLowerCase()} first</option>
+                : [1,2,3,4,5,6,7,8].map(s => (
+                    <option key={s} value={s}>Semester {s}</option>
+                  ))
+              }
+            </StyledSelect>
+          </div>
+          )}
+
+          {/* Name + Code */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel>Subject Name</FieldLabel>
+              <StyledInput value={formData.name} onChange={v => set("name", v)} placeholder="e.g. Data Structures" />
+            </div>
+            <div>
+              <FieldLabel>Subject Code</FieldLabel>
+              <StyledInput value={formData.code} onChange={v => set("code", v)} placeholder="e.g. CS301" />
+            </div>
+          </div>
+
+          {/* Credits — college only */}
+          {!isSchool && (
+          <div>
+            <FieldLabel>Credits</FieldLabel>
+            <StyledSelect value={String(formData.credits)} onChange={v => set("credits", Number(v))}>
+              {[1,2,3,4,5,6].map(c => (
+                <option key={c} value={c}>{c} {c === 1 ? "Credit" : "Credits"}</option>
+              ))}
+            </StyledSelect>
+          </div>
+          )}
+
+          {/* Subject Type */}
+          <div>
+            <FieldLabel>Subject Type</FieldLabel>
+            <div className="flex gap-3">
+              {subjectTypes.map(t => {
+                const active = formData.subject_type === t.value
+                return (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => set("subject_type", t.value)}
+                    className={`flex-1 py-3 px-2 rounded-2xl border flex flex-col items-center gap-1.5 transition-all duration-200 active:scale-95 ${
+                      active
+                        ? `border-slate-900 ${t.bgClass} ${t.textClass} scale-[1.02] shadow-sm font-bold`
+                        : "border-slate-100 bg-slate-50/20 text-slate-500 hover:border-slate-200 font-semibold"
+                    }`}
+                  >
+                    <span className="text-xl leading-none">{t.icon}</span>
+                    <span className="text-[11px] uppercase tracking-wider">{t.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/45 rounded-b-[24px]">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="flex-1 h-11 text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit || loading}
+            className="flex-[2] h-11 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-2xl shadow-md shadow-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:scale-[1.02] active:scale-[0.98] duration-200 outline-none"
+          >
+            {loading ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : "Create Subject")}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

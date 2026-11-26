@@ -1,0 +1,12 @@
+export const ROLES = {
+  SUPER_ADMIN: "SUPER_ADMIN",
+  ORG_ADMIN: "ORG_ADMIN",
+  INSTITUTION_ADMIN: "INSTITUTION_ADMIN",
+  HOD: "HOD",
+  PROGRAM_HEAD: "PROGRAM_HEAD",
+  FACULTY: "FACULTY",
+  STUDENT: "STUDENT",
+  PARENT: "PARENT",
+} as const
+
+export type UserRole = typeof ROLES[keyof typeof ROLES]

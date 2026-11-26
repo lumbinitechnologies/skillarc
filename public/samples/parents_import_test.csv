@@ -1,0 +1,4 @@
+name,email,phone,student_email,student_registration_number,relationship
+Rajesh Sharma,rajesh.sharma@example.com,+919876543220,aarav.sharma@example.com,REG2024001,Father
+Anita Patel,anita.patel@example.com,+919876543221,diya.patel@example.com,REG2024002,Mother
+Suresh Verma,suresh.verma@example.com,+919876543222,vihaan.verma@example.com,REG2024003,Guardian

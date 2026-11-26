@@ -1,0 +1,165 @@
+name: Prepare private Netlify prelaunch candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact reviewed main merge SHA matching tested staging
+        required: true
+        type: string
+      fallback_deploy_id:
+        description: Immutable ID of the rehearsed private Netlify fallback
+        required: false
+        type: string
+      apply_migrations:
+        description: Request production approval for migrations after preparing the private draft
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skillarc-production-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify exact reviewed website revision
+    if: github.ref == 'refs/heads/main' && vars.NETLIFY_PRELAUNCH_PREPARE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: skillarc-policy
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      staging_sha: ${{ steps.verify.outputs.staging_sha }}
+      staging_evidence: ${{ steps.verify.outputs.staging_evidence }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Verify requested migration mode
+        if: inputs.apply_migrations
+        env:
+          NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED: ${{ vars.NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED }}
+          FALLBACK_DEPLOY_ID: ${{ inputs.fallback_deploy_id }}
+        run: |
+          test "$NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED" = true
+          test -n "$FALLBACK_DEPLOY_ID"
+      - name: Verify independent review, branch protection and hosted staging
+        id: verify
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_POLICY_READ_TOKEN: ${{ secrets.GH_POLICY_READ_TOKEN }}
+        run: |
+          git fetch origin main staging
+          node scripts/ci/verify-release.mjs
+
+  draft:
+    name: Build and stage a private Netlify draft
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: skillarc-netlify-candidates
+    outputs:
+      candidate_id: ${{ steps.stage.outputs.candidate_id }}
+      approval_digest: ${{ steps.stage.outputs.approval_digest }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.release_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          cache: npm
+      - run: |
+          npm ci
+          npm install --global netlify-cli@27.20.1
+      - name: Create private candidate and bind its identity
+        id: stage
+        env:
+          FALLBACK_DEPLOY_ID: ${{ inputs.fallback_deploy_id }}
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          STAGING_SHA: ${{ needs.verify.outputs.staging_sha }}
+          STAGING_EVIDENCE: ${{ needs.verify.outputs.staging_evidence }}
+          NETLIFY_PRELAUNCH_PREPARE_ENABLED: ${{ vars.NETLIFY_PRELAUNCH_PREPARE_ENABLED }}
+          SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: node scripts/ci/netlify-prelaunch.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: netlify-prelaunch-approval-record
+          path: netlify-prelaunch-record.json
+          if-no-files-found: error
+
+
+  migrate:
+    name: Approve migrations for Netlify ${{ needs.draft.outputs.approval_digest }}
+    if: inputs.apply_migrations && inputs.fallback_deploy_id != '' && vars.NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED == 'true'
+    needs: [verify, draft]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: skillarc-production
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      STAGING_SHA: ${{ needs.verify.outputs.staging_sha }}
+      STAGING_EVIDENCE: ${{ needs.verify.outputs.staging_evidence }}
+      FALLBACK_DEPLOY_ID: ${{ inputs.fallback_deploy_id }}
+      NETLIFY_CANDIDATE_ID: ${{ needs.draft.outputs.candidate_id }}
+      NETLIFY_APPROVAL_DIGEST: ${{ needs.draft.outputs.approval_digest }}
+      NETLIFY_PRELAUNCH_PREPARE_ENABLED: ${{ vars.NETLIFY_PRELAUNCH_PREPARE_ENABLED }}
+      NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED: ${{ vars.NETLIFY_PRELAUNCH_MIGRATIONS_ENABLED }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb
+        with:
+          version: 2.117.0
+      - run: npm install --global netlify-cli@27.20.1
+      - name: Recheck exact review, hosted staging and approval binding
+        env:
+          DEPLOYMENT_ENVIRONMENT: production
+          GH_TOKEN: ${{ github.token }}
+          GH_POLICY_READ_TOKEN: ${{ secrets.GH_POLICY_READ_TOKEN }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          git fetch origin main staging
+          GITHUB_OUTPUT="$RUNNER_TEMP/netlify-staging-verification" node scripts/ci/verify-release.mjs
+          test "$(sed -n 's/^staging_evidence=//p' "$RUNNER_TEMP/netlify-staging-verification")" = "$STAGING_EVIDENCE"
+          test "$(sed -n 's/^staging_sha=//p' "$RUNNER_TEMP/netlify-staging-verification")" = "$STAGING_SHA"
+          node scripts/ci/netlify-prelaunch.mjs --before-migrations
+      - name: Dry-run, apply and verify reviewed production migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node scripts/ci/migrate.mjs netlifyPrelaunch
+          node scripts/ci/production-clean.mjs
+      - name: Verify the exact private candidate and post-migration counts
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/ci/netlify-prelaunch.mjs --after-migrations

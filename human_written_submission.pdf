@@ -1,0 +1,154 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 3467 >>
+stream
+BT
+/F1 11 Tf
+72 750 Td
+(OOP Assignment  Student B \(Roll No: 21CS103\)) Tj
+-72 -750 Td
+72 734 Td
+() Tj
+-72 -734 Td
+72 718 Td
+(Subject: Object-Oriented Programming | Faculty: Dr. Sharma) Tj
+-72 -718 Td
+72 702 Td
+() Tj
+-72 -702 Td
+72 686 Td
+(Ok so OOP... honestly it took me a while to really get this when I first started coding) Tj
+-72 -686 Td
+72 670 Td
+(last semester. I kept mixing up classes and objects it was super confusing at first. But) Tj
+-72 -670 Td
+72 654 Td
+(basically think of a class like a blueprint. If you wanna build a house you don't draw a) Tj
+-72 -654 Td
+72 638 Td
+(new blueprint every time right  you just use the same one and build multiple houses from) Tj
+-72 -638 Td
+72 622 Td
+(it. Objects are the actual houses.) Tj
+-72 -622 Td
+72 606 Td
+() Tj
+-72 -606 Td
+72 590 Td
+(So the four pillars thing:) Tj
+-72 -590 Td
+72 574 Td
+() Tj
+-72 -574 Td
+72 558 Td
+(ENCAPSULATION  this one I actually understood from day 1. It's basically hiding stuff.) Tj
+-72 -558 Td
+72 542 Td
+(Like when I use my phone I don't need to know HOW the camera app works inside, I just) Tj
+-72 -542 Td
+72 526 Td
+(press a button and it works. Same idea in code  you put data and functions together) Tj
+-72 -526 Td
+72 510 Td
+(inside a class and mark sensitive stuff as private so other code can't just randomly mess) Tj
+-72 -510 Td
+72 494 Td
+(with it. We did this in lab 3 with the BankAccount class. Sir marked my balance variable) Tj
+-72 -494 Td
+72 478 Td
+(as public and deducted marks lol, lesson learned.) Tj
+-72 -478 Td
+72 462 Td
+() Tj
+-72 -462 Td
+72 446 Td
+(ABSTRACTION  ok this is similar to encapsulation but apparently different?? Like it's) Tj
+-72 -446 Td
+72 430 Td
+(more about simplifying for the person using your class. You give them clean methods and) Tj
+-72 -430 Td
+72 414 Td
+(hide the complicated stuff inside. Honestly I still sometimes mix these two up. Maybe) Tj
+-72 -414 Td
+72 398 Td
+(they're two sides of the same coin? I should ask sir.) Tj
+-72 -398 Td
+72 382 Td
+() Tj
+-72 -382 Td
+72 366 Td
+(INHERITANCE  this one's my favourite actually. So if I make an Animal class with an eat\(\)) Tj
+-72 -366 Td
+72 350 Td
+(method, both Dog and Cat classes can just inherit from Animal and they automatically get) Tj
+-72 -350 Td
+72 334 Td
+(eat\(\). No need to rewrite it. My friend Ravi warned me though that if you make inheritance) Tj
+-72 -334 Td
+72 318 Td
+(chains too deep it becomes a nightmare to debug. I didn't believe him until I spent 3) Tj
+-72 -318 Td
+72 302 Td
+(hours on a bug last week that was exactly that problem.) Tj
+-72 -302 Td
+72 286 Td
+() Tj
+-72 -286 Td
+72 270 Td
+(POLYMORPHISM  ok so this blew my mind a little. Same method name but different behaviour) Tj
+-72 -270 Td
+72 254 Td
+(depending on which object you call it on. Dog.speak\(\) says woof, Cat.speak\(\) says meow,) Tj
+-72 -254 Td
+72 238 Td
+(even though the method is called speak\(\) in both. We had this question in the mid-sem and) Tj
+-72 -238 Td
+72 222 Td
+(I got it wrong because I didn't realize you need to override the method in the subclass,) Tj
+-72 -222 Td
+72 206 Td
+(not just inherit it. Makes sense now in hindsight.) Tj
+-72 -206 Td
+72 190 Td
+() Tj
+-72 -190 Td
+72 174 Td
+(Overall I think OOP is pretty powerful once it clicks. Not gonna lie it took a few weeks) Tj
+-72 -174 Td
+72 158 Td
+(and some real debugging pain to really get it. Would've been nice to see more real-world) Tj
+-72 -158 Td
+72 142 Td
+(examples in class though.) Tj
+-72 -142 Td
+72 126 Td
+() Tj
+-72 -126 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000003760 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+3830
+%%EOF

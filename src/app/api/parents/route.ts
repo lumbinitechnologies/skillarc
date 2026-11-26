@@ -1,0 +1,239 @@
+import { errorMessage as readErrorMessage, errorStatus } from "@/lib/error-message"
+import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { NextRequest, NextResponse } from "next/server"
+import { ROLES } from "@/constants/roles"
+import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import { getCurrentUserContext } from "@/lib/user-context"
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createSupabaseServerClient()
+
+    const profile = await getCurrentUserContext()
+    if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    if (profile.role !== ROLES.INSTITUTION_ADMIN) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { name, email, password, institution_id, organization_id } = body
+
+    if (!name || !email || !institution_id) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    if (institution_id !== profile.institution_id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const adminClient = createSupabaseAdminClient()
+
+    // 1. Check if the parent profile already exists in public.users
+    const { data: existingUser } = await adminClient
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .maybeSingle()
+
+    if (existingUser) {
+      if (existingUser.role !== ROLES.PARENT) {
+        return NextResponse.json({ error: "Email is already registered with another role" }, { status: 400 })
+      }
+      // If it exists and is a parent, update its details and return
+      const { data: updatedParent, error: updateError } = await adminClient
+        .from("users")
+        .update({
+          name,
+          institution_id,
+          organization_id: organization_id || profile?.organization_id || existingUser.organization_id
+        })
+        .eq("id", existingUser.id)
+        .select()
+        .single()
+      
+      if (updateError) throw updateError
+      return NextResponse.json(updatedParent)
+    }
+
+    // 2. Try creating the auth user
+    let authData = null
+    let authError = null
+
+    try {
+      const createRes = await adminClient.auth.admin.createUser({
+        email,
+        password: password || Math.random().toString(36).slice(-12),
+        email_confirm: true,
+      })
+      authData = createRes.data
+      authError = createRes.error
+    } catch (err: unknown) {
+      authError = err
+    }
+
+    let parentUserId = authData?.user?.id
+
+    if (authError) {
+      // If auth user already exists in auth.users, resolve their ID
+      if (readErrorMessage(authError).toLowerCase().includes("already") || errorStatus(authError) === 422) {
+        const { data: userList } = await adminClient.auth.admin.listUsers()
+        const existingAuthUser = userList?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+        if (existingAuthUser) {
+          parentUserId = existingAuthUser.id
+        } else {
+          throw authError
+        }
+      } else {
+        throw authError
+      }
+    }
+
+    if (!parentUserId) {
+      throw new Error("Failed to create or resolve parent auth user")
+    }
+
+    // 3. Create the parent profile in public.users
+    const { data: parent, error } = await adminClient
+      .from("users")
+      .insert([
+        {
+          id: parentUserId,
+          name,
+          email,
+          role: ROLES.PARENT,
+          institution_id,
+          organization_id: organization_id || profile?.organization_id || null,
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json(parent)
+  } catch (error) {
+    console.error("Parent creation error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createSupabaseServerClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const institutionId = request.nextUrl.searchParams.get("institution_id")
+    const departmentId = request.nextUrl.searchParams.get("department_id")
+    let targetParentIds: string[] | null = null
+
+    if (departmentId) {
+      const adminClient = createSupabaseAdminClient()
+      const { data: deptPrograms } = await adminClient
+        .from("programs")
+        .select("id")
+        .eq("department_id", departmentId)
+      
+      const programIds = (deptPrograms ?? []).map((p) => p.id)
+      
+      if (programIds.length > 0) {
+        const { data: deptStudents } = await adminClient
+          .from("students")
+          .select("id")
+          .in("program_id", programIds)
+        
+        const studentIds = (deptStudents ?? []).map((s) => s.id)
+        
+        if (studentIds.length > 0) {
+          const { data: relations } = await adminClient
+            .from("parent_student_relations")
+            .select("parent_id")
+            .in("student_id", studentIds)
+          
+          targetParentIds = Array.from(new Set((relations ?? []).map((r) => r.parent_id)))
+        } else {
+          targetParentIds = []
+        }
+      } else {
+        targetParentIds = []
+      }
+    }
+
+    let query = supabase.from("users").select("*").eq("role", ROLES.PARENT)
+    if (institutionId) query = query.eq("institution_id", institutionId)
+    if (targetParentIds !== null) {
+      if (targetParentIds.length > 0) {
+        query = query.in("id", targetParentIds)
+      } else {
+        return NextResponse.json([])
+      }
+    }
+
+    const { data: parents, error } = await query.order("name")
+    if (error) throw error
+
+    if (!parents || parents.length === 0) {
+      return NextResponse.json([])
+    }
+
+    const parentIds = parents.map((p) => p.id)
+    const adminClient = createSupabaseAdminClient()
+
+    // Fetch relations
+    const { data: relations, error: relError } = await adminClient
+      .from("parent_student_relations")
+      .select(`
+        id,
+        parent_id,
+        relationship,
+        student_id
+      `)
+      .in("parent_id", parentIds)
+
+    if (relError) throw relError
+
+    // Fetch all student details
+    const studentIds = Array.from(new Set((relations ?? []).map((r) => r.student_id)))
+    let studentUsers: Array<{ id: string; name: string | null; email: string | null }> = []
+    let studentRecords: Array<{ id: string; registration_number: string | null }> = []
+
+    if (studentIds.length > 0) {
+      const [usersRes, studentsRes] = await Promise.all([
+        adminClient.from("users").select("id, name, email").in("id", studentIds),
+        adminClient.from("students").select("id, registration_number").in("id", studentIds)
+      ])
+      studentUsers = usersRes.data || []
+      studentRecords = studentsRes.data || []
+    }
+
+    const parentList = parents.map((parent) => {
+      const parentRelations = (relations ?? []).filter((r) => r.parent_id === parent.id)
+      const linkedStudents = parentRelations.map((r) => {
+        const userDet = studentUsers.find((u) => u.id === r.student_id)
+        const recDet = studentRecords.find((s) => s.id === r.student_id)
+        return {
+          id: r.student_id,
+          name: userDet?.name || "Unknown",
+          email: userDet?.email || "",
+          registration_number: recDet?.registration_number || "",
+          relationship: r.relationship,
+          relationId: r.id
+        }
+      })
+
+      return {
+        ...parent,
+        students: linkedStudents
+      }
+    })
+
+    return NextResponse.json(parentList)
+  } catch (error) {
+    console.error("Parent fetch error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}

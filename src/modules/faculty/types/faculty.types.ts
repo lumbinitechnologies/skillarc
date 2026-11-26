@@ -1,0 +1,37 @@
+import type { UserProfile } from "@/modules/users/types"
+
+export interface Faculty extends UserProfile {
+  department_id?: string | null
+}
+
+export interface FacultyWithStats extends Faculty {
+  assignedSubjects?: number
+  assignedSections?: number
+  is_timetable_builder?: boolean
+  employee_id?: string | null
+  phone?: string | null
+  department?: {
+    id: string
+    name: string
+  } | null
+}
+
+export interface CreateFacultyInput {
+  name: string
+  email: string
+  department_id?: string
+  institution_id: string
+  organization_id?: string
+  phone?: string
+  employee_id?: string
+}
+
+export interface UpdateFacultyInput {
+  name?: string
+  email?: string
+  department_id?: string
+  role?: string
+  is_timetable_builder?: boolean
+  phone?: string
+  employee_id?: string
+}
