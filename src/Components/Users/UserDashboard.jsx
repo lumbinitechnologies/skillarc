@@ -3,6 +3,10 @@ import { supabase } from "../../services/supabase";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import useAuthGuard from "../hooks/useAuthGuard";
+import AttendanceView from "./AttendanceView";
+import TimesheetsView from "./TimesheetsView";
+import LeavesView from "./LeavesView";
+import TasksView from "./TasksView";
 
 const STATUS_CONFIG = {
   pending:     { label: "Pending",     color: "#94a3b8", bg: "rgba(148,163,184,0.1)",  border: "rgba(148,163,184,0.2)",  glow: "rgba(148,163,184,0.04)" },
@@ -600,6 +604,36 @@ const UserDashboard = () => {
                 </button>
               ))}
 
+              {/* Workforce & Time Tracking — only visible to interns */}
+              {internData?.id && (
+                <>
+                  <button
+                    className={"ud-nav-item" + (activeTab === "attendance" ? " active" : "")}
+                    onClick={() => setActiveTab("attendance")}
+                  >
+                    <span>⏱️</span> ATTENDANCE
+                  </button>
+                  <button
+                    className={"ud-nav-item" + (activeTab === "timesheets" ? " active" : "")}
+                    onClick={() => setActiveTab("timesheets")}
+                  >
+                    <span>📅</span> TIMESHEETS
+                  </button>
+                  <button
+                    className={"ud-nav-item" + (activeTab === "leaves" ? " active" : "")}
+                    onClick={() => setActiveTab("leaves")}
+                  >
+                    <span>🏖️</span> LEAVES
+                  </button>
+                  <button
+                    className={"ud-nav-item" + (activeTab === "tasks" ? " active" : "")}
+                    onClick={() => setActiveTab("tasks")}
+                  >
+                    <span>🎯</span> MY TASKS
+                  </button>
+                </>
+              )}
+
               {/* My Blogs — only visible to interns */}
               {internData?.intern_id && (
                 <button
@@ -855,6 +889,26 @@ const UserDashboard = () => {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ── ATTENDANCE TAB ── */}
+            {activeTab === "attendance" && (
+              <AttendanceView internId={internData?.id} />
+            )}
+
+            {/* ── TIMESHEETS TAB ── */}
+            {activeTab === "timesheets" && (
+              <TimesheetsView internId={internData?.id} />
+            )}
+
+            {/* ── LEAVES TAB ── */}
+            {activeTab === "leaves" && (
+              <LeavesView internId={internData?.id} />
+            )}
+
+            {/* ── TASKS TAB ── */}
+            {activeTab === "tasks" && (
+              <TasksView internId={internData?.id} />
             )}
 
             {/* ── BLOGS TAB ── */}

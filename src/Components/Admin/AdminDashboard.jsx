@@ -1211,6 +1211,18 @@ const AdminDashboard = () => {
   <span style={{fontSize:"1rem"}}>📝</span>
   Blogs
 </button>
+<button
+  className="adm-analytics-btn"
+  onClick={() => navigate("/admin/timesheets")}
+  style={{
+    background: "rgba(250,204,21,.07)",
+    borderColor: "rgba(250,204,21,.25)",
+    color: "#facc15",
+  }}
+>
+  <span style={{fontSize:"1rem"}}>⏱️</span>
+  Timesheets
+</button>
             <button
               className="adm-refresh-btn"
               onClick={() => { fetchApplications(); fetchVisitorStats(); }}

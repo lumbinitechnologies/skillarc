@@ -378,7 +378,7 @@ const MyApplications = () => {
                     {app.skills && (
                       <div className="myapp-card-skills">// {app.skills}</div>
                     )}
-                    <div className="myapp-card-date">📅 Applied {new Date(app.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+                    <div className="myapp-card-date">📅 Applied {fmt(app.created_at)}</div>
                     <div className="myapp-status-msg">
                       {STATUS_MESSAGES[app.status] || STATUS_MESSAGES.pending}
                     </div>

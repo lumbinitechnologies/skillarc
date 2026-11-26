@@ -93,7 +93,6 @@ const AnimatedBackground = () => {
     });
 
     let auroraT = 0;
-    let t = 0;
 
     /* ── Aurora: skip on mobile entirely (big perf win) ── */
     const AURORA_BANDS = isMobile ? 0 : 3;
@@ -103,7 +102,6 @@ const AnimatedBackground = () => {
 
     const draw = () => {
       const W = canvas.width, H = canvas.height;
-      t += 0.009;
       auroraT += 0.0032;
 
       ctx.clearRect(0, 0, W, H);

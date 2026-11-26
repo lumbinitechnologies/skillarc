@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { supabase } from "../../services/supabase";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 const Toast = ({ message, type, onClose }) => {
   if (!message) return null;
@@ -127,7 +127,6 @@ const PasswordWhisper = ({ visible }) => {
 };
 
 const Signup = () => {
-  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

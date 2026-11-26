@@ -46,6 +46,7 @@ const WriteBlog = lazy(() => import("./Components/Users/WriteBlog"));
 const MyBlogs = lazy(() => import("./Components/Users/MyBlogs"));
 
 const BlogManagement = lazy(() => import("./Components/Admin/BlogManagement"));
+const TimesheetManagement = lazy(() => import("./Components/Admin/TimesheetManagement"));
 
 // ── Scroll to top + visitor tracking ─────────────────────────────
 const ScrollToTop = () => {
@@ -260,6 +261,14 @@ const AnimatedRoutes = () => {
           element={
             <PageWrapper>
               <AdminRoute><BlogManagement /></AdminRoute>
+            </PageWrapper>
+          }
+        />
+        <Route
+          path="/admin/timesheets"
+          element={
+            <PageWrapper>
+              <AdminRoute><TimesheetManagement /></AdminRoute>
             </PageWrapper>
           }
         />

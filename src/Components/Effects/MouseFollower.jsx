@@ -15,7 +15,7 @@ const MouseFollower = () => {
       updatePref();
       mq.addEventListener?.('change', updatePref);
       return () => mq.removeEventListener?.('change', updatePref);
-    } catch (_) {
+    } catch {
       // no-op
     }
   }, []);
