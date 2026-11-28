@@ -2,7 +2,7 @@
 
 [Mobile v1 scope](https://github.com/lumbinitechnologies/skillarc-mobile/blob/main/docs/product/mobile-v1.md) governs product commitments. [GitHub Project SkillArc Mobile R1](https://github.com/users/lumbinitechnologies/projects/1) is the sole active tracker across the mobile and server repositories. Jira references and old W01–W06 intervals are historical; they are not active sprint commitments or a release promise. Do not update Jira as part of mobile delivery.
 
-Keane owns the current mobile and server work; @lumbinitechnologies independently reviews. Nikhil may take separately approved server work. Former groups have no mobile assignments.
+The issue records the agreed task owner. Follow the [repository workflow](repository-workflow.md) for author and independent review requirements on each side.
 
 ## Dependency order
 
@@ -17,4 +17,4 @@ The [reconciliation register](https://github.com/lumbinitechnologies/skillarc-mo
 
 ## Review and evidence
 
-Use one GitHub work item per PR and link cross-repository dependencies. Keane records tests, AI assistance and manual verification; the reviewer independently approves. No calendar-based automatic advancement. Check Android/iOS separately and retain the explicit mobile #39 deferral. Before real-data use, enforce the private environment/security gates in [architecture](architecture.md).
+Use one GitHub work item per PR and link cross-repository dependencies. The PR author records tests, AI assistance and manual verification. The independent reviewer approves the latest head. No calendar-based automatic advancement. Check Android/iOS separately and retain the explicit mobile #39 deferral. Before real-data use, enforce the private environment/security gates in [architecture](architecture.md).

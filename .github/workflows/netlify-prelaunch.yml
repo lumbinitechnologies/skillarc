@@ -82,7 +82,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - run: |
+      - env:
+          ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+        run: |
           npm ci
           npm install --global netlify-cli@27.20.1
       - name: Create private candidate and bind its identity
